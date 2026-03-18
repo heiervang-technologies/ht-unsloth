@@ -33,6 +33,9 @@ import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { TOUR_OPEN_EVENT } from "@/features/tour";
 import { ShutdownDialog } from "@/components/shutdown-dialog";
+import { useHardwareInfo } from "@/hooks/use-hardware-info";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Chip02Icon } from "@hugeicons/core-free-icons";
 
 const NAV_ITEMS = [
   { label: "Studio", href: "/studio", icon: ZapIcon, enabled: true },
@@ -55,6 +58,7 @@ export function Navbar() {
   const [shutdownOpen, setShutdownOpen] = useState(false);
 
   const chatOnly = usePlatformStore((s) => s.isChatOnly());
+  const hw = useHardwareInfo();
 
   // Warn before closing the tab only when training is running (data loss risk).
   // We store the handler in a ref so removeUnloadHandler() can clean it up
@@ -182,6 +186,27 @@ export function Navbar() {
 
         {/* Right: docs/tour desktop */}
         <div className="hidden items-center justify-self-end gap-2 md:flex">
+          {hw.gpuName && (
+            <Tooltip>
+              <TooltipTrigger asChild={true}>
+                <div className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-medium text-muted-foreground/70 bg-muted/50 ring-1 ring-border/40">
+                  <HugeiconsIcon icon={Chip02Icon} className="size-3.5" />
+                  <span className="max-w-[120px] truncate">{hw.gpuName.replace("NVIDIA ", "").replace("GeForce ", "")}</span>
+                  {hw.gpuCount > 1 && (
+                    <span className="text-purple-500 font-semibold">x{hw.gpuCount}</span>
+                  )}
+                  {hw.vramTotalGb != null && (
+                    <span className="text-muted-foreground/50">{Math.round(hw.vramTotalGb)}G</span>
+                  )}
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="text-xs">
+                {hw.gpuName}{hw.gpuCount > 1 ? ` x${hw.gpuCount}` : ""}
+                {hw.vramTotalGb != null && ` — ${hw.vramTotalGb.toFixed(1)} GB VRAM`}
+                {hw.gpuCount > 1 && hw.vramTotalGb != null && ` (${(hw.vramTotalGb * hw.gpuCount).toFixed(1)} GB total)`}
+              </TooltipContent>
+            </Tooltip>
+          )}
           <AnimatedThemeToggler
             className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground [&_svg]:size-4"
             title="Toggle theme"
