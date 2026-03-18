@@ -236,20 +236,37 @@ def GraniteDecoderLayer_fast_forward(
         hidden_states = torch.add(residual, hidden_states, alpha = residual_multiplier)
     else:
         residual = hidden_states
-        hidden_states = fast_rms_layernorm(self.input_layernorm, hidden_states)
-        hidden_states, self_attn_weights, present_key_value = self.self_attn(
-            hidden_states = hidden_states,
-            causal_mask = causal_mask,
-            attention_mask = attention_mask,
-            position_ids = position_ids,
-            past_key_value = past_key_value,
-            output_attentions = output_attentions,
-            use_cache = use_cache,
-            padding_mask = padding_mask,
-            position_embeddings = position_embeddings,
-            **kwargs,
-        )
-        hidden_states = torch.add(residual, hidden_states, alpha = residual_multiplier)
+        if getattr(self, "_detach_attention", False):
+            with torch.no_grad():
+                hidden_states = fast_rms_layernorm(self.input_layernorm, hidden_states)
+                hidden_states, self_attn_weights, present_key_value = self.self_attn(
+                    hidden_states = hidden_states,
+                    causal_mask = causal_mask,
+                    attention_mask = attention_mask,
+                    position_ids = position_ids,
+                    past_key_value = past_key_value,
+                    output_attentions = output_attentions,
+                    use_cache = use_cache,
+                    padding_mask = padding_mask,
+                    position_embeddings = position_embeddings,
+                    **kwargs,
+                )
+            hidden_states = torch.add(residual, hidden_states.detach(), alpha = residual_multiplier)
+        else:
+            hidden_states = fast_rms_layernorm(self.input_layernorm, hidden_states)
+            hidden_states, self_attn_weights, present_key_value = self.self_attn(
+                hidden_states = hidden_states,
+                causal_mask = causal_mask,
+                attention_mask = attention_mask,
+                position_ids = position_ids,
+                past_key_value = past_key_value,
+                output_attentions = output_attentions,
+                use_cache = use_cache,
+                padding_mask = padding_mask,
+                position_embeddings = position_embeddings,
+                **kwargs,
+            )
+            hidden_states = torch.add(residual, hidden_states, alpha = residual_multiplier)
 
         # Fully Connected
         residual = hidden_states
