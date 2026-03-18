@@ -46,7 +46,7 @@ export const LOADING_OVERHEAD_GB = 1.4;
 // Estimation
 // ---------------------------------------------------------------------------
 
-export type VramFitStatus = "fits" | "tight" | "exceeds";
+export type VramFitStatus = "fits" | "tight" | "exceeds" | "multi_gpu";
 
 /**
  * Bytes per parameter when loading a model at fp16/bf16 (LoRA, full FT).
@@ -97,6 +97,27 @@ export function checkVramFit(
   return "exceeds";
 }
 
+/**
+ * Check whether a model fits across multiple GPUs.
+ *
+ * If the model exceeds a single GPU but fits across all GPUs combined
+ * (with block-boundary sharding), returns "multi_gpu".
+ */
+export function checkMultiGpuVramFit(
+  requiredGb: number,
+  perGpuGb: number,
+  gpuCount: number,
+): VramFitStatus {
+  if (gpuCount <= 1) return checkVramFit(requiredGb, perGpuGb);
+  const singleFit = checkVramFit(requiredGb, perGpuGb);
+  if (singleFit !== "exceeds") return singleFit;
+  // Model doesn't fit on one GPU — check if it fits across all
+  const totalGb = perGpuGb * gpuCount;
+  const ratio = requiredGb / totalGb;
+  if (ratio <= 1.0) return "multi_gpu";
+  return "exceeds";
+}
+
 export interface ModelVramMapInput {
   id: string;
   totalParams?: number;
@@ -110,9 +131,12 @@ export interface ModelVramMapEntry {
 export function buildModelVramMap(
   models: ModelVramMapInput[],
   method: TrainingMethod,
-  gpu: { available: boolean; memoryTotalGb: number },
+  gpu: { available: boolean; memoryTotalGb: number; gpuCount?: number },
 ): Map<string, ModelVramMapEntry> {
   const map = new Map<string, ModelVramMapEntry>();
+  const count = gpu.gpuCount ?? 1;
+  // memoryTotalGb is the primary GPU's VRAM, not total across all GPUs
+  const perGpuGb = gpu.memoryTotalGb;
   for (const model of models) {
     if (!model.totalParams) {
       map.set(model.id, { est: 0, status: null });
@@ -120,7 +144,9 @@ export function buildModelVramMap(
     }
 
     const est = estimateLoadingVram(model.totalParams, method);
-    const status = gpu.available ? checkVramFit(est, gpu.memoryTotalGb) : null;
+    const status = gpu.available
+      ? checkMultiGpuVramFit(est, perGpuGb, count)
+      : null;
     map.set(model.id, { est, status });
   }
   return map;

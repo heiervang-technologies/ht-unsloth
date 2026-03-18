@@ -232,20 +232,59 @@ def log_gpu_memory(context: str):
 
 def get_gpu_summary() -> Dict[str, Any]:
     """
-    Return a compact summary of the primary GPU.
+    Return a summary of all available GPUs.
 
     Returns dict with keys:
         gpu_name      – e.g. "NVIDIA L4" (or None)
-        vram_total_gb – e.g. 22.17       (or None)
+        vram_total_gb – total VRAM of primary GPU (or None)
+        vram_free_gb  – free VRAM of primary GPU (or None)
+        gpu_count     – number of CUDA GPUs (1 if non-CUDA)
+        gpus          – list of per-GPU dicts (name, vram_total_gb, vram_free_gb)
     """
     mem = get_gpu_memory_info()
-    if mem.get("available"):
-        return {
-            "gpu_name": mem.get("device_name"),
+    if not mem.get("available"):
+        return {"gpu_name": None, "vram_total_gb": None, "vram_free_gb": None, "gpu_count": 0, "gpus": []}
+
+    device = get_device()
+    gpus = []
+
+    if device == DeviceType.CUDA:
+        try:
+            import torch
+            gpu_count = torch.cuda.device_count()
+            for i in range(gpu_count):
+                props = torch.cuda.get_device_properties(i)
+                free, total = torch.cuda.mem_get_info(i)
+                gpus.append({
+                    "index": i,
+                    "name": props.name,
+                    "vram_total_gb": round(total / (1024**3), 2),
+                    "vram_free_gb": round(free / (1024**3), 2),
+                })
+        except Exception:
+            gpu_count = 1
+            gpus = [{
+                "index": 0,
+                "name": mem.get("device_name"),
+                "vram_total_gb": round(mem.get("total_gb", 0), 2),
+                "vram_free_gb": round(mem.get("free_gb", 0), 2),
+            }]
+    else:
+        gpu_count = 1
+        gpus = [{
+            "index": 0,
+            "name": mem.get("device_name"),
             "vram_total_gb": round(mem.get("total_gb", 0), 2),
             "vram_free_gb": round(mem.get("free_gb", 0), 2),
-        }
-    return {"gpu_name": None, "vram_total_gb": None, "vram_free_gb": None}
+        }]
+
+    return {
+        "gpu_name": mem.get("device_name"),
+        "vram_total_gb": round(mem.get("total_gb", 0), 2),
+        "vram_free_gb": round(mem.get("free_gb", 0), 2),
+        "gpu_count": gpu_count,
+        "gpus": gpus,
+    }
 
 
 def get_package_versions() -> Dict[str, Optional[str]]:
@@ -320,6 +359,7 @@ def get_gpu_utilization() -> Dict[str, Any]:
 
     # ── nvidia-smi (most complete source) ───────────────────────
     smi_data = {}
+    all_gpus = []
     try:
         import subprocess
 
@@ -336,9 +376,9 @@ def get_gpu_utilization() -> Dict[str, Any]:
         )
 
         if result.returncode == 0 and result.stdout.strip():
-            # nvidia-smi outputs one line per GPU; take GPU 0
-            first_line = result.stdout.strip().splitlines()[0]
-            parts = [p.strip() for p in first_line.split(",")]
+            lines = result.stdout.strip().splitlines()
+            # Primary GPU (GPU 0) for backward compatibility
+            parts = [p.strip() for p in lines[0].split(",")]
             if len(parts) >= 6:
                 smi_data = {
                     "gpu_util": _parse_smi_value(parts[0]),
@@ -348,6 +388,19 @@ def get_gpu_utilization() -> Dict[str, Any]:
                     "power_draw": _parse_smi_value(parts[4]),
                     "power_limit": _parse_smi_value(parts[5]),
                 }
+            # All GPUs
+            all_gpus = []
+            for line in lines:
+                gpu_parts = [p.strip() for p in line.split(",")]
+                if len(gpu_parts) >= 6:
+                    all_gpus.append({
+                        "gpu_util": _parse_smi_value(gpu_parts[0]),
+                        "temp": _parse_smi_value(gpu_parts[1]),
+                        "vram_used_mb": _parse_smi_value(gpu_parts[2]),
+                        "vram_total_mb": _parse_smi_value(gpu_parts[3]),
+                        "power_draw": _parse_smi_value(gpu_parts[4]),
+                        "power_limit": _parse_smi_value(gpu_parts[5]),
+                    })
 
     except FileNotFoundError:
         logger.debug("nvidia-smi not found, falling back to torch.cuda")
@@ -408,6 +461,8 @@ def get_gpu_utilization() -> Dict[str, Any]:
         "power_draw_w": power_draw,
         "power_limit_w": power_limit,
         "power_utilization_pct": power_pct,
+        "gpu_count": len(all_gpus) if all_gpus else 1,
+        "gpus": all_gpus,
     }
 
 
