@@ -296,6 +296,11 @@ export function ModelSelectionStep() {
                               TIGHT
                             </span>
                           )}
+                          {fitStatus === "multi_gpu" && (
+                            <span className="text-[9px] font-medium text-purple-400">
+                              MULTI-GPU
+                            </span>
+                          )}
                           {sizeLabel ? (
                             <span className="text-xs text-muted-foreground">
                               {sizeLabel}
