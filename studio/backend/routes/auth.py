@@ -48,6 +48,7 @@ async def auth_status() -> AuthStatusResponse:
             initialized = True,
             default_username = storage.DEFAULT_ADMIN_USERNAME,
             requires_password_change = False,
+            auth_disabled = True,
         )
     return AuthStatusResponse(
         initialized = storage.is_initialized(),
