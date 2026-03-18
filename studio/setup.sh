@@ -227,16 +227,11 @@ if [ "$IS_COLAB" = true ]; then
     # Colab: install packages directly without venv
     install_python_stack
 else
-    # Local: create venv under ~/.unsloth/studio/ (shared location, not in repo)
-    STUDIO_HOME="$HOME/.unsloth/studio"
+    # Local: create venv in-repo for isolation (or override with UNSLOTH_STUDIO_HOME)
+    STUDIO_HOME="${UNSLOTH_STUDIO_HOME:-$REPO_ROOT}"
     VENV_DIR="$STUDIO_HOME/.venv"
     VENV_T5_DIR="$STUDIO_HOME/.venv_t5"
     mkdir -p "$STUDIO_HOME"
-
-    # Clean up legacy in-repo venvs if they exist
-    [ -d "$REPO_ROOT/.venv" ] && rm -rf "$REPO_ROOT/.venv"
-    [ -d "$REPO_ROOT/.venv_overlay" ] && rm -rf "$REPO_ROOT/.venv_overlay"
-    [ -d "$REPO_ROOT/.venv_t5" ] && rm -rf "$REPO_ROOT/.venv_t5"
 
     rm -rf "$VENV_DIR"
     rm -rf "$VENV_T5_DIR"
