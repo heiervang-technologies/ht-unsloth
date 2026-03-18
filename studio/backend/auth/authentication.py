@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Copyright 2026-present the Unsloth AI Inc. team. All rights reserved. See /studio/LICENSE.AGPL-3.0
 
+import os
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Tuple
@@ -8,6 +9,9 @@ from typing import Optional, Tuple
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 import jwt
+
+# Set UNSLOTH_DISABLE_AUTH=1 to skip authentication (local/trusted networks only)
+DISABLE_AUTH = os.environ.get("UNSLOTH_DISABLE_AUTH", "0") == "1"
 
 from .storage import (
     API_KEY_PREFIX,
@@ -23,7 +27,7 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 REFRESH_TOKEN_EXPIRE_DAYS = 7
 
-security = HTTPBearer()  # Reads Authorization: Bearer <token>
+security = HTTPBearer(auto_error=not DISABLE_AUTH)  # Reads Authorization: Bearer <token>
 
 
 def _get_secret_for_subject(subject: str) -> str:
@@ -105,9 +109,11 @@ def reload_secret() -> None:
 
 
 async def get_current_subject(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
 ) -> str:
     """Validate JWT and require the password-change flow to be completed."""
+    if DISABLE_AUTH:
+        return "admin"
     return await _get_current_subject(
         credentials,
         allow_password_change = False,
@@ -115,9 +121,11 @@ async def get_current_subject(
 
 
 async def get_current_subject_allow_password_change(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
 ) -> str:
     """Validate JWT but allow access to the password-change endpoint."""
+    if DISABLE_AUTH:
+        return "admin"
     return await _get_current_subject(
         credentials,
         allow_password_change = True,

@@ -302,11 +302,14 @@ class FastLanguageModel(FastLlamaModel):
         # Distributed-safe device placement for quantized models.
         # In multi-GPU (torchrun), each rank must load the model on its own device
         # to avoid Accelerate device relocation errors with quantized weights.
+        # For non-distributed multi-GPU (model sharding), allow "sequential"/"balanced".
         is_quantized = load_in_4bit or load_in_8bit or load_in_fp8
         if is_quantized and isinstance(device_map, str):
             distributed_device_map, is_dist = prepare_device_map()
             if is_dist:
                 device_map = distributed_device_map
+            elif device_map in ("sequential", "balanced") and DEVICE_COUNT > 1:
+                pass  # Allow model sharding across GPUs at block boundaries
 
         if load_in_8bit or full_finetuning or qat_scheme is not None:
             return FastModel.from_pretrained(
@@ -965,11 +968,14 @@ class FastModel(FastBaseModel):
         # Distributed-safe device placement for quantized models.
         # In multi-GPU (torchrun), each rank must load the model on its own device
         # to avoid Accelerate device relocation errors with quantized weights.
+        # For non-distributed multi-GPU (model sharding), allow "sequential"/"balanced".
         is_quantized = load_in_4bit or load_in_8bit or load_in_fp8
         if is_quantized and isinstance(device_map, str):
             distributed_device_map, is_dist = prepare_device_map()
             if is_dist:
                 device_map = distributed_device_map
+            elif device_map in ("sequential", "balanced") and DEVICE_COUNT > 1:
+                pass  # Allow model sharding across GPUs at block boundaries
 
         # Check if 4bit is allowed specifically for AMD
         if not ALLOW_BITSANDBYTES and not use_exact_model_name:
