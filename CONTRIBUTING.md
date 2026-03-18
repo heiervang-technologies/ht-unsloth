@@ -1,3 +1,29 @@
+## HT Fork Management
+
+This is an [HT (Heiervang Technologies)](https://github.com/heiervang-technologies) fork. For full details on branch conventions, sync workflow, and contribution process, see the [Fork Management Guide](https://github.com/orgs/heiervang-technologies/discussions/3).
+
+### Branch Conventions
+
+- **`main`** — Clean fast-forward mirror of upstream. Never commit directly.
+- **`ht`** — Default branch with HT-specific changes. All PRs target `ht`.
+- **Feature branches** — Create from `ht`, squash-merge back via PR.
+
+### Sync Workflow
+
+1. Fast-forward `main` from upstream: `git fetch upstream && git merge --ff-only upstream/main`
+2. Rebase `ht` onto updated `main`: `git checkout ht && git rebase main`
+3. Force-push: `git push --force-with-lease origin ht`
+
+### Commit Standards
+
+- Conventional commits: `feat(<scope>): description`, `fix(<scope>): description`
+- Linear history on `ht` — no merge commits, squash fix-up commits
+- One commit per logical change
+
+For all questions and inquiries about this fork, please use the [HT Discussions](https://github.com/orgs/heiervang-technologies/discussions) page.
+
+---
+
 # 🦥 Contributing to Unsloth
 
 Thank you for not only using Unsloth but also for being interested in helping out! We value all contributions, whether they come in the form of code, ideas, support for others or just by simply spreading the word of Unsloth! 💕
