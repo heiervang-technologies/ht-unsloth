@@ -33,6 +33,7 @@ import { cn } from "@/lib/utils";
 import {
   Book03Icon,
   ChefHatIcon,
+  Chip02Icon,
   ColumnInsertIcon,
   CursorInfo02Icon,
   Delete02Icon,
@@ -66,6 +67,7 @@ import { useChatSearchStore } from "@/features/chat/stores/chat-search-store";
 import { ChatSearchDialog } from "@/features/chat/components/chat-search-dialog";
 import { useTrainingHistorySidebarItems, deleteTrainingRun } from "@/features/training";
 import type { TrainingRunSummary } from "@/features/training";
+import { useHardwareInfo } from "@/hooks/use-hardware-info";
 import { useState } from "react";
 
 function getTourId(pathname: string): string | null {
@@ -175,6 +177,7 @@ export function AppSidebar() {
 
   const isTrainingRunning = useTrainingRuntimeStore((s) => s.isTrainingRunning);
   const chatOnly = usePlatformStore((s) => s.isChatOnly());
+  const hw = useHardwareInfo();
 
   // Chat collapsible state — open by default, syncs with route
   const isChatRoute = pathname.startsWith("/chat");
@@ -499,6 +502,22 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border">
+        {hw.gpuName && (
+          <div className="flex items-center gap-1.5 px-2 py-1 text-[11px] font-medium text-muted-foreground/70 group-data-[collapsible=icon]:hidden">
+            <HugeiconsIcon icon={Chip02Icon} className="size-3.5" />
+            <span className="max-w-[140px] truncate" title={hw.gpuName}>
+              {hw.gpuName.replace("NVIDIA ", "").replace("GeForce ", "")}
+            </span>
+            {hw.gpuCount > 1 && (
+              <span className="text-purple-500 font-semibold">x{hw.gpuCount}</span>
+            )}
+            {hw.vramTotalGb != null && (
+              <span className="text-muted-foreground/50">
+                {Math.round(hw.gpuCount > 1 ? hw.vramTotalGb * hw.gpuCount : hw.vramTotalGb)}G
+              </span>
+            )}
+          </div>
+        )}
         <SidebarMenu>
           <SidebarMenuItem>
             <DropdownMenu>
