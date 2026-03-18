@@ -468,9 +468,11 @@ export function ModelSection() {
                                 <span className="block text-[10px] mt-1">
                                   {exceeds
                                     ? `Needs ~${vramEst}GB VRAM (GPU: ${gpu.memoryTotalGb}GB)`
-                                    : fitStatus === "tight"
-                                      ? `~${vramEst}GB VRAM (tight fit on ${gpu.memoryTotalGb}GB)`
-                                      : `~${vramEst}GB VRAM`}
+                                    : fitStatus === "multi_gpu"
+                                      ? `~${vramEst}GB VRAM (split across ${gpu.gpuCount} GPUs, ${gpu.memoryTotalGb}GB total)`
+                                      : fitStatus === "tight"
+                                        ? `~${vramEst}GB VRAM (tight fit on ${gpu.memoryTotalGb}GB)`
+                                        : `~${vramEst}GB VRAM`}
                                 </span>
                               )}
                             </TooltipContent>
@@ -484,6 +486,11 @@ export function ModelSection() {
                             {fitStatus === "tight" && (
                               <span className="text-[9px] font-medium text-amber-400">
                                 TIGHT
+                              </span>
+                            )}
+                            {fitStatus === "multi_gpu" && (
+                              <span className="text-[9px] font-medium text-purple-400">
+                                MULTI-GPU
                               </span>
                             )}
                             {detail && (
