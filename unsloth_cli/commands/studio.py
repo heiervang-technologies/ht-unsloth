@@ -12,11 +12,18 @@ import typer
 
 studio_app = typer.Typer(help = "Unsloth Studio commands.")
 
-STUDIO_HOME = Path.home() / ".unsloth" / "studio"
+_GLOBAL_STUDIO_HOME = Path.home() / ".unsloth" / "studio"
 
 # __file__ is unsloth_cli/commands/studio.py -- two parents up is the package root
 # (either site-packages or the repo root for editable installs).
 _PACKAGE_ROOT = Path(__file__).resolve().parent.parent.parent
+
+# Prefer in-repo venv (editable/fork installs), fall back to global
+STUDIO_HOME = (
+    _PACKAGE_ROOT
+    if (_PACKAGE_ROOT / ".venv").is_dir()
+    else Path(os.environ.get("UNSLOTH_STUDIO_HOME", str(_GLOBAL_STUDIO_HOME)))
+)
 
 
 def _studio_venv_python() -> Optional[Path]:
