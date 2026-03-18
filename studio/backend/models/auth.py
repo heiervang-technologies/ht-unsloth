@@ -36,6 +36,10 @@ class AuthStatusResponse(BaseModel):
         ...,
         description = "True if the seeded admin must still change the default password",
     )
+    auth_disabled: bool = Field(
+        default = False,
+        description = "True if UNSLOTH_DISABLE_AUTH=1 is set (no login required)",
+    )
 
 
 class ChangePasswordRequest(BaseModel):
