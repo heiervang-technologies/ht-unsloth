@@ -848,20 +848,37 @@ def LlamaDecoderLayer_fast_forward(
         hidden_states += residual
     else:
         residual = hidden_states
-        hidden_states = fast_rms_layernorm(self.input_layernorm, hidden_states)
-        hidden_states, self_attn_weights, present_key_value = self.self_attn(
-            hidden_states = hidden_states,
-            causal_mask = causal_mask,
-            attention_mask = attention_mask,
-            position_ids = position_ids,
-            past_key_value = past_key_value,
-            output_attentions = output_attentions,
-            use_cache = use_cache,
-            padding_mask = padding_mask,
-            position_embeddings = position_embeddings,
-            **kwargs,
-        )
-        hidden_states = residual + hidden_states
+        if getattr(self, "_detach_attention", False):
+            with torch.no_grad():
+                hidden_states = fast_rms_layernorm(self.input_layernorm, hidden_states)
+                hidden_states, self_attn_weights, present_key_value = self.self_attn(
+                    hidden_states = hidden_states,
+                    causal_mask = causal_mask,
+                    attention_mask = attention_mask,
+                    position_ids = position_ids,
+                    past_key_value = past_key_value,
+                    output_attentions = output_attentions,
+                    use_cache = use_cache,
+                    padding_mask = padding_mask,
+                    position_embeddings = position_embeddings,
+                    **kwargs,
+                )
+            hidden_states = residual + hidden_states.detach()
+        else:
+            hidden_states = fast_rms_layernorm(self.input_layernorm, hidden_states)
+            hidden_states, self_attn_weights, present_key_value = self.self_attn(
+                hidden_states = hidden_states,
+                causal_mask = causal_mask,
+                attention_mask = attention_mask,
+                position_ids = position_ids,
+                past_key_value = past_key_value,
+                output_attentions = output_attentions,
+                use_cache = use_cache,
+                padding_mask = padding_mask,
+                position_embeddings = position_embeddings,
+                **kwargs,
+            )
+            hidden_states = residual + hidden_states
 
         # Fully Connected
         residual = hidden_states
@@ -2751,6 +2768,7 @@ class FastLlamaModel:
         qat_scheme = None,
         target_parameters = None,  # For MoE expert layers (nn.Parameter)
         ensure_weight_tying = False,
+        detach_attention = "auto",  # Detach attention from autograd graph for MLP-only LoRA
         **kwargs,
     ):
         if os.environ.get("UNSLOTH_USE_NEW_MODEL", "0") == "1":
@@ -3130,7 +3148,13 @@ class FastLlamaModel:
 
         model._saved_temp_tokenizer = _saved_temp_tokenizer
 
-        model = FastLlamaModel.patch_peft_model(model, use_gradient_checkpointing)
+        # Resolve detach_attention="auto" based on target_modules
+        ATTENTION_MODULES = {"q_proj", "k_proj", "v_proj", "o_proj"}
+        if detach_attention == "auto":
+            has_attention_lora = bool(set(final_modules) & ATTENTION_MODULES)
+            detach_attention = not has_attention_lora
+
+        model = FastLlamaModel.patch_peft_model(model, use_gradient_checkpointing, detach_attention=detach_attention)
 
         if ensure_weight_tying:
             try:
@@ -3231,6 +3255,7 @@ class FastLlamaModel:
     def patch_peft_model(
         model,
         use_gradient_checkpointing = "unsloth",
+        detach_attention = False,
     ):
         if os.environ.get("UNSLOTH_USE_NEW_MODEL", "0") == "1":
             return FastBaseModel.patch_peft_model(
@@ -3420,6 +3445,28 @@ class FastLlamaModel:
                         "Not an error, but Unsloth cannot patch O projection layer with our manual autograd engine since either LoRA adapters\n"
                         "are not enabled or a bias term (like in Qwen) is used."
                     )
+
+                # Attention detachment: skip autograd graph for attention when MLP-only LoRA
+                if detach_attention:
+                    has_qkv_lora = (
+                        hasattr(q_proj, "lora_A")
+                        and hasattr(k_proj, "lora_A")
+                        and hasattr(v_proj, "lora_A")
+                    )
+                    has_o_lora = hasattr(o_proj, "lora_A")
+                    if not has_qkv_lora and not has_o_lora:
+                        layer._detach_attention = True
+
+        if detach_attention:
+            n_detached = sum(
+                1 for layer in model.model.model.layers
+                if getattr(layer, "_detach_attention", False)
+            )
+            if n_detached > 0:
+                logger.warning_once(
+                    f"Unsloth: Detaching attention from autograd graph in {n_detached} layers "
+                    f"(MLP-only LoRA detected). ~25% activation memory savings expected.",
+                )
 
         logger.warning_once(
             f"Unsloth {__version__} patched {len(model.model.model.layers)} layers with "
