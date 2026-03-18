@@ -8,7 +8,20 @@ This module contains functions for detecting dataset formats (Alpaca, ShareGPT, 
 detecting multimodal/VLM dataset structures, and heuristic-based column mapping.
 """
 
+import json
 import re
+
+
+def _try_parse_json_chat(chat_data):
+    """If chat_data is a JSON string, parse it into a list of dicts."""
+    if isinstance(chat_data, str):
+        try:
+            parsed = json.loads(chat_data)
+            if isinstance(parsed, list) and len(parsed) > 0 and isinstance(parsed[0], dict):
+                return parsed
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return chat_data
 
 
 def _keyword_in_column(keyword: str, col_name: str) -> bool:
@@ -58,6 +71,10 @@ def detect_dataset_format(dataset):
             sample = next(iter(dataset))
             chat_data = sample[chat_column]
 
+            # Handle JSON-string chat columns (e.g. conversations stored as
+            # serialized JSON strings in some parquet files)
+            chat_data = _try_parse_json_chat(chat_data)
+
             if chat_data and len(chat_data) > 0:
                 first_msg = chat_data[0]
                 msg_keys = set(first_msg.keys())
@@ -73,10 +90,13 @@ def detect_dataset_format(dataset):
 
                 # ChatML uses "role" and "content"
                 elif "role" in msg_keys and "content" in msg_keys:
+                    # If the original data was a JSON string, it needs
+                    # standardization to parse strings into dicts
+                    is_json_string = isinstance(sample[chat_column], str)
                     return {
                         "format": "chatml",
                         "chat_column": chat_column,
-                        "needs_standardization": False,
+                        "needs_standardization": is_json_string,
                         "sample_keys": list(msg_keys),
                     }
 
@@ -636,9 +656,9 @@ def detect_vlm_dataset_structure(dataset):
 
     # Check if has messages column
     if "messages" in column_names:
-        messages = sample["messages"]
+        messages = _try_parse_json_chat(sample["messages"])
 
-        if messages and len(messages) > 0:
+        if isinstance(messages, list) and len(messages) > 0:
             first_msg = messages[0]
             if "content" in first_msg:
                 content = first_msg["content"]
@@ -682,7 +702,7 @@ def detect_vlm_dataset_structure(dataset):
     for chat_col in ("conversations", "messages"):
         if chat_col not in column_names:
             continue
-        chat_data = sample[chat_col]
+        chat_data = _try_parse_json_chat(sample[chat_col])
         if not isinstance(chat_data, list) or len(chat_data) == 0:
             continue
         first_msg = chat_data[0]

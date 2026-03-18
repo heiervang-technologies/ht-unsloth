@@ -1,13 +1,13 @@
-<h1 align="center" style="margin:0;">
-  <a href="https://unsloth.ai/docs"><picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/unslothai/unsloth/main/images/STUDIO%20WHITE%20LOGO.png">
-    <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/unslothai/unsloth/main/images/STUDIO%20BLACK%20LOGO.png">
-    <img alt="Unsloth logo" src="https://raw.githubusercontent.com/unslothai/unsloth/main/images/STUDIO%20BLACK%20LOGO.png" height="60" style="max-width:100%;">
-  </picture></a>
-</h1>
+<h1 align="center" style="margin:0;">ht-unsloth</h1>
 <h3 align="center" style="margin: 0; margin-top: 0;">
-Run and train AI models with a unified local interface.
+<a href="https://github.com/heiervang-technologies">Heiervang Technologies</a> fork of <a href="https://github.com/unslothai/unsloth">Unsloth</a>
 </h3>
+
+<p align="center">
+  <a href="https://github.com/orgs/heiervang-technologies/discussions">HT Discussions</a> •
+  <a href="https://github.com/orgs/heiervang-technologies/discussions/3">Fork Management Guide</a> •
+  <a href="https://github.com/unslothai/unsloth">Upstream Project</a>
+</p>
 
 <p align="center">
   <a href="#-features">Features</a> •
@@ -16,6 +16,24 @@ Run and train AI models with a unified local interface.
   <a href="https://unsloth.ai/docs">Documentation</a> •
   <a href="https://www.reddit.com/r/unsloth/">Reddit</a>
 </p>
+## HT Fork Changes
+
+This is the [Heiervang Technologies](https://github.com/heiervang-technologies) fork of [Unsloth](https://github.com/unslothai/unsloth). The `ht` branch contains the following changes on top of upstream `main`:
+
+| Change | Description | Contributed back? |
+|--------|-------------|-------------------|
+| *No HT-specific changes yet* | Fork freshly initialized | N/A |
+
+### Branch Strategy
+
+- **`main`** — Clean mirror of upstream `main`. Never commit directly.
+- **`ht`** — Default branch with all HT-specific changes on top of `main`.
+- Feature branches are created from `ht` and merged back via PR.
+
+For questions or discussion about this fork, visit the [HT Discussions](https://github.com/orgs/heiervang-technologies/discussions) page. For details on how we manage forks, see the [Fork Management Guide](https://github.com/orgs/heiervang-technologies/discussions/3).
+
+---
+
  <a href="https://unsloth.ai/docs/new/studio">
 <img alt="unsloth studio ui homepage" src="https://raw.githubusercontent.com/unslothai/unsloth/main/studio/frontend/public/studio%20github%20landscape%20colab%20display.png" style="max-width: 100%; margin-bottom: 0;"></a>
 

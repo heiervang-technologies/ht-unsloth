@@ -8,6 +8,7 @@ This module contains functions for converting between dataset formats
 (Alpaca, ShareGPT, ChatML) and standardizing chat formats.
 """
 
+import json
 import os
 
 from datasets import IterableDataset
@@ -65,8 +66,21 @@ def standardize_chat_format(
     # Inspect structure
     examples = itertools.islice(dataset, 10)
     uniques = collections.defaultdict(list)
+    has_json_strings = False
     for example in examples:
-        for message in example[chat_column]:
+        chat_data = example[chat_column]
+        # Handle JSON-string chat columns (conversations stored as serialized JSON)
+        if isinstance(chat_data, str):
+            try:
+                chat_data = json.loads(chat_data)
+                has_json_strings = True
+            except (json.JSONDecodeError, TypeError):
+                continue
+        if not isinstance(chat_data, list):
+            continue
+        for message in chat_data:
+            if not isinstance(message, dict):
+                continue
             for key, value in message.items():
                 if type(value) is not str:
                     continue  # Skip non-string values
@@ -100,6 +114,13 @@ def standardize_chat_format(
         convos = examples[chat_column]
         all_convos = []
         for convo in convos:
+            # Handle JSON-string chat columns
+            if isinstance(convo, str):
+                try:
+                    convo = json.loads(convo)
+                except (json.JSONDecodeError, TypeError):
+                    all_convos.append([])
+                    continue
             new_convo = []
             for message in convo:
                 # Get original role and content
@@ -174,6 +195,15 @@ def convert_chatml_to_alpaca(dataset, batch_size = 1000, num_proc = None):
         inputs = []
 
         for convo in chatml_data:
+            # Handle JSON-string chat columns
+            if isinstance(convo, str):
+                try:
+                    convo = json.loads(convo)
+                except (json.JSONDecodeError, TypeError):
+                    instructions.append("")
+                    inputs.append("")
+                    outputs.append("")
+                    continue
             instruction = ""
             output = ""
 
@@ -768,6 +798,10 @@ def convert_sharegpt_with_images_to_vlm_format(
         """Convert a single ShareGPT+image sample to standard VLM format."""
         pil_image = _resolve_image(sample[image_column])
         conversation = sample[messages_column]
+
+        # Handle JSON-string chat columns
+        if isinstance(conversation, str):
+            conversation = json.loads(conversation)
 
         new_messages = []
         for msg in conversation:
