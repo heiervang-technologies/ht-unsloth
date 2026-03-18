@@ -237,6 +237,9 @@ export function AppSidebar() {
               alt="Unsloth"
               className="hidden h-7 w-auto dark:block"
             />
+            <span className="ml-1 inline-flex items-center text-[10px] font-extrabold leading-none tracking-[0.12em] text-purple-500">
+              HT
+            </span>
           </Link>
           {!isMobile && (
             <Tooltip>
