@@ -549,8 +549,24 @@ def format_dataset(
             "messages",
             "texts",
         ]:
+            result_dataset = dataset
+            # If the chat column contains JSON strings, run standardization
+            # to parse them into proper list-of-dict structures
+            if detected.get("needs_standardization"):
+                try:
+                    result_dataset = standardize_chat_format(
+                        dataset,
+                        tokenizer,
+                        aliases_for_system,
+                        aliases_for_user,
+                        aliases_for_assistant,
+                        batch_size,
+                        num_proc,
+                    )
+                except Exception as e:
+                    warnings.append(f"Failed to standardize ChatML JSON strings: {e}")
             return {
-                "dataset": dataset,
+                "dataset": result_dataset,
                 "detected_format": f"chatml_{detected['chat_column']}",
                 "final_format": f"chatml_{detected['chat_column']}",
                 "chat_column": detected["chat_column"],
