@@ -23,6 +23,25 @@ class ServeConfig:
     default_lr: float = 1e-5
     default_objective: str = "sft"
 
+    # --- T4.1 idle replay ---------------------------------------------------
+    # When true, a background task re-injects logged feedback records as
+    # training batches whenever the compute queue has been idle for
+    # ``idle_replay_threshold_s``. See ``lile/engine/replay.py``.
+    idle_replay: bool = False
+    idle_replay_threshold_s: float = 30.0
+    replay_poll_interval_s: float = 2.0
+    replay_max_per_record: int = 3
+    replay_half_life_h: float = 24.0
+    replay_min_records: int = 3
+
+    # --- frozen reference model --------------------------------------------
+    # When true, ``ModelState.load_frozen_ref()`` loads a second base-only
+    # model (eval, requires_grad=False) that objectives consume as ``pi_ref``
+    # for KL anchoring. When false (default), the KL anchor falls back to
+    # ``model.disable_adapter()`` on the live model — cheaper, but anchored
+    # to the live merged_deltas rather than session-start.
+    frozen_ref: bool = False
+
 
 @dataclass
 class KLAnchorSpec:

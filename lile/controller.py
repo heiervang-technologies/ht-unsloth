@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from .config import ServeConfig
+from .engine.replay import IdleReplayScheduler, ReplayPolicy
 from .engine.train import TrainEngine
 from .queue import ComputeQueue, new_batch_id
 from .snapshot import SnapshotManager
@@ -36,6 +37,9 @@ class Controller:
         # Feedback-event bookkeeping: response_id -> original inference record.
         self._response_index: dict[str, dict[str, Any]] = {}
 
+        # T4.1 idle replay; instantiated in start() once state is loaded.
+        self._replay: IdleReplayScheduler | None = None
+
     # ------------------------------------------------------------------ lifecycle
     async def start(self) -> None:
         self.state = ModelState.load(
@@ -46,11 +50,19 @@ class Controller:
             lora_dropout=self.cfg.lora_dropout,
             load_in_4bit=self.cfg.load_in_4bit,
         )
+        if self.cfg.frozen_ref:
+            self.state.load_frozen_ref()
         self.train_engine = TrainEngine(self.state, lr=self.cfg.default_lr)
         await self.queue.start(self._handle_task)
+        if self.cfg.idle_replay:
+            self._replay = IdleReplayScheduler(self, ReplayPolicy.from_config(self.cfg))
+            await self._replay.start()
         log.info("controller started on %s", self.cfg.model)
 
     async def stop(self) -> None:
+        if self._replay is not None:
+            await self._replay.stop()
+            self._replay = None
         await self.queue.stop()
 
     # ------------------------------------------------------------------ queue handler
@@ -155,6 +167,87 @@ class Controller:
             "queue_depth": self.queue._q.qsize(),
         }
 
+    @staticmethod
+    def feedback_to_batch(
+        record: dict[str, Any],
+        prompt_fallback: str | None = None,
+        response_fallback: str | None = None,
+    ) -> dict[str, Any] | None:
+        """Route a feedback payload to a train spec — pure, no Controller state.
+
+        Used by both the live ``submit_feedback`` path and the idle replay
+        scheduler (§T4.1). The scheduler reads feedback records directly from
+        the trajectory log, so it cannot consult the in-memory response index;
+        ``prompt`` and ``response`` must either be present in the record or
+        supplied via the fallback args.
+
+        Accepts both the external payload shape (``kind=...``) and the
+        trajectory-logged shape (``feedback_kind=...``, which ``log_feedback``
+        stamps in). Returns ``None`` when routing is impossible — caller can
+        log/skip rather than raising.
+        """
+        # Trajectory-logged records stamp the routing kind under
+        # ``feedback_kind`` (top-level ``kind`` is the event kind, always
+        # "feedback" on those records). Live-payload callers use ``kind``
+        # directly. Prefer ``feedback_kind`` so replay reads resolve
+        # correctly; fall back to ``kind`` but ignore the sentinel event
+        # kind "feedback" which carries no routing information.
+        kind = record.get("feedback_kind")
+        if not kind:
+            top = record.get("kind")
+            if top and top != "feedback":
+                kind = top
+        prompt = record.get("prompt") or prompt_fallback or ""
+        bad_response = record.get("response") or response_fallback or ""
+        if not prompt:
+            return None
+
+        if kind == "binary":
+            label = "desirable" if record.get("value") == "up" else "undesirable"
+            return {
+                "objective": "kto",
+                "samples": [{"prompt": prompt, "response": bad_response, "label": label}],
+            }
+        if kind in ("rewrite", "preferred"):
+            better = record.get("better_response")
+            if not better:
+                return None
+            return {
+                "objective": "weighted_sft",
+                "samples": [{
+                    "prompt": prompt,
+                    "response": better,
+                    "weight": record.get("weight", 3.0),
+                }],
+            }
+        if kind == "nl_critique":
+            critique = record.get("critique")
+            if not critique:
+                return None
+            return {
+                "objective": "coh",
+                "samples": [{
+                    "prompt": prompt,
+                    "bad": bad_response,
+                    "critique": critique,
+                }],
+            }
+        if kind == "nl_critique_with_rewrite":
+            critique = record.get("critique")
+            better = record.get("better_response")
+            if not critique or not better:
+                return None
+            return {
+                "objective": "coh",
+                "samples": [{
+                    "prompt": prompt,
+                    "bad": bad_response,
+                    "critique": critique,
+                    "good": better,
+                }],
+            }
+        return None
+
     async def submit_feedback(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Route feedback to the appropriate training objective (see §5b.3/§5c.16)."""
         rid = payload.get("response_id")
@@ -163,53 +256,30 @@ class Controller:
         if prior is None and "prompt" not in payload:
             return {"error": f"unknown response_id {rid!r}; include prompt in payload "
                              "to bypass index lookup"}
-        prompt = (payload.get("prompt")
-                  or (prior.get("messages", [{}])[-1].get("content") if prior else ""))
-        bad_response = payload.get("response") or (prior.get("response") if prior else "")
 
-        # Always log first.
-        self.trajectory.log_feedback(rid or "", kind=kind or "unknown", **{
-            k: v for k, v in payload.items() if k not in {"response_id", "kind"}
-        })
+        prompt_fallback = (prior.get("messages", [{}])[-1].get("content")
+                           if prior else None)
+        response_fallback = prior.get("response") if prior else None
 
-        # Routing.
-        if kind == "binary":
-            label = "desirable" if payload.get("value") == "up" else "undesirable"
-            spec = {
-                "objective": "kto",
-                "samples": [{"prompt": prompt, "response": bad_response, "label": label}],
-            }
-        elif kind == "rewrite" or kind == "preferred":
-            spec = {
-                "objective": "weighted_sft",
-                "samples": [{
-                    "prompt": prompt,
-                    "response": payload["better_response"],
-                    "weight": payload.get("weight", 3.0),
-                }],
-            }
-        elif kind == "nl_critique":
-            spec = {
-                "objective": "coh",
-                "samples": [{
-                    "prompt": prompt,
-                    "bad": bad_response,
-                    "critique": payload["critique"],
-                }],
-            }
-        elif kind == "nl_critique_with_rewrite":
-            spec = {
-                "objective": "coh",
-                "samples": [{
-                    "prompt": prompt,
-                    "bad": bad_response,
-                    "critique": payload["critique"],
-                    "good": payload["better_response"],
-                }],
-            }
-        else:
-            return {"error": f"unsupported feedback kind {kind!r}"}
+        # Log the feedback record with prompt/response materialized from the
+        # response index. Without this, idle replay (§T4.1) reading the log
+        # later cannot reconstruct the batch — the in-memory index is
+        # ephemeral, the log is canonical.
+        log_fields = {k: v for k, v in payload.items()
+                      if k not in {"response_id", "kind"}}
+        if "prompt" not in log_fields and prompt_fallback:
+            log_fields["prompt"] = prompt_fallback
+        if "response" not in log_fields and response_fallback:
+            log_fields["response"] = response_fallback
+        self.trajectory.log_feedback(rid or "", kind=kind or "unknown", **log_fields)
 
+        spec = self.feedback_to_batch(
+            payload,
+            prompt_fallback=prompt_fallback,
+            response_fallback=response_fallback,
+        )
+        if spec is None:
+            return {"error": f"unsupported or under-specified feedback kind {kind!r}"}
         return await self.submit_train(spec)
 
     async def request_merge(self) -> dict[str, Any]:

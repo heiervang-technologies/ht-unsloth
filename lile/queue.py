@@ -56,6 +56,10 @@ class ComputeQueue:
         self._cursor_advanced = asyncio.Condition()
         self._worker_task: asyncio.Task | None = None
         self._stop = asyncio.Event()
+        # Monotonic timestamp of the last submit(). Read by is_idle_for().
+        # Initialized far in the past so the very first poll after startup
+        # reads as idle; the scheduler gates on "quiet for N seconds" anyway.
+        self._last_enqueue_ts: float = 0.0
 
     # ------------------------------------------------------------------ enqueue
     async def submit(self, kind: str, payload: Any, batch_id: str = "") -> QueueTask:
@@ -63,8 +67,23 @@ class ComputeQueue:
         self._next_token += 1
         task = QueueTask(token=token, kind=kind, payload=payload, batch_id=batch_id)
         self._pending[token] = task
+        self._last_enqueue_ts = time.monotonic()
         await self._q.put(task)
         return task
+
+    # ------------------------------------------------------------------ idleness
+    def is_idle_for(self, seconds: float) -> bool:
+        """True iff the queue is empty AND no submit happened in the last N seconds.
+
+        Consulted by the idle replay scheduler (§T4.1) to avoid contending with
+        live train/infer work. Single-reader pattern: the scheduler polls this
+        at a coarse cadence, so we don't need a lock — `asyncio.Queue.empty()`
+        is safe to call from any coroutine, and the monotonic float read is
+        atomic on CPython.
+        """
+        if not self._q.empty():
+            return False
+        return (time.monotonic() - self._last_enqueue_ts) >= seconds
 
     # ------------------------------------------------------------------ read-side
     @property

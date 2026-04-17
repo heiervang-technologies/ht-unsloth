@@ -26,7 +26,11 @@ A production-clean local-LLM training-plus-inference daemon. Core invariant from
 
 **Shipped (T3.1 trace infilling):** SFT samples accept an optional `span_prefix: str` field. The loss is masked past the token boundary where the decoded suffix first ends with `span_prefix` — surgical credit assignment on the regenerated portion only. Boundary resolution walks token slices with `tokenizer.decode().endswith()` to stay robust to chat-template-inserted content (Qwen3 auto-injects a `<think>..</think>` block that naive tokenize-then-LCP strategies misalign against). `test_span_prefix.py` verifies (a) supervision count drops to ≈ suffix-token-count, (b) full-prefix edge case leaves only end-of-turn markers supervised.
 
-**Out of scope (by design):** T3.2 SCoRe multi-turn (needs multi-turn trajectory collection), T4 background replay/self-distill (operationally important, architecturally the same shape as T2 — two lines of scheduling once you have the queue), GGUF export, multi-GPU, full-FT, streaming WebSocket for training events. All land cleanly on top of the shipped core.
+**Shipped (T4.1 idle replay):** `lile/engine/replay.py` ships an `IdleReplayScheduler` that re-injects logged feedback records as training batches when the compute queue has been idle for `cfg.idle_replay_threshold_s` (default 30 s, opt-in via `cfg.idle_replay=True`). Records are drawn by weighted choice with recency half-life decay (`w = 2^(-age_h / half_life_h)`), capped at `cfg.replay_max_per_record` replays each. The scheduler keys on trajectory-log byte offsets via a new `TrajectoryLog.iter_with_offsets` iterator, and rebuilds batches via a pure `Controller.feedback_to_batch` staticmethod — no dependency on the in-memory response index, so the policy survives process restart. `test_replay.py` pins idle-gating (no submits while queue busy), per-record cap (stops at 2/2), recency bias (50/50 picks land on the fresh record against a 10-half-life stale one), and the full 4-kind routing table.
+
+**Shipped (frozen reference model, opt-in):** `ModelState.load_frozen_ref` loads a second base-only model in eval mode with `requires_grad=False`, auto-injected as `pi_ref=` into every objective by `TrainEngine.step` when `cfg.frozen_ref=True`. Falls back to PEFT's `disable_adapter()` context on the live model (EMA-1 anchor) when false — cheaper, but anchored to the live merged-deltas state rather than session-start. Memory cost is opt-in: ~0.4 GB for 0.6B NF4, ~5 GB for 7B NF4.
+
+**Out of scope (by design):** T3.2 SCoRe multi-turn (needs multi-turn trajectory collection), T4.2 background self-distill (operationally important, same scheduler pattern as T4.1), GGUF export, multi-GPU, full-FT, streaming WebSocket for training events. All land cleanly on top of the shipped core.
 
 ## Design rationale — the calls that matter
 
@@ -38,7 +42,7 @@ A production-clean local-LLM training-plus-inference daemon. Core invariant from
 
 **Decision thresholds pre-registered, not post-hoc.** `DESIGN.md` locked them before the run: ≥0.5 → default, 0.2–0.5 → opt-in, <0.2 → experimental. Mean +0.207 on 8B falls in the mid bucket. CCPD v2 ships as opt-in; hinge is primary T2. Mean +0.183 on 0.6B falls in the bottom bucket — which is exactly the IM-RM pathology the plan predicts at small scale, and corroborates the gate rather than contradicting it.
 
-**π_ref via `disable_adapter()` rather than a frozen snapshot.** For a single-GPU daemon, keeping a second copy of the 8B weights on-card or on-host is unnecessary. PEFT already exposes a `disable_adapter()` context that turns LoRA off on the live model for the duration of a forward. This anchors KL toward `base + merged_deltas` (the "what the current session has committed, minus the active in-flight deltas" policy). Works for both `kl_anchor_loss` and `ccpd_v2_loss`. The door is still open to pass an explicit `pi_ref=` for "frozen at session start" semantics; the controller doesn't auto-do it because that changes meaning after `snapshot_load`.
+**π_ref — EMA-1 (`disable_adapter()`) as default, frozen-snapshot as opt-in.** For a single-GPU daemon, keeping a second copy of the 8B weights on-card or on-host is only sometimes worth it. Default: PEFT's `disable_adapter()` context turns LoRA off on the live model for the duration of a forward — anchors KL toward `base + merged_deltas` at zero memory cost. Opt-in (`cfg.frozen_ref=True`): `ModelState.load_frozen_ref` loads a second base-only model in eval/no-grad mode and `TrainEngine.step` auto-injects it as `pi_ref=` on every objective call. Changes the anchor semantics from "this session's committed state minus active LoRA" to "session-start base model." Users who want frozen-at-start KL (e.g. long-running daemons where merged_deltas have drifted meaningfully) flip one flag; everyone else pays no VRAM for it.
 
 **A threading lock on the model mode.** Discovered the hard way from `test_concurrent_load.py`. Added on `ModelState` because the model is the shared resource. Held by every GPU operation that depends on the per-layer inference/training temp buffers. Costs: serializes chat-vs-train (acceptable on one GPU) and serializes chat-vs-chat (also acceptable — concurrent Unsloth fast-inference calls would be stepping on each other's scratch tensors anyway).
 
@@ -62,7 +66,9 @@ I reviewed a peer submission ("gemini/purple") that had solved the live-residual
 
 I also brought back T3.1 trace infilling, which I had scoped out as "needs CoT auto-detect." It didn't — a `span_prefix: str` on the sample, resolved by `tokenizer.decode(...).endswith(...)` on progressively longer token slices, is enough for surgical credit assignment on the regenerated suffix. The decode-based resolution handles Qwen3's auto-inserted `<think>` block cleanly, which a naive string-concat-then-LCP approach (the first version I wrote) misaligns against.
 
-Full review (scoring, what I'd replace, what they got right that I missed) lives on the peer's PR comment thread.
+A second peer review (Claude Opus 4.6, "blue") had shipped T4.1 idle replay as a standalone scheduler with a pure-function batch-reconstructor, plus a clean config-flag frozen-ref toggle. I had deliberately scoped those out ("nice-to-have"; "one flag"). Seeing it work in ~200 LOC changed my mind — the two prerequisites (`ComputeQueue.is_idle_for` and `Controller.feedback_to_batch` as a pure staticmethod) are tiny, and once they exist the scheduler itself is just weighted-choice + per-record cap + the idle gate. I stole the shape and adapted to my asyncio-native queue: an `IdleReplayScheduler` task that `asyncio.create_task`s in `Controller.start` and cancels in `Controller.stop`, polling `queue.is_idle_for(threshold)` at a coarse cadence. The frozen-ref flag is now `cfg.frozen_ref=True` and `TrainEngine.step` auto-injects it as `pi_ref=` into every objective, including the batch-level ones (KL anchor, CCPD v2 inner KL).
+
+Full reviews (scoring, what I'd replace, what they got right that I missed) live on each peer's PR comment thread — purple at #6, blue at #4.
 
 ## Evidence (numbers)
 
@@ -84,14 +90,15 @@ Full review (scoring, what I'd replace, what they got right that I missed) lives
 | Peak VRAM (0.6B bench) | 1.25 GB | ^ |
 | **Residual applied live after merge** | base -94.571 → trained -8.111 → merged -8.159 (drift 0.048 nats) | `test_residual_live_path.py` |
 | **T3.1 span_prefix mask geometry** | 35 → 15 supervised tokens (suffix-only), edge case full-prefix leaves 2 | `test_span_prefix.py` |
+| **T4.1 idle replay** | idle-gate blocks all replays while queue busy; per-record cap stops at 2/2; recency decay picks fresh 50/50 vs 10-half-life stale 0/50; 4-kind routing preserved | `test_replay.py` |
 
 ## What I'd do next, in this order
 
 1. **Promote CCPD v2 to default on ≥ 14B** — the 0.6B → 8B scaling (+0.025 Spearman mean) suggests a 14B or 32B might cross the 0.5 bar. Same script, same thresholds.
-2. **Auto-snapshot π_ref at session boot** — for users who want the frozen-at-start KL anchor semantics. Controller change + a config flag; the plumbing is already there.
-3. **T4.1 background replay** — the queue already supports priority; this is a scheduler policy change, not new primitives.
+2. **T4.2 self-distill** — same scheduler pattern as T4.1 but the target is trainer↔sidecar weight-state distillation. Once a vLLM sidecar lands, this is the natural follow-up.
+3. **vLLM sidecar for 2×GPU** — Phase 6 of the plan. The trajectory contract is already process-boundary-safe (offsets, not in-memory handles), and `feedback_to_batch` being pure means a sidecar-side replay scheduler is a ~50-LOC port.
 4. **VL-content-wrapper layer** for tokenizer calls, so the same daemon runs against VL-backed text models without per-site rewrites.
-5. **Expose `/v1/metrics` Prometheus endpoint** — we already log every train step + inference to the trajectory; one scrape adapter gives live loss curves in Grafana.
+5. **Expose `/v1/metrics` Prometheus endpoint** — we already log every train step + inference + replay to the trajectory; one scrape adapter gives live loss curves in Grafana.
 
 ## Repro one-liner
 
@@ -106,6 +113,7 @@ python -m lile.tests.test_ccpd_e2e && \
 python -m lile.tests.test_concurrent_load && \
 python -m lile.tests.test_residual_live_path && \
 python -m lile.tests.test_span_prefix && \
+python -m lile.tests.test_replay && \
 python -m lile.tests.bench_rc_ranking \
     --model unsloth/Qwen3-8B-unsloth-bnb-4bit \
     --k 6 --repeats 2 --max-new-tokens 80 \

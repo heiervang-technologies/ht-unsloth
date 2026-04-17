@@ -84,6 +84,37 @@ class TrajectoryLog:
                 except json.JSONDecodeError:
                     log.warning("malformed trajectory line at offset %d", f.tell())
 
+    def iter_with_offsets(
+        self,
+        since_offset: int = 0,
+        kinds: set[str] | None = None,
+    ) -> Iterable[tuple[int, dict[str, Any]]]:
+        """Yield ``(line_start_offset, record)`` so callers can deduplicate by offset.
+
+        Used by the idle replay scheduler (§T4.1) to track per-record replay
+        counts: the line's byte offset is its stable identifier for the
+        lifetime of the log file. ``kinds`` restricts yielded records to the
+        listed event kinds (e.g. ``{"feedback"}``); ``None`` yields all.
+        """
+        with self.path.open("rb") as f:
+            f.seek(since_offset)
+            while True:
+                pos = f.tell()
+                line = f.readline()
+                if not line:
+                    break
+                stripped = line.strip()
+                if not stripped:
+                    continue
+                try:
+                    record = json.loads(stripped)
+                except json.JSONDecodeError:
+                    log.warning("malformed trajectory line at offset %d", pos)
+                    continue
+                if kinds is not None and record.get("kind") not in kinds:
+                    continue
+                yield pos, record
+
     def tail(self, n: int = 20) -> list[dict[str, Any]]:
         all_events = list(self.iter_events())
         return all_events[-n:]

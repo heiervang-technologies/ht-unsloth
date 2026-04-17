@@ -66,6 +66,10 @@ class TrainEngine:
             name = spec["objective"]
             samples = spec.get("samples", [])
             kwargs = dict(spec.get("kwargs", {}))
+            # Inject frozen reference if loaded; objectives that care (CCPD v2,
+            # KL anchor) consume it, the rest absorb it via **_.
+            if self.state.frozen_ref is not None and "pi_ref" not in kwargs:
+                kwargs["pi_ref"] = self.state.frozen_ref
             fn = get_objective(name)
             result = fn(self.state.model, self.state.tokenizer, samples, **kwargs)
             loss = result["loss"]
@@ -75,8 +79,11 @@ class TrainEngine:
             for bo in spec.get("batch_objectives", []):
                 bo_name = bo["name"]
                 bo_fn = get_objective(bo_name)
+                bo_kwargs = {k: v for k, v in bo.items() if k != "name"}
+                if self.state.frozen_ref is not None and "pi_ref" not in bo_kwargs:
+                    bo_kwargs["pi_ref"] = self.state.frozen_ref
                 bo_result = bo_fn(self.state.model, self.state.tokenizer,
-                                  samples, **{k: v for k, v in bo.items() if k != "name"})
+                                  samples, **bo_kwargs)
                 bo_loss = bo_result.get("loss")
                 if bo_loss is not None:
                     loss = (loss if loss is not None else 0.0) + bo_loss

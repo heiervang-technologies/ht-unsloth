@@ -116,6 +116,10 @@ class ModelState:
     # Base-layer forward pre-hook handles (fallback path for disable_adapter).
     # Keyed by LoraLayer name; stored so we can remove/rebind without leaking.
     _residual_hook_handles: dict[str, Any] = field(default_factory=dict, repr=False)
+    # Optional frozen reference model (base-only, eval, requires_grad=False).
+    # When set, objectives consume it as ``pi_ref`` for KL anchoring instead
+    # of falling back to ``model.disable_adapter()`` on the live model.
+    frozen_ref: Any = field(default=None, repr=False)
 
     @classmethod
     def load(
@@ -285,6 +289,42 @@ class ModelState:
             h.update(k.encode("utf-8"))
             h.update(t.cpu().contiguous().view(torch.uint8).numpy().tobytes())
         return h.hexdigest()
+
+    # ------------------------------------------------------------------ frozen ref
+    def load_frozen_ref(self) -> None:
+        """Load a second base-only model as the frozen reference for KL anchors.
+
+        The live ``self.model`` carries an active LoRA adapter plus any applied
+        residual. A frozen reference held in eval mode with grad disabled gives
+        objectives a *stable* anchor point — the session-start policy — rather
+        than the EMA-1 fallback (``model.disable_adapter()``) which anchors to
+        the live merged-deltas state.
+
+        Memory cost: the 4-bit NF4 base weighs roughly 0.4 GB for a 0.6B model
+        and ~5 GB for a 7B model. Call from ``Controller.start`` only when
+        ``cfg.frozen_ref=True`` so the VRAM cost is opt-in.
+        """
+        from unsloth import FastLanguageModel
+        if self.frozen_ref is not None:
+            log.info("frozen reference already loaded — skipping")
+            return
+        log.info("loading frozen reference (base-only) from %s", self.base_model_name)
+        ref_model, _ = FastLanguageModel.from_pretrained(
+            model_name=self.base_model_name,
+            max_seq_length=2048,
+            load_in_4bit=True,
+            dtype=None,
+        )
+        ref_model.eval()
+        for p in ref_model.parameters():
+            p.requires_grad = False
+        # Put into inference mode so the Unsloth fast path works.
+        try:
+            FastLanguageModel.for_inference(ref_model)
+        except Exception:
+            pass
+        self.frozen_ref = ref_model
+        log.info("frozen reference loaded (eval, requires_grad=False)")
 
     def save_residual(self, path: Path) -> None:
         from safetensors.torch import save_file
