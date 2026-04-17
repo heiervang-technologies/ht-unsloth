@@ -19,6 +19,10 @@ def _lile_base_url() -> str:
     return f"http://{host}:{port}"
 
 
+# Module-level cell; flipped by /capsule/start when we spawn.
+_spawned_pid: int | None = None
+
+
 @router.get("/capsule/status")
 async def capsule_status() -> dict:
     url = f"{_lile_base_url()}/health"
@@ -35,7 +39,3 @@ async def capsule_status() -> dict:
         }
     except (httpx.ConnectError, httpx.TimeoutException):
         return {"running": False}
-
-
-# Module-level cell; flipped by /capsule/start when we spawn.
-_spawned_pid: int | None = None
