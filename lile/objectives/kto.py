@@ -12,23 +12,38 @@ z0 is the reference drift and is estimated by mismatched (x, y) pairs in a
 batch. For online single-sample learning we estimate z0 via the batch mean of
 log-ratios on mismatched samples, as in TRL's implementation.
 
-This is a minimal, correct implementation for online feedback; defaults favor
-the community-validated λ_D=1.0, λ_U=1.5 imbalance from §5b.1.
+Batch-1 degeneracy and the EMA fix
+----------------------------------
+With batch-size 1 the "batch mean of log-ratios" degenerates to ``logratio[0]``
+itself, so ``logratio - z0 == 0`` and ``1 - σ(0) == 0.5`` — a constant for the
+desirable singleton case. TRL has the same artifact. The live-feedback path
+almost always submits one sample at a time (one thumbs-up/down per event), so
+we maintain a module-level EMA of ``z0`` keyed by ``(id(model), beta)``. When
+batch-size < 2 the EMA provides a real drift reference; when batch-size ≥ 2 we
+use the batch mean (and update the EMA). Callers that want the old TRL-style
+behavior can pass ``z0_ema_alpha=None`` to disable the EMA and fall back to
+the batch-mean (which is a constant at batch=1, per above).
+
+Defaults favor the community-validated λ_D=1.0, λ_U=1.5 imbalance from §5b.1.
 """
 from __future__ import annotations
 
 from typing import Any
 
 import torch
-import torch.nn.functional as F
 
 from ._utils import build_chat_inputs, pad_and_stack, sequence_logprob
+
+# Module-level EMA of z0, keyed by (id(model), beta). Keeps single-sample
+# feedback events from collapsing to a zero-signal update (see docstring).
+_Z0_EMA: dict[tuple[int, float], float] = {}
 
 
 def kto_loss(model: Any, tokenizer: Any, samples: list[dict[str, Any]],
              pi_ref: Any | None = None, beta: float = 0.1,
              lambda_desirable: float = 1.0, lambda_undesirable: float = 1.5,
              pi_ref_mode: str | None = "adapter_disabled",
+             z0_ema_alpha: float | None = 0.9,
              **_: Any) -> dict[str, Any]:
     """
     `samples` items: {"prompt": str, "response": str, "label": "desirable"|"undesirable"}
@@ -44,6 +59,11 @@ def kto_loss(model: Any, tokenizer: Any, samples: list[dict[str, Any]],
         back to a zero reference, degenerating to a weighted log-likelihood
         term. That path is explicit opt-in, not the default, because it
         silently weakens the binary-feedback signal.
+
+    ``z0_ema_alpha``: when set (default 0.9), ``z0`` is tracked as an EMA
+    across calls at batch-size 1 and used as the drift reference instead of
+    the degenerate-to-zero batch mean. Pass ``None`` to restore TRL-style
+    batch-mean behavior (warning: at batch=1 this zero-signal desirable case).
     """
     if not samples:
         raise ValueError("kto_loss requires at least one sample")
@@ -78,10 +98,29 @@ def kto_loss(model: Any, tokenizer: Any, samples: list[dict[str, Any]],
         ref_mode = "degenerate_zero"
 
     logratio = beta * (policy_logprob_per_tok - ref_logprob_per_tok)
-    # z0: expected drift estimated by mean logratio on the batch. This is a
-    # reasonable proxy when we lack mismatched pairs.
+    # z0 = expected drift. Batch-mean is a reasonable proxy when we have
+    # multiple samples; at batch=1 it collapses to logratio[0] so σ(lr - z0)
+    # is constant 0.5. Use a module-level EMA to restore real drift signal
+    # on single-sample calls (the production feedback path).
+    use_ema = z0_ema_alpha is not None and len(samples) < 2
+    ema_key = (id(model), float(beta))
     with torch.no_grad():
-        z0 = logratio.mean().detach()
+        batch_z0 = float(logratio.mean().detach().cpu())
+        if use_ema and ema_key in _Z0_EMA:
+            z0_val = _Z0_EMA[ema_key]
+            z0_source = "ema"
+        else:
+            z0_val = batch_z0
+            z0_source = "batch_mean"
+        # Always update EMA from the current batch mean (cold-start included).
+        if z0_ema_alpha is not None:
+            prev = _Z0_EMA.get(ema_key)
+            if prev is None:
+                _Z0_EMA[ema_key] = batch_z0
+            else:
+                a = float(z0_ema_alpha)
+                _Z0_EMA[ema_key] = a * prev + (1.0 - a) * batch_z0
+        z0 = torch.tensor(z0_val, device=logratio.device, dtype=logratio.dtype)
 
     labels = [s.get("label", "desirable") for s in samples]
     losses = []
@@ -97,6 +136,7 @@ def kto_loss(model: Any, tokenizer: Any, samples: list[dict[str, Any]],
         "components": {
             "kto_loss": float(loss.detach().cpu()),
             "kto_z0": float(z0.detach().cpu()),
+            "kto_z0_source": z0_source,
             "kto_ref_mode": ref_mode,
             "n_desirable": sum(1 for l in labels if l == "desirable"),
             "n_undesirable": sum(1 for l in labels if l == "undesirable"),

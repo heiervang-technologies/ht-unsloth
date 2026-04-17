@@ -33,17 +33,26 @@ class TrajectoryLog:
             self.path.touch()
 
     # ------------------------------------------------------------------ writers
-    def log_event(self, kind: str, data: dict[str, Any]) -> int:
-        """Append a `{kind, ts, ...data}` line. Returns byte offset of the new line."""
-        payload = {"kind": kind, "ts": time.time(), **data}
+    def append_raw(self, payload: dict[str, Any]) -> int:
+        """Append a pre-shaped JSON record with no kind/ts stamping.
+
+        Intended for fixtures, migration tools, and tests that need to control
+        ``ts`` or write pre-built records verbatim. Production code should use
+        ``log_event`` (or the kind-specific wrappers), which enforce the
+        canonical ``{kind, ts, ...}`` shape.
+        """
         line = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
         with self._lock:
-            # Binary mode so the returned offset matches what tail()/reconstruct() see.
             with self.path.open("ab") as f:
                 offset = f.tell()
                 f.write(line.encode("utf-8") + b"\n")
                 f.flush()
         return offset
+
+    def log_event(self, kind: str, data: dict[str, Any]) -> int:
+        """Append a `{kind, ts, ...data}` line. Returns byte offset of the new line."""
+        payload = {"kind": kind, "ts": time.time(), **data}
+        return self.append_raw(payload)
 
     def log_inference(self, response_id: str, prompt: str, response: str,
                       model_fingerprint: str) -> int:

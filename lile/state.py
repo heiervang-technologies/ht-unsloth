@@ -35,6 +35,7 @@ still applies the residual.
 """
 from __future__ import annotations
 
+import functools
 import logging
 import sys
 import threading
@@ -86,11 +87,14 @@ def _install_matmul_lora_patch() -> None:
         delta = getattr(W, "_residual_delta", None)
         if delta is None:
             return out_res
-        # Residual is a (out_features, in_features) bf16 GPU tensor, no grad.
-        # F.linear(X, delta) = X @ delta.T; shape matches out_res exactly since
-        # matmul_lora's final view(...) mirrors F.linear's broadcasting.
-        delta_cast = delta.to(dtype=out_res.dtype, device=out_res.device, non_blocking=True)
-        return out_res + F.linear(X, delta_cast)
+        # Residual is a (out_features, in_features) bf16 GPU tensor, no grad,
+        # pre-cast at bind time by ``_apply_residual_to_model`` to match the
+        # model compute dtype. Skip the per-forward .to() syscall when the
+        # dtype/device already match (the common path on bf16 pipelines).
+        if delta.dtype != out_res.dtype or delta.device != out_res.device:
+            delta = delta.to(dtype=out_res.dtype, device=out_res.device,
+                             non_blocking=True)
+        return out_res + F.linear(X, delta)
 
     _patched._lile_patched = True  # type: ignore[attr-defined]
     _patched._lile_original = original  # type: ignore[attr-defined]
@@ -114,8 +118,18 @@ def _install_matmul_lora_patch() -> None:
     log.debug("installed matmul_lora residual patch (%d bindings rewritten)", replaced)
 
 
-# Install at import — matches Gemini's ergonomics but with explicit idempotence.
-_install_matmul_lora_patch()
+@functools.cache
+def install() -> None:
+    """Idempotent: patches unsloth's matmul_lora to honor ``W._residual_delta``.
+
+    Called automatically by ``ModelState.load``. External callers can invoke
+    ``lile.install()`` explicitly to pre-warm the patch before constructing a
+    ModelState. Previously this ran as an import-time side effect, which
+    meant a plain ``from lile.state import ModelState`` (dataclass reads,
+    snapshot-manifest inspection, schema probes) mutated
+    ``sys.modules["unsloth.*"]``. See PR#8 review.
+    """
+    _install_matmul_lora_patch()
 
 
 @dataclass
@@ -155,6 +169,9 @@ class ModelState:
         lora_dropout: float = 0.0,
         load_in_4bit: bool = True,
     ) -> "ModelState":
+        # Install the matmul_lora residual patch before Unsloth finishes
+        # binding its fast-path references. Idempotent + cached.
+        install()
         from unsloth import FastLanguageModel  # heavy import; lazy
 
         log.info("loading base model %s (4bit=%s)", model_name, load_in_4bit)
@@ -371,8 +388,16 @@ class ModelState:
 
 
 def _make_residual_forward_hook(delta_gpu: torch.Tensor):
-    """Closure-scoped forward hook adding ``F.linear(x, delta)`` to base_layer output."""
+    """Closure-scoped forward hook adding ``F.linear(x, delta)`` to base_layer output.
+
+    ``delta_gpu`` is pre-cast to the model compute dtype by
+    ``_apply_residual_to_model``; the per-forward .to() only fires on a true
+    mismatch (e.g. a layer in fp16 while the residual is bf16).
+    """
     def _hook(module: Any, inputs: tuple, output: torch.Tensor) -> torch.Tensor:
         x = inputs[0] if isinstance(inputs, tuple) else inputs
-        return output + F.linear(x, delta_gpu.to(dtype=output.dtype, device=output.device))
+        delta = delta_gpu
+        if delta.dtype != output.dtype or delta.device != output.device:
+            delta = delta.to(dtype=output.dtype, device=output.device)
+        return output + F.linear(x, delta)
     return _hook

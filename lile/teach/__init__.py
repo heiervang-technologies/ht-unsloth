@@ -295,11 +295,15 @@ def numeric_surface_forms(n: int, noun: str = "") -> list[str]:
             if suffix:
                 forms.append(f"{_SMALL_WORD[value]} {unit_word}{suffix}")
 
+    # Emit the LARGEST matching magnitude unit only — cascading if/if/if
+    # produced noisy duplicates ("2000 million" / "2000000 thousand" alongside
+    # "2 billion" for n=2e9). If a model emits a lower-magnitude form (rare),
+    # the raw forms "{n}" and "{n:,}" above still cover it. See PR#8 review.
     if n >= 1_000_000_000 and n % 1_000_000_000 == 0:
         _add_unit(n // 1_000_000_000, "billion", "B")
-    if n >= 1_000_000 and n % 1_000_000 == 0:
+    elif n >= 1_000_000 and n % 1_000_000 == 0:
         _add_unit(n // 1_000_000, "million", "M")
-    if n >= 1_000 and n % 1_000 == 0:
+    elif n >= 1_000 and n % 1_000 == 0:
         _add_unit(n // 1_000, "thousand", "K")
 
     # Dedupe, preserve order.

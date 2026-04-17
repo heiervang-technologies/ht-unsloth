@@ -15,7 +15,11 @@ import random
 import sys
 import time
 
+import pytest
+
 from lile.queue import ComputeQueue
+
+pytestmark = pytest.mark.cpu_only
 
 
 async def _slow_handler(task) -> int:
@@ -150,6 +154,16 @@ async def main() -> int:
     await _scenario_concurrent_submit_and_wait()
     print("[test_queue] ALL OK")
     return 0
+
+
+def test_queue_scenarios() -> None:
+    """Pytest entrypoint that runs all four async scenarios.
+
+    The scenarios themselves are private (underscore-prefixed) so pytest's
+    auto-discovery doesn't try to run them as sync tests. This wrapper lets
+    ``pytest -m cpu_only`` pick up the file.
+    """
+    assert asyncio.run(main()) == 0
 
 
 if __name__ == "__main__":

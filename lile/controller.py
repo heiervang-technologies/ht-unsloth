@@ -9,10 +9,15 @@ This module is the glue between `server` (HTTP) and `engine` (GPU work).
 from __future__ import annotations
 
 import asyncio
+import collections
 import logging
 import time
 from pathlib import Path
 from typing import Any
+
+# Response index cap: after this many live responses we start evicting the
+# oldest entries. OrderedDict gives O(1) insertion, lookup, and eviction.
+_RESPONSE_INDEX_CAP = 4096
 
 from .config import ServeConfig
 from .engine.replay import IdleReplayScheduler, ReplayPolicy
@@ -35,7 +40,13 @@ class Controller:
         self.snapshots = SnapshotManager(cfg.data_dir / "snapshots")
 
         # Feedback-event bookkeeping: response_id -> original inference record.
-        self._response_index: dict[str, dict[str, Any]] = {}
+        # OrderedDict keeps insertion order so ``popitem(last=False)`` evicts
+        # oldest in O(1). Previously the eviction path did
+        # ``sorted(..., key=ts)[:1024]`` — O(n log n) per generate above the
+        # cap. See PR#8 review.
+        self._response_index: "collections.OrderedDict[str, dict[str, Any]]" = (
+            collections.OrderedDict()
+        )
 
         # T4.1 idle replay; instantiated in start() once state is loaded.
         self._replay: IdleReplayScheduler | None = None
@@ -133,14 +144,7 @@ class Controller:
             response=text,
             model_fingerprint=self.state.residual_fingerprint()[:16],
         )
-        self._response_index[rid] = {
-            "messages": messages, "response": text, "ts": time.time(),
-        }
-        # Evict old entries to cap memory.
-        if len(self._response_index) > 4096:
-            oldest = sorted(self._response_index.items(), key=lambda kv: kv[1]["ts"])[:1024]
-            for k, _ in oldest:
-                self._response_index.pop(k, None)
+        self._remember_response(rid, messages, text)
         return {"response_id": rid, "response": text}
 
     async def stream_generate(self, messages: list[dict[str, str]],
@@ -199,15 +203,18 @@ class Controller:
             response=full_text,
             model_fingerprint=self.state.residual_fingerprint()[:16],
         )
-        self._response_index[rid] = {
-            "messages": messages, "response": full_text, "ts": time.time(),
-        }
-        if len(self._response_index) > 4096:
-            oldest = sorted(self._response_index.items(), key=lambda kv: kv[1]["ts"])[:1024]
-            for k, _ in oldest:
-                self._response_index.pop(k, None)
+        self._remember_response(rid, messages, full_text)
         yield {"final": True, "response_id": rid, "full": full_text,
                "commit_cursor": self.queue.committed}
+
+    def _remember_response(self, rid: str, messages: list[dict[str, str]],
+                           response_text: str) -> None:
+        """O(1) insertion + LRU eviction via OrderedDict."""
+        self._response_index[rid] = {
+            "messages": messages, "response": response_text, "ts": time.time(),
+        }
+        while len(self._response_index) > _RESPONSE_INDEX_CAP:
+            self._response_index.popitem(last=False)
 
     async def submit_train(self, spec: dict[str, Any]) -> dict[str, Any]:
         """Chunk a train batch into queue tasks and return the final commit_token."""

@@ -17,16 +17,19 @@ Run: python -m lile.tests.test_replay
 from __future__ import annotations
 
 import asyncio
-import json
 import sys
 import tempfile
 import time
 from pathlib import Path
 
+import pytest
+
 # Import the modules under test.
 from lile.controller import Controller
 from lile.engine.replay import IdleReplayScheduler, ReplayPolicy
 from lile.trajectory import TrajectoryLog
+
+pytestmark = pytest.mark.cpu_only
 
 
 class _FakeQueue:
@@ -59,13 +62,17 @@ def _write_feedback(log: TrajectoryLog, *, kind: str, prompt: str,
                     response: str, critique: str | None = None,
                     better_response: str | None = None,
                     ts: float | None = None) -> int:
-    """Append a feedback event, returning its byte offset. Supports ts override."""
+    """Append a feedback event via the public ``append_raw`` helper.
+
+    Tests need ``ts`` control that the canonical ``log_feedback`` (which
+    stamps ``time.time()``) can't provide. Using ``append_raw`` keeps this
+    test decoupled from the log's internal lock/path layout.
+    """
     fields = {"prompt": prompt, "response": response}
     if critique:
         fields["critique"] = critique
     if better_response:
         fields["better_response"] = better_response
-    # Direct file write so we can control ts (log_feedback uses time.time()).
     payload = {
         "kind": "feedback",
         "ts": ts if ts is not None else time.time(),
@@ -73,13 +80,7 @@ def _write_feedback(log: TrajectoryLog, *, kind: str, prompt: str,
         "feedback_kind": kind,
         **fields,
     }
-    line = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
-    with log._lock:
-        with log.path.open("ab") as f:
-            offset = f.tell()
-            f.write(line.encode("utf-8") + b"\n")
-            f.flush()
-    return offset
+    return log.append_raw(payload)
 
 
 # ---------------------------------------------------------------------- tests

@@ -17,11 +17,14 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+import pytest
 import torch
 
 from lile.snapshot import SnapshotManager
 from lile.state import ModelState
 from lile.trajectory import TrajectoryLog, new_response_id
+
+pytestmark = pytest.mark.cpu_only
 
 
 def _make_fake_state() -> ModelState:

@@ -149,15 +149,14 @@ def ccpd_v2_loss(
 
     # --- Step 4a: REINFORCE with rank advantages ----------------------------
     # log π_θ(y | x), mean over tokens — gradient flows via policy log-prob.
-    logprobs: list[torch.Tensor] = []
-    for y in candidates:
-        tok = build_chat_inputs(tokenizer, prompt, y)
-        pad_id = tokenizer.pad_token_id or tokenizer.eos_token_id or 0
-        batch = pad_and_stack([tok], pad_id=pad_id)
-        lp = sequence_logprob_mean(model, batch["input_ids"], batch["labels"],
-                                   batch["attention_mask"])
-        logprobs.append(lp.squeeze(0))
-    lp_stack = torch.stack(logprobs)                             # (k,)
+    # One batched forward over all k candidates; pad_and_stack handles ragged
+    # lengths. Previously this was k sequential forwards (PR#8 review).
+    toks = [build_chat_inputs(tokenizer, prompt, y) for y in candidates]
+    pad_id = tokenizer.pad_token_id or tokenizer.eos_token_id or 0
+    batch = pad_and_stack(toks, pad_id=pad_id)
+    lp_stack = sequence_logprob_mean(
+        model, batch["input_ids"], batch["labels"], batch["attention_mask"],
+    )                                                            # (k,)
     A = advantages.to(lp_stack.device).detach()                  # (k,)
     L_policy = -(A * lp_stack).mean()
 
@@ -175,6 +174,16 @@ def ccpd_v2_loss(
     #       anchors π_θ toward base + merged_deltas (the session-start policy
     #       if no merges have happened this session).
     #   (c) Otherwise: KL is zero.
+    #
+    # Scope note (chosen simplification, not derived from §5c.11): the KL is
+    # computed over the prompt's next-token distribution only — not over the
+    # full generation distribution (p(y_t | x, y_<t) for sampled y). That
+    # would require either running KL on each candidate's response tokens (k×
+    # forward cost on the ref side) or Monte-Carlo sampling under π_θ. Over
+    # prompt-position only keeps the KL term O(1) in candidate count while
+    # still penalizing drift at the reaction-to-prompt layer, which empirically
+    # stabilizes CCPD. Promoting this to full-generation KL is tracked as a
+    # future refinement; see PR#8 review.
     use_self_ref = (pi_ref is None and pi_ref_mode == "adapter_disabled"
                     and gamma > 0.0 and hasattr(model, "disable_adapter"))
     if pi_ref is not None or use_self_ref:
