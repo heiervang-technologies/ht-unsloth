@@ -26,6 +26,7 @@ from .logging_backends import LoggerConfig, MetricsLogger, flatten_scalars, get_
 from .queue import ComputeQueue, new_batch_id
 from .snapshot import SnapshotManager
 from .state import ModelState
+from .teach.ttrl_mv import TTRLPolicy, TTRLScheduler
 from .trajectory import TrajectoryLog, new_response_id
 
 log = logging.getLogger(__name__)
@@ -58,6 +59,11 @@ class Controller:
 
         # T4.1 idle replay; instantiated in start() once state is loaded.
         self._replay: IdleReplayScheduler | None = None
+
+        # PR L TTRL pseudo-reward scheduler; instantiated in start() if
+        # ``cfg.ttrl_pseudo_reward``. Co-lives with ``_replay`` — both are
+        # idle-gated, so the queue mediates any contention naturally.
+        self._ttrl: TTRLScheduler | None = None
 
         # Shutdown coordination (#11). ``_shutting_down`` is read by metrics
         # (the ``lile_shutting_down`` gauge) and by every submit_* entrypoint
@@ -93,9 +99,15 @@ class Controller:
         if self.cfg.idle_replay:
             self._replay = IdleReplayScheduler(self, ReplayPolicy.from_config(self.cfg))
             await self._replay.start()
+        if self.cfg.ttrl_pseudo_reward:
+            self._ttrl = TTRLScheduler(self, TTRLPolicy.from_config(self.cfg))
+            await self._ttrl.start()
         log.info("controller started on %s", self.cfg.model)
 
     async def stop(self) -> None:
+        if self._ttrl is not None:
+            await self._ttrl.stop()
+            self._ttrl = None
         if self._replay is not None:
             await self._replay.stop()
             self._replay = None
@@ -134,6 +146,9 @@ class Controller:
         if self._shutting_down:
             return {"already_shut_down": True}
         self._shutting_down = True
+        if self._ttrl is not None:
+            await self._ttrl.stop()
+            self._ttrl = None
         if self._replay is not None:
             await self._replay.stop()
             self._replay = None
