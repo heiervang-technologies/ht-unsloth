@@ -67,6 +67,13 @@ triton = [
     "triton-windows ; (sys_platform == 'win32') and (platform_machine == 'AMD64' or platform_machine == 'x86_64')",
 ]
 
+# lile offline eval harness — opt-in via `uv sync --extra eval`. Not loaded by
+# the daemon; only the CLI at `python -m lile.teach.eval` imports these.
+eval = [
+    "lm-eval>=0.4.0",
+    "evalplus>=0.3.0",
+]
+
 huggingfacenotorch = [
     "wheel>=0.42.0",
     "packaging",
@@ -1195,4 +1202,5 @@ python_files = ["test_*.py"]
 markers = [
     "cpu_only: test runs without a GPU (pure function, queue, trajectory, filesystem)",
     "gpu: test requires CUDA (loads a real model, exercises Unsloth kernels)",
+    "eval: test exercises lile.teach.eval harness (stub path without --extra eval)",
 ]
