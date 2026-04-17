@@ -1,0 +1,62 @@
+"""Inference path.
+
+Uses Unsloth's fast_generate when available, falling back to HF generate.
+Inference sees the live LoRA instantly — no sync is required because
+training and inference share the same model weights (the single-process
+invariant from DESIGN.md).
+"""
+from __future__ import annotations
+
+import logging
+from typing import Any
+
+import torch
+
+log = logging.getLogger(__name__)
+
+
+def generate_chat(model: Any, tokenizer: Any, messages: list[dict[str, str]],
+                  max_new_tokens: int = 256, temperature: float = 0.7,
+                  top_p: float = 0.95,
+                  mode_lock: Any = None) -> str:
+    """OpenAI-style messages → generated assistant text.
+
+    `mode_lock` is the ModelState.mode_lock; held across the Unsloth mode flip
+    and the entire generate so concurrent training cannot tear down the
+    per-layer temp buffers the fast-inference path relies on.
+    """
+    prompt_text = tokenizer.apply_chat_template(
+        messages, add_generation_prompt=True, tokenize=False,
+    )
+    enc = tokenizer(text=prompt_text, return_tensors="pt", add_special_tokens=False)
+    device = next(model.parameters()).device
+    input_ids = enc["input_ids"].to(device)
+    attn = enc.get("attention_mask")
+    if attn is not None:
+        attn = attn.to(device)
+
+    # Null-object pattern so callers that don't know about the lock still work.
+    import contextlib
+    lock_cm = mode_lock if mode_lock is not None else contextlib.nullcontext()
+
+    with lock_cm:
+        try:
+            from unsloth import FastLanguageModel
+            FastLanguageModel.for_inference(model)
+        except Exception:
+            pass
+
+        with torch.no_grad():
+            out = model.generate(
+                input_ids=input_ids,
+                attention_mask=attn,
+                max_new_tokens=max_new_tokens,
+                do_sample=True,
+                temperature=temperature,
+                top_p=top_p,
+                pad_token_id=tokenizer.pad_token_id or tokenizer.eos_token_id,
+            )
+
+    gen = out[0, input_ids.size(-1):]
+    text = tokenizer.decode(gen, skip_special_tokens=True).strip()
+    return text
