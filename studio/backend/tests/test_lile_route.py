@@ -21,3 +21,19 @@ def test_status_returns_offline_when_daemon_absent(client, monkeypatch):
     r = client.get("/api/lile/capsule/status")
     assert r.status_code == 200
     assert r.json() == {"running": False}
+
+
+def test_status_returns_health_when_daemon_reachable(client, monkeypatch, respx_mock):
+    """When lile /health responds 200, status mirrors the payload and url."""
+    monkeypatch.setenv("LILE_HOST", "127.0.0.1")
+    monkeypatch.setenv("LILE_PORT", "59999")
+    body = {"ok": True, "model": "qwen3-0.6b", "queue_depth": 0,
+            "commit_cursor": 7, "merges": 2}
+    respx_mock.get("http://127.0.0.1:59999/health").respond(200, json=body)
+    r = client.get("/api/lile/capsule/status")
+    assert r.status_code == 200
+    payload = r.json()
+    assert payload["running"] is True
+    assert payload["health"] == body
+    assert payload["url"] == "http://127.0.0.1:59999"
+    assert payload["externally_managed"] is True
