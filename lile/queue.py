@@ -164,7 +164,12 @@ class ComputeQueue:
             await self._worker_task
             self._worker_task = None
 
-    async def graceful_drain(self, deadline_s: float | None = None) -> dict[str, Any]:
+    async def graceful_drain(
+        self,
+        deadline_s: float | None = None,
+        *,
+        hard_stop_grace_s: float = 30.0,
+    ) -> dict[str, Any]:
         """Close the queue, drain pending, resolve remainders with ShutdownDropped.
 
         On entry: flip ``_accepting`` so any new ``submit`` raises
@@ -181,6 +186,10 @@ class ComputeQueue:
         and every still-pending queue entry gets ``error =
         ShutdownDroppedError`` and ``done.set()`` so every ``wait_for``
         caller resolves deterministically.
+
+        ``hard_stop_grace_s`` bounds how long we'll wait for the in-flight
+        task after setting ``_hard_stop``. k8s operators should size this
+        plus ``deadline_s`` to stay under ``terminationGracePeriodSeconds``.
 
         Idempotent: a second call with nothing left to do returns
         ``{"dropped": 0, "timed_out": False}``.
@@ -205,7 +214,8 @@ class ComputeQueue:
             self._hard_stop.set()
             try:
                 await asyncio.wait_for(
-                    asyncio.shield(self._worker_task), timeout=30.0,
+                    asyncio.shield(self._worker_task),
+                    timeout=hard_stop_grace_s,
                 )
             except asyncio.TimeoutError:
                 # In-flight task is genuinely stuck; best we can do is move
