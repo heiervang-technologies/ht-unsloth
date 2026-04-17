@@ -100,13 +100,19 @@ def test_majority_vote_clear_winner_math():
     assert idx == 0
 
 
-def test_majority_vote_ties_break_on_first_occurrence():
-    # Two 1-vote keys: "5" vs "7". Tie → first occurrence wins.
+def test_majority_vote_rejects_top_count_below_floor():
+    # Two distinct 1-vote keys → below the ≥2 agreement floor → None.
     rollouts = ["the answer is 5", "actually 7"]
+    assert majority_vote(rollouts, domain="math") is None
+
+
+def test_majority_vote_ties_above_floor_break_on_first_occurrence():
+    # 2×"5" and 2×"7"; both tied at the floor → first-occurrence winner.
+    rollouts = ["answer: 5", "answer: 7", "answer: 5", "answer: 7"]
     result = majority_vote(rollouts, domain="math")
     assert result is not None
     idx, key = result
-    assert idx == 0 and key == "5"
+    assert key == "5" and idx == 0
 
 
 def test_majority_vote_none_when_no_extraction():
@@ -120,14 +126,21 @@ def test_majority_vote_empty_list_returns_none():
 
 
 def test_majority_vote_skips_unextractable_rollouts():
-    # Mix: two rollouts with extractable "9", one with nothing.
-    rollouts = ["just words", "answer: 9", "my guess is 9"]
+    # Three extractable "9"s + one unextractable rollout.
+    rollouts = ["just words", "answer: 9", "my guess is 9", "really 9"]
     result = majority_vote(rollouts, domain="math")
     assert result is not None
     idx, key = result
     assert key == "9"
     # First rollout whose key == "9" is index 1.
     assert idx == 1
+
+
+def test_majority_vote_min_count_override():
+    # Override lets callers accept solo-agreement for k<4 configs.
+    rollouts = ["answer: 9"]
+    result = majority_vote(rollouts, domain="math", min_count=1)
+    assert result == (0, "9")
 
 
 # ---------------------------------------------------------------- _rollout_key
@@ -145,6 +158,13 @@ def test_rollout_key_code_runs_sandbox():
     # Smoke: fenced python block whose stdout becomes the key.
     rollout = "```python\nprint('hi')\n```"
     assert _rollout_key("code", rollout) == "hi"
+
+
+def test_rollout_key_code_empty_stdout_is_none():
+    # Regression: silent code must not agree on key "". Otherwise two
+    # no-op rollouts would majority-vote an empty response back as SFT.
+    rollout = "```python\nx = 1\n```"
+    assert _rollout_key("code", rollout) is None
 
 
 # ---------------------------------------------------------------- _pick_prompt
@@ -238,6 +258,53 @@ def test_maybe_run_one_skips_when_no_majority_extractable():
         assert sched.stats["skipped_no_majority"] == 1
         # Burned a seen count so we don't immediately re-pick it forever.
         assert sched._seen[off] == 1
+
+
+def test_maybe_run_one_bumps_seen_even_when_submit_raises():
+    # Regression: if submit_train raises, the offset must still count
+    # against max_per_prompt — otherwise a broken submit path loops
+    # re-picking the same offset every poll and burns k rollouts each time.
+    with tempfile.TemporaryDirectory() as td:
+        log = TrajectoryLog(Path(td) / "t.jsonl")
+        off = _write_inference(log, prompt="How many apples if Jane has 3?")
+        ctrl = _FakeController(
+            log, _FakeQueue(),
+            rollouts=["answer: 3", "the result is 3"],
+        )
+
+        async def _boom(spec):
+            raise RuntimeError("simulated submit failure")
+
+        ctrl.submit_train = _boom  # type: ignore[assignment]
+        sched = TTRLScheduler(
+            ctrl,
+            TTRLPolicy(min_prompts=1, k_rollouts=2, max_per_prompt=2),
+        )
+        asyncio.run(sched._maybe_run_one())
+        assert sched._seen[off] == 1
+        assert sched.stats["labels_enqueued"] == 0
+
+
+def test_maybe_run_one_counts_empty_stdout_rollouts():
+    # Two silent-no-op code rollouts — no majority possible; the
+    # skipped_empty_stdout bucket must count per-rollout occurrences.
+    with tempfile.TemporaryDirectory() as td:
+        log = TrajectoryLog(Path(td) / "t.jsonl")
+        # Prompt the code verifier claims.
+        _write_inference(log, prompt="Write a program. Expected: hi")
+        rollouts = [
+            "```python\nx = 1\n```",   # empty stdout
+            "```python\ny = 2\n```",   # empty stdout
+        ]
+        ctrl = _FakeController(log, _FakeQueue(), rollouts=rollouts)
+        sched = TTRLScheduler(
+            ctrl,
+            TTRLPolicy(min_prompts=1, k_rollouts=2, max_per_prompt=2),
+        )
+        asyncio.run(sched._maybe_run_one())
+        assert len(ctrl.submitted) == 0
+        assert sched.stats["skipped_empty_stdout"] == 2
+        assert sched.stats["skipped_no_majority"] == 1
 
 
 def test_maybe_run_one_skips_when_log_below_min_prompts():
