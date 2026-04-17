@@ -4,7 +4,7 @@ Covers `lile/metrics.py`:
 
 - Counters (requests_total, train_steps_total, feedback_events_total,
   queue_dropped_total, replay_enqueued_total).
-- Histograms (step_latency_ms, generate_latency_ms, objective_loss).
+- Histograms (step_latency_seconds, generate_latency_seconds, objective_loss).
 - Lazy gauges (queue_depth, commit_cursor, merges_applied, trajectory_bytes,
   snapshots_bytes, snapshots_count, shutting_down) sampled from a bound
   Controller-shaped object at scrape time.
@@ -123,7 +123,7 @@ def test_record_train_step_increments_counter_and_histogram():
     after = _counter_value(text.encode(), "lile_train_steps_total", {"objective": "sft"})
     assert after == before + 1.0
     # Histogram count bumped.
-    assert "lile_step_latency_ms_count" in text
+    assert "lile_step_latency_seconds_count" in text
 
 
 def test_record_feedback_event_counter():
@@ -143,8 +143,8 @@ def test_record_generate_latency_observes_histogram():
     metrics.record_generate_latency(stream=False, latency_s=0.25)
     metrics.record_generate_latency(stream=True, latency_s=0.05)
     text = metrics.render_prometheus().decode("utf-8")
-    assert 'lile_generate_latency_ms_count{stream="false"}' in text
-    assert 'lile_generate_latency_ms_count{stream="true"}' in text
+    assert 'lile_generate_latency_seconds_count{stream="false"}' in text
+    assert 'lile_generate_latency_seconds_count{stream="true"}' in text
 
 
 # ---------------------------------------------------------------- gauges (lazy)
@@ -229,6 +229,58 @@ def test_metrics_route_emits_prom_text_format():
     assert r.headers["content-type"].startswith("text/plain")
     assert r.text.startswith("#") or r.text.lstrip().startswith("#")
     assert "lile_requests_total" in r.text
+
+
+def test_openmetrics_negotiation_returns_exemplar_content_type():
+    """Prometheus' scraper sends Accept: application/openmetrics-text to opt
+    into exemplars. Plain-text callers keep the legacy content-type."""
+    from lile import metrics
+
+    plain_body, plain_ct = metrics.render_negotiated(
+        "text/plain; version=0.0.4"
+    )
+    assert plain_ct.startswith("text/plain")
+    assert b"# HELP lile_requests_total" in plain_body
+
+    om_body, om_ct = metrics.render_negotiated(
+        "application/openmetrics-text; version=1.0.0; charset=utf-8"
+    )
+    assert om_ct.startswith("application/openmetrics-text")
+    # The OpenMetrics exposition has a distinctive `# EOF` trailer.
+    assert b"# EOF" in om_body
+
+
+def test_exemplar_attached_when_request_id_bound():
+    """Observing inside a bound request-id context should emit an exemplar in
+    the OpenMetrics exposition."""
+    from lile.middleware import _REQUEST_ID_CTX, set_request_id
+    from lile import metrics
+
+    token = set_request_id("req_cafebabecafebabe")
+    try:
+        metrics.record_train_step(objective="sft", latency_s=0.01, loss=0.5)
+    finally:
+        _REQUEST_ID_CTX.reset(token)
+
+    body = metrics.render_openmetrics().decode("utf-8")
+    assert "request_id=\"req_cafebabecafebabe\"" in body
+
+
+def test_unmatched_route_collapses_to_single_label():
+    """Unknown paths must not mint unbounded route= label cardinality."""
+    from starlette.datastructures import URL
+
+    from lile import metrics
+
+    class _FakeRequest:
+        def __init__(self, path: str) -> None:
+            self.scope = {}
+            self.url = URL(path)
+
+    # Any unmatched path (scanner probes, typos, 404s) collapses to one label.
+    assert metrics._resolve_route(_FakeRequest("/admin")) == "unmatched"
+    assert metrics._resolve_route(_FakeRequest("/..%2fsecret")) == "unmatched"
+    assert metrics._resolve_route(_FakeRequest("/")) == "unmatched"
 
 
 def test_metrics_route_wired_in_server():
