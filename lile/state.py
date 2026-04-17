@@ -11,18 +11,87 @@ For this implementation we rely on Unsloth's FastLanguageModel + PEFT LoRA. The
 merged_deltas residual is materialized by Unsloth's existing dequant→fp32→merge
 path when `merge()` is called; we keep our own bf16 copy so we can repeat the
 merge or restore it on load.
+
+Live residual application
+-------------------------
+Unsloth's fast path (Qwen3 attention + MLP) bypasses both ``LoraLayer.forward``
+and ``base_layer.forward``. A naive forward-hook on either never fires, so a
+merged residual would sit inert on CPU. We close that gap by monkey-patching
+``unsloth.kernels.utils.matmul_lora`` — the single low-level kernel every
+QKV/O/gate/up/down call funnels into. The patch:
+
+  * reads a sidecar attribute ``W._residual_delta`` (a bf16 GPU tensor),
+  * adds ``F.linear(X, delta)`` to the kernel's output,
+  * is a no-op when the attribute is absent.
+
+Attaching the delta to the Parameter itself (rather than Gemini's
+``id(W) -> delta`` global dict) keeps the binding local to the layer and
+survives Unsloth's ``for_training``/``for_inference`` mode flips (``id(W)``
+stays stable across those flips, empirically verified on Qwen3).
+
+A fallback ``forward_pre_hook`` is also registered on ``base_layer`` so the
+standard PEFT path (used under ``model.disable_adapter()`` for the KL anchor)
+still applies the residual.
 """
 from __future__ import annotations
 
 import logging
+import sys
 import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 import torch
+import torch.nn.functional as F
 
 log = logging.getLogger(__name__)
+
+
+# --------------------------------------------------------------------- matmul_lora patch
+# Module-level, installed once on import. Idempotent via the sentinel attribute.
+def _install_matmul_lora_patch() -> None:
+    import unsloth.kernels.utils as _uutils  # heavy but already paid for by Unsloth
+
+    original = _uutils.matmul_lora
+    if getattr(original, "_lile_patched", False):
+        return
+
+    def _patched(X, W, W_quant, A, B, s, out=None):
+        out_res = original(X, W, W_quant, A, B, s, out=out)
+        delta = getattr(W, "_residual_delta", None)
+        if delta is None:
+            return out_res
+        # Residual is a (out_features, in_features) bf16 GPU tensor, no grad.
+        # F.linear(X, delta) = X @ delta.T; shape matches out_res exactly since
+        # matmul_lora's final view(...) mirrors F.linear's broadcasting.
+        delta_cast = delta.to(dtype=out_res.dtype, device=out_res.device, non_blocking=True)
+        return out_res + F.linear(X, delta_cast)
+
+    _patched._lile_patched = True  # type: ignore[attr-defined]
+    _patched._lile_original = original  # type: ignore[attr-defined]
+
+    # Replace every binding across the unsloth package. Unsloth re-exports
+    # matmul_lora in several submodules (kernels.utils, kernels.fast_lora, …)
+    # and pre-bound references in those modules must also flip — otherwise the
+    # fast path in fast_lora still sees the unpatched callable.
+    replaced = 0
+    for mod_name, mod in list(sys.modules.items()):
+        if not mod_name.startswith("unsloth"):
+            continue
+        try:
+            members = list(vars(mod).items())
+        except Exception:
+            continue
+        for attr, val in members:
+            if val is original:
+                setattr(mod, attr, _patched)
+                replaced += 1
+    log.debug("installed matmul_lora residual patch (%d bindings rewritten)", replaced)
+
+
+# Install at import — matches Gemini's ergonomics but with explicit idempotence.
+_install_matmul_lora_patch()
 
 
 @dataclass
@@ -44,6 +113,9 @@ class ModelState:
     # calls .generate() or .backward() must hold this lock across the mode flip
     # AND the work that depends on those buffers.
     mode_lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
+    # Base-layer forward pre-hook handles (fallback path for disable_adapter).
+    # Keyed by LoraLayer name; stored so we can remove/rebind without leaking.
+    _residual_hook_handles: dict[str, Any] = field(default_factory=dict, repr=False)
 
     @classmethod
     def load(
@@ -145,10 +217,64 @@ class ModelState:
         self.merged_deltas.update(new_deltas)
         self.merges_applied += 1
         self.reset_active_adapter()
+        self._apply_residual_to_model()
         log.info(
             "merged %d LoRA sites; total merges=%d",
             len(new_deltas), self.merges_applied,
         )
+
+    # ------------------------------------------------------------------ residual → live
+    def _apply_residual_to_model(self) -> None:
+        """Bind the CPU bf16 residual onto each live LoRA site for forward-time use.
+
+        Two channels:
+          (a) ``base_layer.weight._residual_delta = delta_gpu`` — picked up by
+              the patched matmul_lora kernel on every QKV/MLP forward under
+              Unsloth's fast path.
+          (b) ``forward_pre_hook`` on ``base_layer`` that adds
+              ``F.linear(x, delta)`` to the layer's output. Fires under the
+              standard PEFT path (e.g. during ``model.disable_adapter()`` used
+              by the KL anchor in CCPD v2).
+
+        Both channels reference the same delta tensor; if one fires, the other
+        doesn't see the layer at all. Under Unsloth fast path, channel (a) fires
+        and the hook stays idle. Under PEFT-standard, the hook fires and
+        matmul_lora isn't called.
+        """
+        if not self.merged_deltas:
+            return
+        device = next(self.model.parameters()).device
+        applied = 0
+        for name, module in self.model.named_modules():
+            if not hasattr(module, "lora_A") or not hasattr(module, "lora_B"):
+                continue
+            if "default" not in module.lora_A:
+                continue
+            key = f"{name}.weight"
+            delta_cpu = self.merged_deltas.get(key)
+            if delta_cpu is None:
+                continue
+            delta_gpu = delta_cpu.to(device=device, dtype=torch.bfloat16, non_blocking=True)
+            base_layer = getattr(module, "base_layer", None)
+            target_w = base_layer.weight if base_layer is not None else None
+            if target_w is None:
+                continue
+            # Channel (a): attach to the Parameter directly.
+            target_w._residual_delta = delta_gpu  # type: ignore[attr-defined]
+            # Channel (b): register forward hook (dedup via stored handle).
+            old = self._residual_hook_handles.pop(name, None)
+            if old is not None:
+                try:
+                    old.remove()
+                except Exception:
+                    pass
+            if base_layer is not None:
+                handle = base_layer.register_forward_hook(
+                    _make_residual_forward_hook(delta_gpu)
+                )
+                self._residual_hook_handles[name] = handle
+            applied += 1
+        log.info("applied residual to %d LoRA sites (matmul_lora + forward_hook)", applied)
 
     def residual_fingerprint(self) -> str:
         """Deterministic hash of the CPU residual — used by snapshot round-trip tests."""
@@ -177,3 +303,12 @@ class ModelState:
             self.merged_deltas = {}
             return
         self.merged_deltas = load_file(str(path))
+        self._apply_residual_to_model()
+
+
+def _make_residual_forward_hook(delta_gpu: torch.Tensor):
+    """Closure-scoped forward hook adding ``F.linear(x, delta)`` to base_layer output."""
+    def _hook(module: Any, inputs: tuple, output: torch.Tensor) -> torch.Tensor:
+        x = inputs[0] if isinstance(inputs, tuple) else inputs
+        return output + F.linear(x, delta_gpu.to(dtype=output.dtype, device=output.device))
+    return _hook

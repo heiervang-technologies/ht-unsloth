@@ -22,13 +22,17 @@ Why: Qwen3-0.6B is small enough that a full forward+backward+LoRA step is a coup
 
 **Gated on §11 benchmark:** T2.1 (CCPD v2 light) — auxiliary sampling + detached `r_c` + rank-advantage REINFORCE + SFT on top-m + KL anchor. Implemented only if Spearman on `r_c` rankings lands above the 0.2 floor; shipped as the T2 default only if above 0.5. The benchmark script is always shipped so anyone can re-run it on their own hardware. **Result (`STATUS.md` §11): Qwen3-8B Spearman mean +0.207 → shipped as per-event opt-in; hinge remains primary T2.**
 
-**Scoped out for this submission:** T3.1 trace-infilling (requires CoT auto-detect), T3.2 SCoRe multi-turn (requires multi-turn trajectory collection), T4.1/T4.2 background replay/self-distill (operationally important, architecturally identical to T2). All land cleanly on top of the shipped core.
+**Added post-cross-review: T3.1 trace infilling.** Implemented as an optional `span_prefix: str` field on SFT samples. The token boundary between accepted prefix and regenerated suffix is resolved by walking token-by-token slices of the response and checking `tokenizer.decode(...).endswith(span_prefix)`. That sidesteps chat-template-inserted content (e.g. Qwen3's auto `<think>..</think>` block) which misaligns a naive tokenize-then-LCP strategy. No CoT auto-detect required — the caller passes what it wants kept.
+
+**Scoped out for this submission:** T3.2 SCoRe multi-turn (requires multi-turn trajectory collection), T4.1/T4.2 background replay/self-distill (operationally important, architecturally identical to T2). All land cleanly on top of the shipped core.
 
 Rationale: the brief says "depth in one dimension beats breadth in all." A production-clean T1 + queue + state + server with the 4-bit merge path correct and the commit-cursor invariant under test is more valuable than twelve half-implemented objectives.
 
 ## Adapter stack
 
 **bf16 LoRA on NF4 base, merged_deltas stored as bf16 CPU tensor and applied as a forward-time residual.** Exactly the shape §6 forces. The alternative (requantize merged_deltas to NF4 per merge) is the silent-quality-loss footgun the plan warns about. I'm choosing the latency cost (~5–10% at forward time, measurable) over the quality cost.
+
+**Residual application mechanism.** PEFT's standard LoraLayer.forward and base_layer.forward are both bypassed by Unsloth's fast path on Qwen3 — `register_forward_hook` on either silently never fires. The only place to intercept is the single funnel `unsloth.kernels.utils.matmul_lora` that every QKV/MLP projection calls. `state.py` installs a module-level monkey-patch at import: the patched kernel checks for `W._residual_delta` (a bf16 GPU tensor attached to the Parameter) and adds `F.linear(X, delta)` to the output. Binding-by-attribute is preferred over a module-level `id(W) -> delta` dict because it survives Unsloth's mode flips (`for_training` / `for_inference` both keep `id(W)` stable) and has no cleanup burden. A `base_layer.register_forward_hook` backstop is also registered so PEFT's standard path (used under `disable_adapter()` for the KL anchor) applies the same residual. `test_residual_live_path.py` verifies both paths end in a forward that stays within 0.05 nats of the trained-adapter forward after merge.
 
 ## Commit cursor
 
@@ -62,5 +66,7 @@ Test obligation: a concurrent train+infer invariant test that would fail under r
 4. **Objective composition**: two-objective batch loss equals manual weighted sum of separately-computed losses (modulo BF16 rounding tolerance).
 5. **4-bit merge correctness**: forward pass after merge within 1e-3 relative of forward pass before merge on the same input (dequant-merge path preserves semantics).
 6. **Concurrent-load safety**: N concurrent `/v1/chat` + M interleaved `/v1/train` hold the commit-cursor invariant, every `after_commit_token` chat sees the cursor advanced past its token, no deadlocks, trajectory contains every event. Pinned in `test_concurrent_load.py`.
+7. **Residual applied live at forward time**: after `merge_active_into_residual()` zeroes the active adapter, a forward on the training prompt stays within 0.05 nats of the pre-merge trained-adapter forward (vs. an ~86-nat gap if the residual weren't applied). Pinned in `test_residual_live_path.py`.
+8. **T3.1 mask geometry**: `span_prefix` on SFT samples produces labels where every prompt + span_prefix token is `-100` and every regenerated-suffix token carries its own id. Supervision count matches the standalone suffix token count within ±3 (chat-template end-of-turn markers). Pinned in `test_span_prefix.py`.
 
 These are the load-bearing pieces the jury will read closely; tests are where those invariants get pinned down.

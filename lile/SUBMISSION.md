@@ -10,7 +10,7 @@ A production-clean local-LLM training-plus-inference daemon. Core invariant from
 
 1. **The commit-cursor invariant is shipped as a typed guarantee, not a best-effort.** `/v1/chat/completions` accepts `after_commit_token: int`. Inference dispatch blocks on that token's completion event before the forward pass runs. This is the difference between "training might be reflected" and "training is reflected by contract." `test_controller_commit_cursor_e2e` and the HTTP smoke both verify this on a real model; `test_concurrent_load.py` then pins the invariant under 10 concurrent `/v1/chat` calls and 10 interleaved `/v1/train` calls.
 
-2. **The 4-bit merge gotcha (§6) is resolved the safe way.** `merged_deltas` lives in bf16 on CPU, applied as a forward-time additive residual on the dequantized layer output. Never requantized into NF4. This trades ~5–10% forward latency for byte-exact snapshot reproducibility (the plan calls the requantize path a silent-quality-loss footgun; I chose not to step in it). `test_snapshot_residual_byte_exact` pins the round-trip fingerprint.
+2. **The 4-bit merge gotcha (§6) is resolved the safe way, *and* applied live.** `merged_deltas` lives in bf16 on CPU; at merge time a GPU mirror of each layer's delta is pinned to the corresponding `base_layer.weight` via a sidecar `_residual_delta` attribute, and a module-level monkey-patch of `unsloth.kernels.utils.matmul_lora` adds `F.linear(X, delta)` to every QKV/O/gate/up/down forward. Never requantized into NF4. This closes the "residual is bookkeeping only" gap that naive `register_forward_hook` strategies fall into under Unsloth's fast path (which bypasses both `LoraLayer.forward` and `base_layer.forward` on Qwen3). A fallback `forward_hook` on `base_layer` covers the PEFT-standard path used by `disable_adapter()` during the KL anchor. `test_residual_live_path.py` verifies the merged-adapter forward stays within 0.05 nats of the trained-adapter forward (trained -8.111 → merged -8.159 vs. base -94.571).
 
 3. **CCPD v2 (§5c.11) is fully implemented, E2E-validated, and gated on its own benchmark.** Auxiliary sampling under π_old (no-grad forward), detached length-normalized `r_c`, centered rank-based advantages, REINFORCE on the rank advantages, SFT on top-m, **KL anchor to π_ref via PEFT `disable_adapter()`** (zero memory overhead — no separate reference model), and a τ-spread gate that returns `{"loss": None}` when the ranking can't discriminate. `test_ccpd_e2e.py` verifies on Qwen3-0.6B that (a) the full composition produces a finite scalar with `requires_grad=True`, (b) 196 LoRA parameters receive non-zero gradients on backward, (c) τ-spread triggers exactly when aux candidates collapse, and (d) three AdamW steps move the measured `r_c` on a held-out pair.
 
@@ -20,11 +20,13 @@ A production-clean local-LLM training-plus-inference daemon. Core invariant from
 
 ## What I built vs. what the plan lists
 
-**Shipped (T1 + T2.2 + infra):** weighted SFT, KTO, CoH (two templates), hinge contrastive, KL anchor with π_ref-via-`disable_adapter`, compute queue with commit cursor, state manager with 4-bit residual path and mode_lock, trajectory log with byte offsets, snapshot manager with byte-exact round-trip, OpenAI-compatible FastAPI server, controller routing feedback → objective, E2E + HTTP + CCPD E2E + concurrent-load tests.
+**Shipped (T1 + T2.2 + T3.1 + infra):** weighted SFT (with T3.1 `span_prefix` trace infilling), KTO, CoH (two templates), hinge contrastive, KL anchor with π_ref-via-`disable_adapter`, compute queue with commit cursor, state manager with 4-bit residual path applied live via `matmul_lora` patch + mode_lock, trajectory log with byte offsets, snapshot manager with byte-exact round-trip, OpenAI-compatible FastAPI server, controller routing feedback → objective, E2E + HTTP + CCPD E2E + concurrent-load + residual-live-path + span-prefix tests.
 
 **Shipped-opt-in (T2.1 CCPD v2):** Callable via `objective: "ccpd_v2"`. Hinge remains the primary T2 because the 8B Spearman was in the 0.2–0.5 band (opt-in), not the ≥ 0.5 band (promote-to-default). All five §5c.11 pieces (aux sampling, detached r_c, rank-advantage REINFORCE, top-m SFT, KL anchor, τ-spread skip) are load-bearing and individually tested.
 
-**Out of scope (by design):** T3.1 trace-infilling (needs CoT auto-detect), T3.2 SCoRe multi-turn (needs multi-turn trajectory collection), T4 background replay/self-distill (operationally important, architecturally the same shape as T2 — two lines of scheduling once you have the queue), GGUF export, multi-GPU, full-FT, streaming WebSocket for training events. All land cleanly on top of the shipped core.
+**Shipped (T3.1 trace infilling):** SFT samples accept an optional `span_prefix: str` field. The loss is masked past the token boundary where the decoded suffix first ends with `span_prefix` — surgical credit assignment on the regenerated portion only. Boundary resolution walks token slices with `tokenizer.decode().endswith()` to stay robust to chat-template-inserted content (Qwen3 auto-injects a `<think>..</think>` block that naive tokenize-then-LCP strategies misalign against). `test_span_prefix.py` verifies (a) supervision count drops to ≈ suffix-token-count, (b) full-prefix edge case leaves only end-of-turn markers supervised.
+
+**Out of scope (by design):** T3.2 SCoRe multi-turn (needs multi-turn trajectory collection), T4 background replay/self-distill (operationally important, architecturally the same shape as T2 — two lines of scheduling once you have the queue), GGUF export, multi-GPU, full-FT, streaming WebSocket for training events. All land cleanly on top of the shipped core.
 
 ## Design rationale — the calls that matter
 
@@ -49,6 +51,19 @@ A production-clean local-LLM training-plus-inference daemon. Core invariant from
 5. **Unsloth's fast-inference path is not concurrency-safe out of the box.** `temp_QA/temp_O` are set up by `for_inference(model)` and torn down by `for_training(model)`. Training threads racing with inference generate an `AttributeError` mid-forward. `test_concurrent_load.py` caught it; the fix is a shared `threading.RLock`.
 6. **The same `temp_QA` issue hits single-threaded too — when CCPD v2 samples candidates inside a training step.** `TrainEngine.step` calls `for_training()` which tears the buffers down, then `_sample_candidates.model.generate()` asks for them. A follow-up test (`test_ccpd_through_train_engine`) exercising the HTTP `objective: ccpd_v2` path caught this; fixed with an unconditional `for_inference(model)` at the top of `_sample_candidates` (idempotent, single-threaded under the mode lock).
 
+## What I learned from the cross-review
+
+I reviewed a peer submission ("gemini/purple") that had solved the live-residual application differently: a direct monkey-patch of `unsloth.kernels.utils.matmul_lora` keyed by `id(W) -> delta` in a module-level dict. I had ruled that out early in my own build after a `register_forward_hook` attempt on `LoraLayer` silently failed (Unsloth's fast path bypasses `LoraLayer.forward` entirely on Qwen3). The cross-review showed the matmul_lora path is the *right* place to intercept — one kernel call funnels every QKV/MLP forward. I stole the strategy and tightened it:
+
+- **Binding by attribute, not global id dict.** `W._residual_delta = delta` on the Parameter itself, so the binding is layer-local, survives Unsloth's `for_training`/`for_inference` mode flips (verified `id(W)` stays stable), and doesn't pollute a module-level cache. If a layer has no residual the patch is a no-op. No cleanup needed.
+- **Idempotent installation.** Patched via a sentinel attribute on the wrapped callable. Safe to import multiple times in a test session.
+- **All `sys.modules` re-bindings flipped.** `unsloth.kernels.fast_lora` already captured a reference to the unpatched callable at its own import time; we iterate `sys.modules` once at install and rewrite every binding. The reference chase is documented inline.
+- **Belt-and-suspenders forward hook.** A `base_layer.register_forward_hook` backstop covers `model.disable_adapter()` (used by the KL anchor in CCPD v2), where PEFT routes through the standard path that `matmul_lora` doesn't see.
+
+I also brought back T3.1 trace infilling, which I had scoped out as "needs CoT auto-detect." It didn't — a `span_prefix: str` on the sample, resolved by `tokenizer.decode(...).endswith(...)` on progressively longer token slices, is enough for surgical credit assignment on the regenerated suffix. The decode-based resolution handles Qwen3's auto-inserted `<think>` block cleanly, which a naive string-concat-then-LCP approach (the first version I wrote) misaligns against.
+
+Full review (scoring, what I'd replace, what they got right that I missed) lives on the peer's PR comment thread.
+
 ## Evidence (numbers)
 
 | Thing | Value | Source |
@@ -67,6 +82,8 @@ A production-clean local-LLM training-plus-inference daemon. Core invariant from
 | §11 decision (0.6B) | fallback_to_sft_self_refinement (below 0.2, as expected for small-model IM-RM) | ^ |
 | Peak VRAM (8B bench) | **8.21 GB** | ^ |
 | Peak VRAM (0.6B bench) | 1.25 GB | ^ |
+| **Residual applied live after merge** | base -94.571 → trained -8.111 → merged -8.159 (drift 0.048 nats) | `test_residual_live_path.py` |
+| **T3.1 span_prefix mask geometry** | 35 → 15 supervised tokens (suffix-only), edge case full-prefix leaves 2 | `test_span_prefix.py` |
 
 ## What I'd do next, in this order
 
@@ -87,6 +104,8 @@ python -m lile.tests.test_merge_and_e2e && \
 python -m lile.tests.smoke_server && \
 python -m lile.tests.test_ccpd_e2e && \
 python -m lile.tests.test_concurrent_load && \
+python -m lile.tests.test_residual_live_path && \
+python -m lile.tests.test_span_prefix && \
 python -m lile.tests.bench_rc_ranking \
     --model unsloth/Qwen3-8B-unsloth-bnb-4bit \
     --k 6 --repeats 2 --max-new-tokens 80 \

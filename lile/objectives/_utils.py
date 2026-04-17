@@ -32,11 +32,23 @@ def _to_int_list(x: Any) -> list[int]:
 
 
 def build_chat_inputs(tokenizer: Any, prompt: str, response: str,
-                      max_len: int = 2048) -> dict[str, torch.Tensor]:
+                      max_len: int = 2048,
+                      span_prefix: str | None = None) -> dict[str, torch.Tensor]:
     """Tokenize (prompt, response) into input_ids + labels with prompt masked out.
 
     Response tokens carry labels; prompt tokens are masked with -100 so loss
     does not penalize reproducing the prompt.
+
+    ``span_prefix`` (T3.1 trace infilling, §T3.1 in the plan): if given, loss
+    is computed *only* on tokens after ``span_prefix``. Interpretation: the
+    assistant's response is ``span_prefix + suffix``; we mask the accepted
+    prefix so gradient signal is surgically applied to the part that was
+    regenerated. The token boundary is resolved by decoding progressively
+    longer slices of the response and taking the shortest slice whose text
+    ends with ``span_prefix``. This is robust to chat templates that inject
+    hidden content between ``<|im_start|>assistant`` and the user-supplied
+    text (Qwen3 auto-inserts a ``<think>..</think>`` block, for example),
+    which naive string-concatenation tokenization misaligns against.
     """
     if getattr(tokenizer, "chat_template", None):
         messages_prompt = [{"role": "user", "content": prompt}]
@@ -59,7 +71,23 @@ def build_chat_inputs(tokenizer: Any, prompt: str, response: str,
     if len(prompt_ids) > len(full_ids):
         prompt_ids = prompt_ids[:len(full_ids)]
 
-    labels = [-100] * len(prompt_ids) + list(full_ids[len(prompt_ids):])
+    prefix_len = len(prompt_ids)
+    if span_prefix:
+        # Walk token-by-token past the prompt; the first slice whose decoded
+        # text ends with span_prefix defines the infill boundary. Robust to
+        # chat-template-inserted content (e.g. Qwen3's auto-think block).
+        # O(N^2) in assistant tokens but N is small in practice.
+        resolved = None
+        n = len(prompt_ids)
+        for pl in range(n, len(full_ids) + 1):
+            decoded = tokenizer.decode(full_ids[n:pl])
+            if decoded.endswith(span_prefix):
+                resolved = pl
+                break
+        if resolved is not None:
+            prefix_len = resolved
+
+    labels = [-100] * prefix_len + list(full_ids[prefix_len:])
     labels = labels[:len(full_ids)]
     if len(labels) < len(full_ids):
         labels.extend(full_ids[len(labels):])
