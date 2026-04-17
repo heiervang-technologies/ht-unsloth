@@ -18,17 +18,30 @@
 </p>
 ## HT Fork Changes
 
-This is the [Heiervang Technologies](https://github.com/heiervang-technologies) fork of [Unsloth](https://github.com/unslothai/unsloth). The `ht` branch contains the following changes on top of upstream `main`:
+This is the [Heiervang Technologies](https://github.com/heiervang-technologies) fork of [Unsloth](https://github.com/unslothai/unsloth). The `ht` branch contains the following additions on top of upstream `main`.
 
-| Change | Description | Contributed back? |
-|--------|-------------|-------------------|
-| *No HT-specific changes yet* | Fork freshly initialized | N/A |
+### What ht-unsloth adds
+
+| Feature | Summary | Docs |
+|---|---|---|
+| **LiveLearn (`lile`)** | Online-learning daemon: OpenAI-compatible `/v1/chat/completions` that shares weights with a live training loop. Non-disruptive `/v1/train`, `/v1/feedback`, `/v1/state/*` routes with a compute queue and commit-cursor guarantee ("post a batch, next inference sees it"). | [Design](lile/DESIGN.md) · [Status + tests](lile/STATUS.md) · [Glossary](lile/GLOSSARY.md) · [Plan](lile/PLAN.md) |
+| ↳ Objectives | Stackable SFT, NTP, KTO, CoH, hinge, KL-anchor, and **CCPD v2** (Critique-Conditional Policy Distillation — π-only feedback-guided learning with detached rewards). | [DESIGN §5c](lile/DESIGN.md) |
+| ↳ Reasoning-content parsing | Streaming two-state parser that splits `<think>…</think>` (Qwen3, DeepSeek-R1, Magistral, gpt-oss) into `reasoning_content` vs `content` deltas, vllm-compatible semantics. | [`lile/reasoning.py`](lile/reasoning.py) |
+| ↳ Pluggable metrics sinks | Optional fan-out to **Weights & Biases**, **TensorBoard**, **MLflow**, or **trackio** (trajectory JSONL is canonical; sinks are no-throw mirrors). | [`lile/logging_backends.py`](lile/logging_backends.py) |
+| ↳ Studio integration | New `/lile` page: capsule lifecycle, live loss / grad-norm / KL / queue-depth / components charts, snapshots + trajectory tabs, feedback modal. Chat can route to lile mode with block-on-last-commit. | [`studio/frontend/src/features/lile/`](studio/frontend/src/features/lile) |
+| **Multi-GPU sharding** | Replaces upstream's hard `RuntimeError` with a warning; passes `device_map="sequential"`/`"balanced"` through; backend reports per-GPU VRAM; purple **MULTI-GPU** badge + navbar GPU chip when the model spans cards. | [Status report](docs/multi-gpu-status.md) |
+| **Docker image** | `ht-unsloth-studio` container with CUDA + Studio + llama.cpp baked in; auto-published by Docker Hub CI on pushes to `ht`. | [Dockerfile](Dockerfile) |
+| **Auth bypass** | `UNSLOTH_DISABLE_AUTH=1` skips the Studio login flow end-to-end (dev + self-hosted). | [`studio/backend/auth/authentication.py`](studio/backend/auth/authentication.py) |
+| **Dataset robustness** | Transparently parses JSON-string `conversations`/`messages` columns common in multi-subset parquet repos. | [HT-CHANGELOG](HT-CHANGELOG.md) |
+| **Fork infrastructure** | In-repo `.venv` for editable installs, HT branding in Studio, fork-sync CI, HT Discussions links. | [HT-CHANGELOG](HT-CHANGELOG.md) |
+
+All HT-specific changes are tracked in **[HT-CHANGELOG.md](HT-CHANGELOG.md)**. For anything not listed above, behavior matches upstream — see the [Unsloth docs](https://unsloth.ai/docs).
 
 ### Branch Strategy
 
 - **`main`** — Clean mirror of upstream `main`. Never commit directly.
 - **`ht`** — Default branch with all HT-specific changes on top of `main`.
-- Feature branches are created from `ht` and merged back via PR.
+- Feature branches are created from `ht` and merged back via squash-merge PR.
 
 For questions or discussion about this fork, visit the [HT Discussions](https://github.com/orgs/heiervang-technologies/discussions) page. For details on how we manage forks, see the [Fork Management Guide](https://github.com/orgs/heiervang-technologies/discussions/3).
 
