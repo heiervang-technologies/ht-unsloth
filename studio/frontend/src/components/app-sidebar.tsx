@@ -347,6 +347,18 @@ export function AppSidebar() {
               />
 
               <NavItem
+                icon={Chip02Icon}
+                label="Lile"
+                active={pathname === "/lile" || pathname.startsWith("/lile/")}
+                disabled={chatOnly}
+                onClick={() => {
+                  if (chatOnly) return;
+                  navigate({ to: "/lile" });
+                  closeMobileIfOpen();
+                }}
+              />
+
+              <NavItem
                 icon={ChefHatIcon}
                 label="Recipes"
                 active={isRecipesRoute}
