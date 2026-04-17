@@ -188,7 +188,8 @@ cython_debug/
 .pypirc
 .vscode
 .idea/
-.claude/
+.claude/*
+!.claude/skills/
 *.swp
 *.swo
 
