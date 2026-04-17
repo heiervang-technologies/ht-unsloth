@@ -178,16 +178,20 @@ export interface OpenAIChatCompletionsRequest {
    * commit cursor is known, the adapter threads it through so the
    * capsule replies only after it has integrated that commit.
    */
-  after_commit_token?: string | null;
+  after_commit_token?: number | null;
 }
 
 /**
  * Server-emitted `lile` metadata block. Attached to the non-streaming
  * response or to the final SSE chunk when `lileMode` is active.
+ *
+ * Wire shape — do NOT camelCase these field names. Backend emits
+ * snake_case (see lile/controller.py), and we forward the same shape
+ * through `message.metadata.custom.lile` so consumers can round-trip it.
  */
 export interface LileResponseMeta {
   response_id: string;
-  commit_cursor: number | string;
+  commit_cursor: number;
   latency_s?: number;
 }
 

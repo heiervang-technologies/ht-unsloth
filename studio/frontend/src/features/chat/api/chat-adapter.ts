@@ -901,13 +901,11 @@ export function createOpenAIStreamAdapter(): ChatModelAdapter {
         );
 
         // Lile: propagate new commit cursor into the runtime store so
-        // subsequent sends can gate on `after_commit_token`. We keep the
-        // store value as a string for uniformity with the existing
-        // store shape (`lileLastCommit: string | null`).
-        if (lileMeta && lileMeta.commit_cursor != null) {
+        // subsequent sends can gate on `after_commit_token`.
+        if (lileMeta && typeof lileMeta.commit_cursor === "number") {
           useChatRuntimeStore
             .getState()
-            .setLileLastCommit(String(lileMeta.commit_cursor));
+            .setLileLastCommit(lileMeta.commit_cursor);
         }
 
         yield {

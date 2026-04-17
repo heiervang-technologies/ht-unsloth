@@ -187,10 +187,10 @@ type ChatRuntimeStore = {
   modelLoading: boolean;
   lileMode: boolean;
   lileBlockOnLastCommit: boolean;
-  lileLastCommit: string | null;
+  lileLastCommit: number | null;
   setLileMode: (v: boolean) => void;
   setLileBlockOnLastCommit: (v: boolean) => void;
-  setLileLastCommit: (v: string | null) => void;
+  setLileLastCommit: (v: number | null) => void;
   setModelLoading: (loading: boolean) => void;
   setModelRequiresTrustRemoteCode: (required: boolean) => void;
   setParams: (params: InferenceParams) => void;
