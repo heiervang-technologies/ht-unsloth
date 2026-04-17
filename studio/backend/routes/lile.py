@@ -45,7 +45,7 @@ async def capsule_status() -> dict:
             "health": r.json(),
             "url": _lile_base_url(),
         }
-    except (httpx.ConnectError, httpx.TimeoutException):
+    except httpx.HTTPError:
         return {"running": False}
 
 
@@ -64,7 +64,7 @@ async def _probe_health() -> dict | None:
             r = await c.get(f"{_lile_base_url()}/health")
         if r.status_code == 200:
             return r.json()
-    except (httpx.ConnectError, httpx.TimeoutException):
+    except httpx.HTTPError:
         pass
     return None
 
