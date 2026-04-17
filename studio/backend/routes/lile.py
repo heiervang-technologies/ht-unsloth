@@ -15,7 +15,7 @@ from pathlib import Path
 
 import httpx
 from fastapi import APIRouter, Request
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/lile", tags=["lile"])
@@ -140,7 +140,28 @@ def _forward_headers(headers) -> dict:
 
 
 async def _proxy_stream(method: str, url: str, headers: dict, body: bytes):
-    raise NotImplementedError  # Task 6
+    client = httpx.AsyncClient(timeout=None)
+    req = client.build_request(method, url, content=body, headers=headers)
+    upstream = await client.send(req, stream=True)
+
+    async def gen():
+        try:
+            async for chunk in upstream.aiter_raw():
+                if chunk:
+                    yield chunk
+        finally:
+            await upstream.aclose()
+            await client.aclose()
+
+    resp_headers = _forward_headers(upstream.headers)
+    resp_headers["x-accel-buffering"] = "no"
+    resp_headers["cache-control"] = "no-cache"
+    return StreamingResponse(
+        gen(),
+        status_code=upstream.status_code,
+        headers=resp_headers,
+        media_type=upstream.headers.get("content-type", "text/event-stream"),
+    )
 
 
 @router.api_route(

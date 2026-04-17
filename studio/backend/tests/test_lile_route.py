@@ -131,3 +131,28 @@ def test_proxy_502_on_upstream_down(client, monkeypatch):
     r = client.get("/api/lile/v1/foo")
     assert r.status_code == 502
     assert "proxy upstream" in r.json()["error"]
+
+
+def test_proxy_streams_sse_without_buffering(client, monkeypatch, respx_mock):
+    monkeypatch.setenv("LILE_HOST", "127.0.0.1")
+    monkeypatch.setenv("LILE_PORT", "59999")
+
+    sse_body = (b"data: {\"delta\": \"hel\"}\n\n"
+                b"data: {\"delta\": \"lo\"}\n\n"
+                b"data: [DONE]\n\n")
+    respx_mock.post("http://127.0.0.1:59999/v1/chat/completions").respond(
+        200, content=sse_body,
+        headers={"content-type": "text/event-stream",
+                 "x-accel-buffering": "no"},
+    )
+
+    with client.stream("POST", "/api/lile/v1/chat/completions",
+                       headers={"accept": "text/event-stream"},
+                       json={"messages": [{"role": "user", "content": "hi"}],
+                             "stream": True}) as r:
+        assert r.status_code == 200
+        assert r.headers["content-type"].startswith("text/event-stream")
+        assert r.headers.get("x-accel-buffering") == "no"
+        chunks = list(r.iter_bytes())
+    assembled = b"".join(chunks)
+    assert b"[DONE]" in assembled
