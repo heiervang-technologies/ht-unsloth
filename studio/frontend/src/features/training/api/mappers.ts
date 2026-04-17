@@ -6,6 +6,9 @@ import type { TrainingStartRequest } from "../types/api";
 
 const BACKEND_LORA_TYPE = "LoRA/QLoRA";
 const BACKEND_FULL_TYPE = "Full Finetuning";
+// HT fork — bakery integration. Baking trains LoRA weights, so on the backend
+// it presents as the LoRA/QLoRA training_type with is_prompt_baking=true.
+const BACKEND_BAKING_TYPE = BACKEND_LORA_TYPE;
 
 function parseSliceValue(value: string | null): number | null {
   if (value == null) return null;
@@ -17,7 +20,9 @@ function parseSliceValue(value: string | null): number | null {
 }
 
 export function toBackendTrainingType(trainingMethod: string): string {
-  return trainingMethod === "full" ? BACKEND_FULL_TYPE : BACKEND_LORA_TYPE;
+  if (trainingMethod === "full") return BACKEND_FULL_TYPE;
+  if (trainingMethod === "prompt-baking") return BACKEND_BAKING_TYPE;
+  return BACKEND_LORA_TYPE;
 }
 
 export function buildTrainingStartPayload(
@@ -25,6 +30,7 @@ export function buildTrainingStartPayload(
 ): TrainingStartRequest {
   const adapterMethod = config.trainingMethod !== "full";
   const isQloraMethod = config.trainingMethod === "qlora";
+  const isPromptBaking = config.trainingMethod === "prompt-baking";
   const isEmbedding = config.isEmbeddingModel;
   const hfDataset = config.datasetSource === "huggingface" ? config.dataset : null;
   const localDatasets =
@@ -99,6 +105,13 @@ export function buildTrainingStartPayload(
     is_dataset_image: isEmbedding ? false : !!config.isDatasetImage,
     is_dataset_audio: isEmbedding ? false : config.isDatasetAudio,
     is_embedding: isEmbedding,
+    is_prompt_baking: isPromptBaking,
+    baking_system_prompt: isPromptBaking ? config.bakingSystemPrompt : null,
+    baking_num_trajectories: config.bakingNumTrajectories,
+    baking_trajectory_length: config.bakingTrajectoryLength,
+    baking_temperature: config.bakingTemperature,
+    baking_sampling_temperature: config.bakingSamplingTemperature,
+    baking_use_prefill: config.bakingUsePrefill,
     enable_wandb: config.enableWandb,
     wandb_token: config.enableWandb ? config.wandbToken.trim() || null : null,
     wandb_project: config.enableWandb

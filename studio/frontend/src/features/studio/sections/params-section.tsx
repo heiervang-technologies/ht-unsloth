@@ -39,6 +39,7 @@ import {
 } from "@/config/training";
 import { useMaxStepsEpochsToggle, useTrainingConfigStore } from "@/features/training";
 import type { GradientCheckpointing } from "@/types/training";
+import { PromptBakingSection } from "./prompt-baking-section";
 import {
   ArrowDown01Icon,
   InformationCircleIcon,
@@ -124,6 +125,7 @@ function SliderRow({
 
 export function ParamsSection(): ReactElement {
   const store = useTrainingConfigStore();
+  const isPromptBaking = store.trainingMethod === "prompt-baking";
   const isLora = store.trainingMethod !== "full";
   const showVisionLora = store.isVisionModel && store.isDatasetImage === true;
   const [loraOpen, setLoraOpen] = useState(false);
@@ -171,6 +173,7 @@ export function ParamsSection(): ReactElement {
           : "h-studio-config-column"} duration-150`}
       >
         <div className="flex flex-col gap-4">
+          {isPromptBaking && <PromptBakingSection />}
           {/* Max Steps / Epochs */}
           <div className="flex flex-col gap-2">
             <div

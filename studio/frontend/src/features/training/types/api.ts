@@ -49,6 +49,14 @@ export interface TrainingStartRequest {
   is_dataset_image: boolean;
   is_dataset_audio: boolean;
   is_embedding: boolean;
+  // HT fork — prompt baking (bakery integration)
+  is_prompt_baking: boolean;
+  baking_system_prompt: string | null;
+  baking_num_trajectories: number;
+  baking_trajectory_length: number;
+  baking_temperature: number;
+  baking_sampling_temperature: number;
+  baking_use_prefill: boolean;
   enable_wandb: boolean;
   wandb_token: string | null;
   wandb_project: string | null;

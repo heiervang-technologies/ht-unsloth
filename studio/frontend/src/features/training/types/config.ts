@@ -81,6 +81,13 @@ export interface TrainingConfigState {
   finetuneMLPModules: boolean;
   targetModules: string[];
   maxPositionEmbeddings: number | null;
+  // HT fork — prompt baking (bakery integration)
+  bakingSystemPrompt: string;
+  bakingNumTrajectories: number;
+  bakingTrajectoryLength: number;
+  bakingTemperature: number;
+  bakingSamplingTemperature: number;
+  bakingUsePrefill: boolean;
 }
 
 export interface TrainingConfigActions {
@@ -143,6 +150,12 @@ export interface TrainingConfigActions {
   setFinetuneAttentionModules: (value: boolean) => void;
   setFinetuneMLPModules: (value: boolean) => void;
   setTargetModules: (value: string[]) => void;
+  setBakingSystemPrompt: (value: string) => void;
+  setBakingNumTrajectories: (value: number) => void;
+  setBakingTrajectoryLength: (value: number) => void;
+  setBakingTemperature: (value: number) => void;
+  setBakingSamplingTemperature: (value: number) => void;
+  setBakingUsePrefill: (value: boolean) => void;
   canProceed: () => boolean;
   reset: () => void;
   resetToModelDefaults: () => void;

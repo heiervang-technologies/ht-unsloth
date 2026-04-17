@@ -2,6 +2,18 @@
 
 All notable changes in the HT fork (relative to upstream unsloth) are documented here.
 
+## Unreleased
+
+### Prompt Baking — 4th training mode in Studio
+
+Integrates [marksverdhei/bakery](https://github.com/marksverdhei/bakery) as a new training method alongside QLoRA, LoRA, and Full fine-tune. Prompt baking distils a system prompt into LoRA weights via KL divergence so the model exhibits the prompted behavior at zero inference-time cost.
+
+- New method selector entry **Prompt Baking** with purple dot in `ModelSection`.
+- New **Prompt Baking** panel in `ParamsSection`: system prompt (required), trajectory count / length / sampling temperature, KL temperature, and a "Use Prefill Data" toggle for prebuilt response datasets.
+- Backend fast-path in `core/training/worker.py` mirrors the embeddings dispatch: self-contained `run_prompt_baking()` handles model load, LoRA apply, dataset build, `PromptBakingTrainer.train()`, and adapter save.
+- Request schema gains `is_prompt_baking` + baking params; persists via zustand store (persist v10).
+- Template: `studio/backend/assets/configs/prompt_baking.yaml`.
+
 ## 2026-04-17
 
 ### LiveLearn (`lile`) — live-training FastAPI daemon (PR #8)
