@@ -67,6 +67,7 @@ const METHOD_DOTS: Record<string, string> = {
   qlora: "bg-emerald-400",
   lora: "bg-blue-400",
   full: "bg-amber-400",
+  "prompt-baking": "bg-purple-400",
 };
 
 const DARK_TRIGGER =
@@ -622,6 +623,14 @@ export function ModelSection() {
                       className={`size-2 shrink-0 rounded-full ${METHOD_DOTS.full}`}
                     />
                     Full Fine-tune
+                  </span>
+                </SelectItem>
+                <SelectItem value="prompt-baking">
+                  <span className="flex items-center gap-2">
+                    <span
+                      className={`size-2 shrink-0 rounded-full ${METHOD_DOTS["prompt-baking"]}`}
+                    />
+                    Prompt Baking
                   </span>
                 </SelectItem>
               </SelectContent>
