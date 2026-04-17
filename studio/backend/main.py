@@ -184,6 +184,9 @@ app.include_router(
     training_history_router, prefix = "/api/train", tags = ["training-history"]
 )
 
+from routes.lile import router as lile_router  # new
+app.include_router(lile_router)
+
 
 # ============ Health and System Endpoints ============
 
