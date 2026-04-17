@@ -29,10 +29,8 @@ export function LilePage(): ReactElement {
 
   return (
     <div className="flex flex-col gap-4 p-4">
-      {/* 1. Status strip */}
       <CapsuleStatusStrip />
 
-      {/* 2. Charts */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <LossChartCard />
         <GradNormChartCard />
@@ -41,8 +39,7 @@ export function LilePage(): ReactElement {
       </div>
       <ComponentsChartCard />
 
-      {/* 4. CapsuleLoadForm when not running */}
-      {status?.running === false && (
+      {!status?.running && (
         <Card>
           <CardContent className="pt-6">
             <CapsuleLoadForm />
@@ -50,7 +47,6 @@ export function LilePage(): ReactElement {
         </Card>
       )}
 
-      {/* 3. Tabs */}
       <Tabs defaultValue="train">
         <TabsList>
           <TabsTrigger value="train">Train</TabsTrigger>
@@ -58,8 +54,8 @@ export function LilePage(): ReactElement {
           <TabsTrigger value="snapshots">Snapshots</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="train">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 mt-4">
+        <TabsContent value="train" className="mt-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <Card>
               <CardHeader>
                 <CardTitle>Supervised fine-tuning</CardTitle>
@@ -95,11 +91,11 @@ export function LilePage(): ReactElement {
           </div>
         </TabsContent>
 
-        <TabsContent value="trajectory">
+        <TabsContent value="trajectory" className="mt-4">
           <TrajectoryTab />
         </TabsContent>
 
-        <TabsContent value="snapshots">
+        <TabsContent value="snapshots" className="mt-4">
           <SnapshotsTab />
         </TabsContent>
       </Tabs>
