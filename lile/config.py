@@ -59,3 +59,4 @@ class KLAnchorSpec:
     """Configuration for an optional KL anchor term added once per step."""
     target: str = "base"   # "base" | "ema" | "snapshot:<name>"
     weight: float = 0.0
+    scope: str = "prompt"  # "prompt" | "full_sequence" — see objectives/kl.py
