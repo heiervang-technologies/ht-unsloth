@@ -754,12 +754,19 @@ const LileActionsSlot: FC = () => {
     const raw = custom?.lile;
     return isLileResponseMeta(raw) ? raw : null;
   });
+  const assistantText = useAuiState(({ message }) =>
+    message.content
+      .filter((p): p is { type: "text"; text: string } => p.type === "text")
+      .map((p) => p.text)
+      .join(""),
+  );
   if (!lileMode || lile == null) return null;
   return (
     <LileMessageActions
       responseId={lile.response_id}
       commitCursor={lile.commit_cursor}
       latencyS={lile.latency_s}
+      assistantText={assistantText}
     />
   );
 };
