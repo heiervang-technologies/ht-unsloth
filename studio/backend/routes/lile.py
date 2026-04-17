@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import signal
 import subprocess
@@ -13,7 +14,8 @@ import sys
 from pathlib import Path
 
 import httpx
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
+from fastapi.responses import Response
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/lile", tags=["lile"])
@@ -126,3 +128,50 @@ async def capsule_stop() -> dict:
     pid = _spawned_pid
     _spawned_pid = None
     return {"stopped": True, "pid": pid}
+
+
+_HOP_BY_HOP = {"connection", "keep-alive", "proxy-authenticate",
+               "proxy-authorization", "te", "trailers",
+               "transfer-encoding", "upgrade", "host", "content-length"}
+
+
+def _forward_headers(headers) -> dict:
+    return {k: v for k, v in headers.items() if k.lower() not in _HOP_BY_HOP}
+
+
+async def _proxy_stream(method: str, url: str, headers: dict, body: bytes):
+    raise NotImplementedError  # Task 6
+
+
+@router.api_route(
+    "/{path:path}",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+)
+async def proxy(path: str, request: Request):
+    url = f"{_lile_base_url()}/{path}"
+    if request.url.query:
+        url = f"{url}?{request.url.query}"
+    body = await request.body()
+    headers = _forward_headers(request.headers)
+    accept = request.headers.get("accept", "")
+    is_sse = "text/event-stream" in accept.lower()
+
+    try:
+        if is_sse:
+            return await _proxy_stream(request.method, url, headers, body)
+
+        async with httpx.AsyncClient(timeout=None) as c:
+            upstream = await c.request(
+                request.method, url, content=body, headers=headers,
+                follow_redirects=False,
+            )
+        rh = _forward_headers(upstream.headers)
+        return Response(content=upstream.content,
+                        status_code=upstream.status_code,
+                        headers=rh,
+                        media_type=upstream.headers.get("content-type"))
+    except (httpx.ConnectError, httpx.ReadError):
+        return Response(
+            content=json.dumps({"error": "proxy upstream failure"}),
+            status_code=502, media_type="application/json",
+        )

@@ -3,6 +3,8 @@
 
 """Tests for the lile capsule lifecycle + proxy routes."""
 
+import json
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -98,3 +100,34 @@ def test_stop_sends_signal_when_we_spawned(client, monkeypatch):
     assert r.json()["stopped"] is True
     assert killed == {"pid": 4242, "sig": lile_mod.signal.SIGTERM}
     assert lile_mod._spawned_pid is None
+
+
+def test_proxy_forwards_get(client, monkeypatch, respx_mock):
+    monkeypatch.setenv("LILE_HOST", "127.0.0.1")
+    monkeypatch.setenv("LILE_PORT", "59999")
+    respx_mock.get("http://127.0.0.1:59999/v1/state/trajectory/tail")\
+              .respond(200, json={"events": [], "next_offset": 0, "total_size": 0})
+    r = client.get("/api/lile/v1/state/trajectory/tail")
+    assert r.status_code == 200
+    assert r.json()["total_size"] == 0
+
+
+def test_proxy_forwards_post_with_body(client, monkeypatch, respx_mock):
+    monkeypatch.setenv("LILE_HOST", "127.0.0.1")
+    monkeypatch.setenv("LILE_PORT", "59999")
+    route = respx_mock.post("http://127.0.0.1:59999/v1/train")\
+                      .respond(200, json={"queued": True})
+    r = client.post("/api/lile/v1/train",
+                    json={"objective": "sft", "samples": []})
+    assert r.status_code == 200
+    assert route.called
+    sent = json.loads(route.calls.last.request.content)
+    assert sent["objective"] == "sft"
+
+
+def test_proxy_502_on_upstream_down(client, monkeypatch):
+    monkeypatch.setenv("LILE_HOST", "127.0.0.1")
+    monkeypatch.setenv("LILE_PORT", "59997")  # nothing listens
+    r = client.get("/api/lile/v1/foo")
+    assert r.status_code == 502
+    assert "proxy upstream" in r.json()["error"]
