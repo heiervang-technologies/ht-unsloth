@@ -5,6 +5,7 @@ import type { FormEvent, ReactElement } from "react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { lileClient } from "../../api/lile-client";
@@ -19,6 +20,7 @@ const defaultRows: Row[] = [
 
 export function ChatSftCard(): ReactElement {
   const [rows, setRows] = useState<Row[]>(defaultRows);
+  const [weight, setWeight] = useState(1.0);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,9 +43,12 @@ export function ChatSftCard(): ReactElement {
     setSubmitting(true);
     setError(null);
     try {
+      const objective = weight === 1.0 ? "sft" : "weighted_sft";
+      const sample: { messages: Row[]; weight?: number } = { messages: rows };
+      if (objective === "weighted_sft") sample.weight = weight;
       await lileClient.postTrain({
-        objective: "sft",
-        samples: [{ messages: rows }],
+        objective,
+        samples: [sample],
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -105,10 +110,26 @@ export function ChatSftCard(): ReactElement {
         })}
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex items-center gap-2">
         <Button type="button" variant="outline" onClick={addTurn} disabled={submitting}>
           Add turn
         </Button>
+        <div className="flex-1" />
+        <Label htmlFor="sft-weight" className="text-xs text-muted-foreground">
+          strength
+        </Label>
+        <Input
+          id="sft-weight"
+          type="number"
+          min={0.1}
+          max={10}
+          step="any"
+          value={weight}
+          onChange={(e) => setWeight(Number.parseFloat(e.target.value) || 1.0)}
+          disabled={submitting}
+          className="w-20"
+          aria-label="Training sample strength (weight)"
+        />
         <Button type="submit" disabled={submitting}>
           {submitting ? "Training…" : "Train"}
         </Button>
