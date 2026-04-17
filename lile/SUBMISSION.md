@@ -1,6 +1,6 @@
 # lile — submission writeup
 
-Hackathon build of the LiveLearn daemon spec in `LIVELEARN.md`, built in one session on a single RTX 3090 (24 GB). Read `DESIGN.md` for load-bearing choices and `STATUS.md` for the honest accounting of what works.
+Hackathon build of the LiveLearn daemon spec in `PLAN.md`, built in one session on a single RTX 3090 (24 GB). Read `DESIGN.md` for load-bearing choices and `STATUS.md` for the honest accounting of what works.
 
 ## TL;DR
 

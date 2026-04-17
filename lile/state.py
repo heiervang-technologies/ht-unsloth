@@ -50,11 +50,35 @@ log = logging.getLogger(__name__)
 
 # --------------------------------------------------------------------- matmul_lora patch
 # Module-level, installed once on import. Idempotent via the sentinel attribute.
+#
+# Upstream coupling: our wrapper assumes matmul_lora's signature is
+# (X, W, W_quant, A, B, s, out=None). If a future Unsloth refactor changes
+# param names or count, we abort the install loudly rather than run with a
+# silently-wrong residual — lile still works, just without the fast-path
+# residual (PEFT-standard forward_pre_hook backstop still fires).
+_EXPECTED_MATMUL_LORA_PARAMS = ("X", "W", "W_quant", "A", "B", "s", "out")
+
+
 def _install_matmul_lora_patch() -> None:
+    import inspect
     import unsloth.kernels.utils as _uutils  # heavy but already paid for by Unsloth
 
     original = _uutils.matmul_lora
     if getattr(original, "_lile_patched", False):
+        return
+
+    try:
+        params = tuple(inspect.signature(original).parameters.keys())
+    except (TypeError, ValueError):
+        params = ()
+    if params != _EXPECTED_MATMUL_LORA_PARAMS:
+        log.warning(
+            "lile: unsloth.kernels.utils.matmul_lora signature changed "
+            "(got %s, expected %s) — skipping residual patch install. "
+            "Live residual via fast path is DISABLED; PEFT forward_pre_hook "
+            "backstop still covers disable_adapter() codepaths.",
+            params, _EXPECTED_MATMUL_LORA_PARAMS,
+        )
         return
 
     def _patched(X, W, W_quant, A, B, s, out=None):

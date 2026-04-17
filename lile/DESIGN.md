@@ -1,6 +1,6 @@
 # lile — Design Choices
 
-One-pager of load-bearing decisions made before writing code. The plan in `LIVELEARN.md` is the spec; this doc records where I made a call and why.
+One-pager of load-bearing decisions made before writing code. The plan in `PLAN.md` is the spec; this doc records where I made a call and why.
 
 ## Engine (§8 Q1)
 
