@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import signal
 import subprocess
 import sys
 from pathlib import Path
@@ -111,3 +112,17 @@ async def capsule_start(req: StartRequest) -> dict:
 
     return {"running": False, "error": "health-check timeout (120s)",
             "pid": proc.pid, "log": str(log_path)}
+
+
+@router.post("/capsule/stop")
+async def capsule_stop() -> dict:
+    global _spawned_pid
+    if _spawned_pid is None:
+        return {"stopped": False, "reason": "externally_managed"}
+    try:
+        os.kill(_spawned_pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    pid = _spawned_pid
+    _spawned_pid = None
+    return {"stopped": True, "pid": pid}

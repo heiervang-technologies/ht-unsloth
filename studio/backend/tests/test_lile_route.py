@@ -76,3 +76,25 @@ def test_start_spawns_subprocess_when_absent(client, monkeypatch):
     assert body["pid"] == 4242
     assert "lile.server" in " ".join(spawned["argv"])
     assert "--port" in spawned["argv"]
+
+
+def test_stop_refuses_when_externally_managed(client, monkeypatch):
+    from routes import lile as lile_mod
+    monkeypatch.setattr(lile_mod, "_spawned_pid", None)
+    r = client.post("/api/lile/capsule/stop")
+    assert r.status_code == 200
+    assert r.json() == {"stopped": False, "reason": "externally_managed"}
+
+
+def test_stop_sends_signal_when_we_spawned(client, monkeypatch):
+    from routes import lile as lile_mod
+    killed = {}
+    monkeypatch.setattr(lile_mod, "_spawned_pid", 4242)
+    def fake_kill(pid, sig):
+        killed["pid"] = pid; killed["sig"] = sig
+    monkeypatch.setattr(lile_mod.os, "kill", fake_kill)
+    r = client.post("/api/lile/capsule/stop")
+    assert r.status_code == 200
+    assert r.json()["stopped"] is True
+    assert killed == {"pid": 4242, "sig": lile_mod.signal.SIGTERM}
+    assert lile_mod._spawned_pid is None
