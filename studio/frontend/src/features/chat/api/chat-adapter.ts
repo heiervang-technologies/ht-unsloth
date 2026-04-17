@@ -16,6 +16,7 @@ import {
 import { db } from "../db";
 import { useChatRuntimeStore } from "../stores/chat-runtime-store";
 import type { ChatModelSummary } from "../types/runtime";
+import type { LileResponseMeta } from "../types/api";
 import {
   hasClosedThinkTag,
   parseAssistantContent,
@@ -694,9 +695,17 @@ export function createOpenAIStreamAdapter(): ChatModelAdapter {
       // result is set directly on the tool-call part when tool_end arrives.
       const toolCallParts: ToolCallMessagePart[] = [];
       let serverMetadata: { usage?: ServerUsage; timings?: ServerTimings } | null = null;
+      // Lile capsule metadata — harvested from any SSE chunk that carries
+      // a top-level `lile` block (usually the final chunk before [DONE]).
+      let lileMeta: LileResponseMeta | null = null;
 
       try {
         const { supportsReasoning, reasoningEnabled } = runtime;
+        const {
+          lileMode,
+          lileBlockOnLastCommit,
+          lileLastCommit,
+        } = runtime;
         const stream = streamChatCompletions(
           {
             model: params.checkpoint,
@@ -729,11 +738,24 @@ export function createOpenAIStreamAdapter(): ChatModelAdapter {
                   session_id: resolvedThreadId,
                 }
               : {}),
+            // Lile gating: include last commit token when the user has
+            // asked us to block until the capsule has integrated it.
+            ...(lileMode && lileBlockOnLastCommit && lileLastCommit
+              ? { after_commit_token: lileLastCommit }
+              : {}),
           },
           abortSignal,
+          { lileMode },
         );
 
         for await (const chunk of stream) {
+          // Lile: harvest top-level `lile` block from any chunk that
+          // carries it (the capsule emits it on the final chunk before
+          // [DONE], but we accept it anywhere to stay robust).
+          if (chunk.lile && typeof chunk.lile === "object") {
+            lileMeta = chunk.lile;
+          }
+
           // Handle tool status events
           const toolStatusText = (chunk as unknown as { _toolStatus?: string })._toolStatus;
           if (toolStatusText !== undefined) {
@@ -878,6 +900,14 @@ export function createOpenAIStreamAdapter(): ChatModelAdapter {
           finalTokPerSec,
         );
 
+        // Lile: propagate new commit cursor into the runtime store so
+        // subsequent sends can gate on `after_commit_token`.
+        if (lileMeta && typeof lileMeta.commit_cursor === "number") {
+          useChatRuntimeStore
+            .getState()
+            .setLileLastCommit(lileMeta.commit_cursor);
+        }
+
         yield {
           content: [
             ...toolCallParts,
@@ -897,6 +927,15 @@ export function createOpenAIStreamAdapter(): ChatModelAdapter {
                 modelId: params.checkpoint,
               } : undefined,
               timing: finalTiming,
+              ...(lileMeta
+                ? {
+                    lile: {
+                      response_id: lileMeta.response_id,
+                      commit_cursor: lileMeta.commit_cursor,
+                      latency_s: lileMeta.latency_s,
+                    },
+                  }
+                : {}),
             },
           },
         };

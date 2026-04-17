@@ -62,6 +62,8 @@ import { type FC, useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { deleteThreadMessage } from "@/features/chat/utils/delete-thread-message";
 import { useChatRuntimeStore } from "@/features/chat/stores/chat-runtime-store";
+import { LileMessageActions } from "@/features/lile/components/lile-message-actions";
+import type { LileResponseMeta } from "@/features/chat/types/api";
 
 export const Thread: FC<{ hideComposer?: boolean; hideWelcome?: boolean }> = ({
   hideComposer,
@@ -733,6 +735,42 @@ const CopyButton: FC = () => {
   );
 };
 
+function isLileResponseMeta(value: unknown): value is LileResponseMeta {
+  if (value == null || typeof value !== "object") return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.response_id === "string" &&
+    typeof v.commit_cursor === "number" &&
+    (v.latency_s === undefined || typeof v.latency_s === "number")
+  );
+}
+
+const LileActionsSlot: FC = () => {
+  const lileMode = useChatRuntimeStore((s) => s.lileMode);
+  const lile = useAuiState(({ message }) => {
+    const custom = message.metadata?.custom as
+      | Record<string, unknown>
+      | undefined;
+    const raw = custom?.lile;
+    return isLileResponseMeta(raw) ? raw : null;
+  });
+  const assistantText = useAuiState(({ message }) =>
+    message.content
+      .filter((p): p is { type: "text"; text: string } => p.type === "text")
+      .map((p) => p.text)
+      .join(""),
+  );
+  if (!lileMode || lile == null) return null;
+  return (
+    <LileMessageActions
+      responseId={lile.response_id}
+      commitCursor={lile.commit_cursor}
+      latencyS={lile.latency_s}
+      assistantText={assistantText}
+    />
+  );
+};
+
 const AssistantActionBar: FC = () => {
   return (
     <ActionBarPrimitive.Root
@@ -749,6 +787,7 @@ const AssistantActionBar: FC = () => {
       </ActionBarPrimitive.Reload>
       <DeleteMessageButton />
       <MessageTiming side="top" />
+      <LileActionsSlot />
       <ActionBarMorePrimitive.Root>
         <ActionBarMorePrimitive.Trigger asChild={true}>
           <TooltipIconButton
