@@ -10,10 +10,9 @@ import {
   ChartTooltipContent,
 } from "@/components/ui/chart";
 import type { ChartConfig } from "@/components/ui/chart";
-import { useLileCapsuleStore } from "@/features/lile/stores/lile-capsule-store";
 import type { ReactElement } from "react";
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
-import { selectComponentsSeries } from "./chart-utils";
+import { useComponentsSeries } from "./chart-utils";
 
 const CHART_COLORS = [
   "var(--chart-1)",
@@ -24,7 +23,7 @@ const CHART_COLORS = [
 ];
 
 export function ComponentsChartCard(): ReactElement {
-  const series = useLileCapsuleStore(selectComponentsSeries);
+  const series = useComponentsSeries();
 
   // Merge per-key point arrays into flat { step, [key]: value }[] shape.
   // Use a Map keyed on step so a component named "step" cannot clobber it.

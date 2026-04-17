@@ -2,7 +2,7 @@
 // Copyright 2026-present the Unsloth AI Inc. team. All rights reserved. See /studio/LICENSE.AGPL-3.0
 
 import type { ReactElement } from "react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import type { FeedbackEvent } from "../../api/types";
@@ -10,10 +10,13 @@ import { lileClient } from "../../api/lile-client";
 import { useLileCapsuleStore } from "../../stores/lile-capsule-store";
 
 export function ReinforceCard(): ReactElement {
-  const feedbackEvents = useLileCapsuleStore((s) =>
-    s.trajectory
-      .filter((e): e is FeedbackEvent => e.kind === "feedback")
-      .slice(-10),
+  const trajectory = useLileCapsuleStore((s) => s.trajectory);
+  const feedbackEvents = useMemo(
+    () =>
+      trajectory
+        .filter((e): e is FeedbackEvent => e.kind === "feedback")
+        .slice(-10),
+    [trajectory],
   );
 
   const [replayingId, setReplayingId] = useState<string | null>(null);

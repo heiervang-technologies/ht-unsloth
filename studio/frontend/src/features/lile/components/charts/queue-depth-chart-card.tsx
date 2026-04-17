@@ -8,17 +8,16 @@ import {
   ChartTooltipContent,
 } from "@/components/ui/chart";
 import type { ChartConfig } from "@/components/ui/chart";
-import { useLileCapsuleStore } from "@/features/lile/stores/lile-capsule-store";
 import type { ReactElement } from "react";
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
-import { selectQueueDepthSeries } from "./chart-utils";
+import { useQueueDepthSeries } from "./chart-utils";
 
 const chartConfig = {
   value: { label: "Queue depth", color: "var(--chart-4)" },
 } satisfies ChartConfig;
 
 export function QueueDepthChartCard(): ReactElement {
-  const data = useLileCapsuleStore(selectQueueDepthSeries);
+  const data = useQueueDepthSeries();
 
   return (
     <Card size="sm">

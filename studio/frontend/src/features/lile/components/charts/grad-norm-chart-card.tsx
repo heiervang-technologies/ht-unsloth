@@ -8,17 +8,16 @@ import {
   ChartTooltipContent,
 } from "@/components/ui/chart";
 import type { ChartConfig } from "@/components/ui/chart";
-import { useLileCapsuleStore } from "@/features/lile/stores/lile-capsule-store";
 import type { ReactElement } from "react";
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
-import { selectGradNormSeries } from "./chart-utils";
+import { useGradNormSeries } from "./chart-utils";
 
 const chartConfig = {
   value: { label: "Grad norm", color: "var(--chart-2)" },
 } satisfies ChartConfig;
 
 export function GradNormChartCard(): ReactElement {
-  const data = useLileCapsuleStore(selectGradNormSeries);
+  const data = useGradNormSeries();
 
   return (
     <Card size="sm">

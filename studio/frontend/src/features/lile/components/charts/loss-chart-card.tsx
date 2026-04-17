@@ -8,17 +8,16 @@ import {
   ChartTooltipContent,
 } from "@/components/ui/chart";
 import type { ChartConfig } from "@/components/ui/chart";
-import { useLileCapsuleStore } from "@/features/lile/stores/lile-capsule-store";
 import type { ReactElement } from "react";
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
-import { selectLossSeries } from "./chart-utils";
+import { useLossSeries } from "./chart-utils";
 
 const chartConfig = {
   value: { label: "Loss", color: "var(--chart-1)" },
 } satisfies ChartConfig;
 
 export function LossChartCard(): ReactElement {
-  const data = useLileCapsuleStore(selectLossSeries);
+  const data = useLossSeries();
 
   return (
     <Card size="sm">

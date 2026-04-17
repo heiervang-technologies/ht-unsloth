@@ -8,17 +8,16 @@ import {
   ChartTooltipContent,
 } from "@/components/ui/chart";
 import type { ChartConfig } from "@/components/ui/chart";
-import { useLileCapsuleStore } from "@/features/lile/stores/lile-capsule-store";
 import type { ReactElement } from "react";
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
-import { selectKlSeries } from "./chart-utils";
+import { useKlSeries } from "./chart-utils";
 
 const chartConfig = {
   value: { label: "KL divergence", color: "var(--chart-3)" },
 } satisfies ChartConfig;
 
 export function KlDivergenceChartCard(): ReactElement {
-  const data = useLileCapsuleStore(selectKlSeries);
+  const data = useKlSeries();
 
   return (
     <Card size="sm">
