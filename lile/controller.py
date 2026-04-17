@@ -108,21 +108,33 @@ class Controller:
         if kind == "train":
             result = self.train_engine.step(payload)
             components = result.get("components")
+            wall = time.time() - t0
+            objective = payload.get("objective", "") or "unknown"
             # Canonical log entry for every committed step.
             self.trajectory.log_train(
                 batch_id=task.batch_id,
-                objective=payload.get("objective", ""),
+                objective=objective,
                 loss=result.get("loss") or 0.0,
                 batch_size=len(payload.get("samples", [])),
                 commit_token=task.token,
                 components=components,
             )
+            # Prometheus counters + latency/loss histograms.
+            try:
+                from . import metrics as metrics_mod  # noqa: PLC0415
+                metrics_mod.record_train_step(
+                    objective=objective,
+                    latency_s=wall,
+                    loss=result.get("loss"),
+                )
+            except Exception as exc:  # pragma: no cover — metrics must not break training
+                log.warning("metrics record_train_step failed: %s", exc)
             # Fan out scalar metrics to the external sink (no-op for NullLogger).
             scalars = flatten_scalars(components or {})
             if scalars:
                 self.metrics_logger.log_metrics(scalars, step=task.token)
             return {"loss": result.get("loss"), "components": components,
-                    "wall": time.time() - t0}
+                    "wall": wall}
         elif kind == "merge":
             self.state.merge_active_into_residual()
             return {"merges_applied": self.state.merges_applied,
@@ -391,10 +403,12 @@ class Controller:
 
     async def submit_feedback(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Route feedback to the appropriate training objective (see §5b.3/§5c.16)."""
+        from . import metrics as metrics_mod
         from .errors import InvalidInputError, UnknownResponseIdError
 
         rid = payload.get("response_id")
         kind = payload.get("kind")
+        metrics_mod.record_feedback_event(kind=kind or "unknown")
         prior = self._response_index.get(rid) if rid else None
         if prior is None and "prompt" not in payload:
             raise UnknownResponseIdError(

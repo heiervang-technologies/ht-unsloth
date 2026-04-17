@@ -13,12 +13,14 @@ from typing import Any
 
 import uvicorn
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 
+from . import metrics as metrics_mod
 from .config import ServeConfig
 from .controller import Controller
 from .errors import NotFoundError
+from .metrics import MetricsMiddleware
 from .middleware import RequestIDMiddleware, current_request_id
 from .server_errors import register_error_handlers
 
@@ -101,6 +103,11 @@ def create_app(cfg: ServeConfig | None = None) -> FastAPI:
     app = FastAPI(title="lile", version="0.1.0-dev")
     app.state.cfg = cfg
     app.state.controller = Controller(cfg)
+    metrics_mod.bind_controller(app.state.controller)
+    # Middleware order: Starlette runs the outermost `add_middleware` last on
+    # the way in, first on the way out. We want MetricsMiddleware to see the
+    # final response status, so it goes outside RequestIDMiddleware.
+    app.add_middleware(MetricsMiddleware)
     app.add_middleware(RequestIDMiddleware)
     register_error_handlers(app)
 
@@ -111,6 +118,14 @@ def create_app(cfg: ServeConfig | None = None) -> FastAPI:
     @app.on_event("shutdown")
     async def _shutdown() -> None:
         await app.state.controller.stop()
+
+    # --------------------------------------------------------------- metrics
+    @app.get("/metrics")
+    async def metrics_endpoint() -> Response:
+        return Response(
+            metrics_mod.render_prometheus(),
+            media_type="text/plain; version=0.0.4; charset=utf-8",
+        )
 
     # --------------------------------------------------------------- health
     @app.get("/health")
@@ -133,6 +148,7 @@ def create_app(cfg: ServeConfig | None = None) -> FastAPI:
 
         if req.stream:
             async def sse():
+                ttft_observed = False
                 try:
                     async for ev in c.stream_generate(
                         messages,
@@ -184,6 +200,11 @@ def create_app(cfg: ServeConfig | None = None) -> FastAPI:
                         if len(delta_obj) == 1:
                             # Only role — nothing useful to emit.
                             continue
+                        if not ttft_observed:
+                            metrics_mod.record_generate_latency(
+                                stream=True, latency_s=time.time() - t0,
+                            )
+                            ttft_observed = True
                         payload = {
                             "id": ev["response_id"],
                             "object": "chat.completion.chunk",
@@ -222,6 +243,7 @@ def create_app(cfg: ServeConfig | None = None) -> FastAPI:
             parse_reasoning=req.parse_reasoning,
         )
         latency = time.time() - t0
+        metrics_mod.record_generate_latency(stream=False, latency_s=latency)
         message: dict[str, Any] = {"role": "assistant",
                                    "content": result["response"]}
         if result.get("reasoning_content"):
