@@ -9,6 +9,7 @@ in worker.py: a self-contained function that handles model loading, dataset
 construction, training, and saving.
 """
 
+import json
 import logging
 import math
 import os
@@ -228,9 +229,13 @@ def run_prompt_baking(event_queue: Any, stop_queue: Any, config: dict) -> None:
             })
             return
 
-        dataset = create_dataset(prompts, responses)
-        logger.info("Prompt baking dataset: %d prompts, responses=%s",
-                     len(prompts), "yes" if responses else "on-the-fly")
+        use_prefill = bool(config.get("baking_use_prefill", False))
+        dataset_responses = responses if use_prefill else None
+        dataset = create_dataset(prompts, dataset_responses)
+        logger.info("Prompt baking dataset: %d prompts, responses=%s (prefill=%s)",
+                     len(prompts),
+                     "yes" if dataset_responses else "on-the-fly",
+                     use_prefill)
     except Exception as e:
         event_queue.put({
             "type": "error",
@@ -290,7 +295,7 @@ def run_prompt_baking(event_queue: Any, stop_queue: Any, config: dict) -> None:
         "fp16": not is_bfloat16_supported(),
         "bf16": is_bfloat16_supported(),
         "logging_steps": log_frequency,
-        "report_to": ["wandb"] if config.get("enable_wandb") else ["none"],
+        "report_to": ["wandb"] if config.get("enable_wandb") else "none",
         "lr_scheduler_type": config.get("lr_scheduler_type", "linear"),
         "optim": config.get("optim", "adamw_8bit"),
         "weight_decay": config.get("weight_decay", 0.001),
@@ -434,7 +439,6 @@ def _extract_prompts_from_dataset(dataset) -> tuple[list[str], list[str] | None]
             for row in dataset:
                 msgs = row[col]
                 if isinstance(msgs, str):
-                    import json
                     try:
                         msgs = json.loads(msgs)
                     except (json.JSONDecodeError, TypeError):
@@ -465,7 +469,10 @@ def _extract_prompts_from_dataset(dataset) -> tuple[list[str], list[str] | None]
         prompts = [str(row[prompt_col]) for row in dataset if row[prompt_col]]
         responses = None
         if response_col:
-            responses = [str(row[response_col]) for row in dataset if row[prompt_col]]
+            responses = [
+                str(row[response_col]) for row in dataset
+                if row[prompt_col] and row[response_col] is not None
+            ]
         return prompts, responses
 
     return [], None
