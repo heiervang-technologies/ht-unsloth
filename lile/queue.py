@@ -19,6 +19,8 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
+from .errors import ShutdownDroppedError, ShuttingDownError
+
 log = logging.getLogger(__name__)
 
 
@@ -56,6 +58,12 @@ class ComputeQueue:
         self._cursor_advanced = asyncio.Condition()
         self._worker_task: asyncio.Task | None = None
         self._stop = asyncio.Event()
+        # Shutdown coordination (see ``graceful_drain``):
+        #  - ``_accepting`` gates ``submit``; flipped False on drain entry.
+        #  - ``_hard_stop`` tells the worker loop to exit WITHOUT pulling more
+        #    tasks, even if the queue is non-empty. Set on deadline expiry.
+        self._accepting: bool = True
+        self._hard_stop = asyncio.Event()
         # Monotonic timestamp of the last submit(). Read by is_idle_for().
         # Initialized far in the past so the very first poll after startup
         # reads as idle; the scheduler gates on "quiet for N seconds" anyway.
@@ -63,6 +71,10 @@ class ComputeQueue:
 
     # ------------------------------------------------------------------ enqueue
     async def submit(self, kind: str, payload: Any, batch_id: str = "") -> QueueTask:
+        if not self._accepting:
+            raise ShuttingDownError(
+                "queue is draining; new submits rejected until restart",
+            )
         token = self._next_token
         self._next_token += 1
         task = QueueTask(token=token, kind=kind, payload=payload, batch_id=batch_id)
@@ -113,9 +125,16 @@ class ComputeQueue:
 
     async def _run(self, handler: Callable[[QueueTask], Any]) -> None:
         log.info("compute queue worker started")
-        while not self._stop.is_set():
+        while True:
+            # Drain-on-stop: exit only when stop is requested AND the queue
+            # has been fully processed, OR a hard-stop is signalled (deadline
+            # expired — stop pulling new tasks even if some are queued).
+            if self._hard_stop.is_set():
+                return
+            if self._stop.is_set() and self._q.empty():
+                return
             try:
-                task = await asyncio.wait_for(self._q.get(), timeout=0.25)
+                task = await asyncio.wait_for(self._q.get(), timeout=0.1)
             except asyncio.TimeoutError:
                 continue
             try:
@@ -144,6 +163,81 @@ class ComputeQueue:
         if self._worker_task is not None:
             await self._worker_task
             self._worker_task = None
+
+    async def graceful_drain(self, deadline_s: float | None = None) -> dict[str, Any]:
+        """Close the queue, drain pending, resolve remainders with ShutdownDropped.
+
+        On entry: flip ``_accepting`` so any new ``submit`` raises
+        :class:`ShuttingDownError`, then ask the worker to stop as soon as
+        the queue is empty.
+
+        While ``deadline_s`` has budget, the worker keeps pulling tasks and
+        running them — the drain-on-stop semantics mean a sufficiently long
+        budget completes every enqueued task naturally.
+
+        If the budget expires with the queue non-empty, we set
+        ``_hard_stop``: the worker exits after the currently-in-flight task
+        returns (we never cancel mid-GPU-step — that would tear the LoRA),
+        and every still-pending queue entry gets ``error =
+        ShutdownDroppedError`` and ``done.set()`` so every ``wait_for``
+        caller resolves deterministically.
+
+        Idempotent: a second call with nothing left to do returns
+        ``{"dropped": 0, "timed_out": False}``.
+        """
+        self._accepting = False
+        self._stop.set()
+        if self._worker_task is None or self._worker_task.done():
+            return await self._reap_pending(timed_out=False)
+
+        timed_out = False
+        try:
+            if deadline_s is not None:
+                await asyncio.wait_for(
+                    asyncio.shield(self._worker_task), timeout=deadline_s,
+                )
+            else:
+                await self._worker_task
+        except asyncio.TimeoutError:
+            timed_out = True
+            # Ask the worker to stop pulling more tasks; give the in-flight
+            # one a bit more time to finish so its state is consistent.
+            self._hard_stop.set()
+            try:
+                await asyncio.wait_for(
+                    asyncio.shield(self._worker_task), timeout=30.0,
+                )
+            except asyncio.TimeoutError:
+                # In-flight task is genuinely stuck; best we can do is move
+                # on and let the process teardown handle it.
+                pass
+        self._worker_task = None
+        return await self._reap_pending(timed_out=timed_out)
+
+    async def _reap_pending(self, *, timed_out: bool) -> dict[str, Any]:
+        """Fire ``done`` on every still-pending task with ShutdownDroppedError.
+
+        Advances ``_completed_token`` over the dropped range so any reader
+        that consults the cursor after drain sees monotone progress.
+        """
+        dropped = 0
+        async with self._cursor_advanced:
+            for task in list(self._pending.values()):
+                if task.done.is_set():
+                    continue
+                task.error = ShutdownDroppedError(
+                    f"queue task {task.token} ({task.kind}) dropped on shutdown",
+                )
+                if task.token > self._completed_token:
+                    self._completed_token = task.token
+                task.done.set()
+                dropped += 1
+            self._cursor_advanced.notify_all()
+            # GC: we've resolved every pending task one way or another.
+            for t in list(self._pending.keys()):
+                if t <= self._completed_token:
+                    self._pending.pop(t, None)
+        return {"dropped": dropped, "timed_out": timed_out}
 
 
 def new_batch_id() -> str:
