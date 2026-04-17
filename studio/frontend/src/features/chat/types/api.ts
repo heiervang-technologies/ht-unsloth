@@ -173,6 +173,22 @@ export interface OpenAIChatCompletionsRequest {
   max_tool_calls_per_message?: number;
   tool_call_timeout?: number;
   session_id?: string;
+  /**
+   * Lile gating — when `lileBlockOnLastCommit` is on and a previous
+   * commit cursor is known, the adapter threads it through so the
+   * capsule replies only after it has integrated that commit.
+   */
+  after_commit_token?: string | null;
+}
+
+/**
+ * Server-emitted `lile` metadata block. Attached to the non-streaming
+ * response or to the final SSE chunk when `lileMode` is active.
+ */
+export interface LileResponseMeta {
+  response_id: string;
+  commit_cursor: number | string;
+  latency_s?: number;
 }
 
 export interface OpenAIChatDelta {
@@ -193,4 +209,9 @@ export interface OpenAIChatChunk {
     total_tokens: number;
   };
   timings?: Record<string, number>;
+  /**
+   * Optional `lile` metadata block carried on the final SSE chunk when
+   * streaming through `/api/lile/v1/chat/completions`.
+   */
+  lile?: LileResponseMeta;
 }
