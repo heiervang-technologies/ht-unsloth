@@ -216,3 +216,10 @@ setup_leo.sh
 server.pid
 *.log
 package-lock.json
+
+# lile runtime state — per-process, not evidence.
+# bench_*.json files in lile_data/ are intentionally tracked (checked-in
+# reproducibility evidence for the §11 benchmark); the log + snapshots are
+# ephemeral. See PR#8 review.
+/lile_data/trajectory.jsonl
+/lile_data/snapshots/

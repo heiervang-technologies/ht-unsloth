@@ -61,6 +61,7 @@ from routes import (
     datasets_router,
     export_router,
     inference_router,
+    lile_router,
     models_router,
     training_history_router,
     training_router,
@@ -183,6 +184,7 @@ app.include_router(export_router, prefix = "/api/export", tags = ["export"])
 app.include_router(
     training_history_router, prefix = "/api/train", tags = ["training-history"]
 )
+app.include_router(lile_router)
 
 
 # ============ Health and System Endpoints ============

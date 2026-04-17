@@ -1184,3 +1184,15 @@ ignore = [
 ]
 
 [tool.ruff.format]
+
+[tool.pytest.ini_options]
+# lile test discovery. Pure-function / queue / trajectory tests carry the
+# `cpu_only` marker and run without a GPU; everything else loads a real
+# model and needs CUDA. CI gates can filter with `-m cpu_only`. See PR#8
+# review.
+testpaths = ["lile/tests"]
+python_files = ["test_*.py"]
+markers = [
+    "cpu_only: test runs without a GPU (pure function, queue, trajectory, filesystem)",
+    "gpu: test requires CUDA (loads a real model, exercises Unsloth kernels)",
+]
