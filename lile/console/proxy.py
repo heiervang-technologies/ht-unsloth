@@ -5,6 +5,7 @@ Run with system Python — no venv, no deps.
 from __future__ import annotations
 
 import json
+import os
 import sys
 import urllib.error
 import urllib.request
@@ -13,8 +14,8 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 HTML = HERE / "demo.html"
-UPSTREAM = "http://127.0.0.1:8765"
-PORT = 8766
+UPSTREAM = "http://127.0.0.1:" + os.environ.get("LILE_PORT", "8768")
+PORT = int(os.environ.get("LILE_PROXY_PORT", "8766"))
 
 
 class Handler(BaseHTTPRequestHandler):

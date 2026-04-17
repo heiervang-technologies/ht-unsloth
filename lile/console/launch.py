@@ -16,7 +16,7 @@ cfg = ServeConfig(
     model="unsloth/Qwen3.5-9B",
     max_seq_length=2048,
     host="127.0.0.1",
-    port=8765,
+    port=int(os.environ.get("LILE_PORT", "8768")),
     idle_replay=False,
     frozen_ref=False,
 )
