@@ -117,7 +117,12 @@ def create_app(cfg: ServeConfig | None = None) -> FastAPI:
 
     @app.on_event("shutdown")
     async def _shutdown() -> None:
-        await app.state.controller.stop()
+        # Prefer the graceful path so pending /v1/wait callers get
+        # ShutdownDroppedError envelopes instead of hanging on their own
+        # 60s timeout (see issue #11).
+        await app.state.controller.graceful_shutdown(
+            deadline_s=cfg.shutdown_deadline_s,
+        )
 
     # --------------------------------------------------------------- metrics
     @app.get("/metrics")

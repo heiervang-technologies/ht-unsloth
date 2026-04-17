@@ -20,6 +20,12 @@ class ServeConfig:
     data_dir: Path = field(default_factory=lambda: Path("./lile_data"))
     max_queue_depth: int = 64
 
+    # Budget passed to ``Controller.graceful_shutdown`` on FastAPI shutdown
+    # (SIGINT/SIGTERM via uvicorn's default handler). The queue worker keeps
+    # pulling tasks while the budget holds and cleanly resolves the rest
+    # with ``ShutdownDroppedError`` — so no ``wait_for(token)`` ever hangs.
+    shutdown_deadline_s: float = 30.0
+
     default_lr: float = 1e-5
     default_objective: str = "sft"
 
