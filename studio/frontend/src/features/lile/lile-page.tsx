@@ -23,9 +23,8 @@ import { useLileCapsuleStore } from "@/features/lile/stores/lile-capsule-store";
 
 export function LilePage(): ReactElement {
   useLileStatusPoll({ enabled: true });
-  useLileTrajectoryPoll({ enabled: true });
-
   const status = useLileCapsuleStore((s) => s.status);
+  useLileTrajectoryPoll({ enabled: status?.running === true });
 
   return (
     <div className="flex flex-col gap-4 p-4">
