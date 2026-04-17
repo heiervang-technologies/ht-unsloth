@@ -52,7 +52,7 @@ Four metrics are explicitly in scope for v1 dashboards: **training loss**, **gra
                          │
                 ┌────────▼────────┐
                 │   lile daemon   │   independent process (subprocess or
-                │   :8000 (def.)  │   externally managed), not embedded.
+                │   :8765 (def.)  │   externally managed), not embedded.
                 └─────────────────┘
 ```
 
