@@ -15,6 +15,12 @@ import re
 from . import register
 
 # Explicit boxed / labelled answer patterns, tried in order.
+#
+# Intentionally narrow: scientific notation (``1.5e10`` → ``1.5``) and
+# fractions (``3/4`` → ``3``) are treated as the integer/decimal prefix.
+# Fine for GSM8K-style benches where the final answer is always a plain
+# decimal; TTRL layers equivalence hashing on top of ``extract_answer``
+# when richer number shapes matter.
 _ANSWER_PATTERNS = (
     re.compile(r"####\s*(-?\d[\d,]*(?:\.\d+)?)"),
     re.compile(r"\\boxed\{\s*(-?\d[\d,]*(?:\.\d+)?)\s*\}"),

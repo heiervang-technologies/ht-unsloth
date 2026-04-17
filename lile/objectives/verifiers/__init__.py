@@ -69,6 +69,12 @@ def select(prompt: str) -> str | None:
     to let TTRL pick a verifier without the caller hard-coding domains.
     Custom verifiers without a ``claims`` attribute are skipped — register
     your own ``select`` if you need richer routing.
+
+    Dispatch is insertion-order over ``VERIFIERS``; the first claim wins.
+    Priority-sensitive verifiers (stricter claims that should pre-empt the
+    seeds) must insert into ``VERIFIERS`` at the head rather than appending
+    — e.g. ``VERIFIERS = {"my_strict": fn, **VERIFIERS}`` — or register
+    their own ``select`` wrapper.
     """
     for domain, fn in VERIFIERS.items():
         claims = getattr(fn, "claims", None)

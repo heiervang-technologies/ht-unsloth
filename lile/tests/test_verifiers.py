@@ -11,6 +11,8 @@ Covers:
 """
 from __future__ import annotations
 
+import threading
+
 import pytest
 
 pytestmark = pytest.mark.cpu_only
@@ -150,3 +152,23 @@ def test_code_verify_false_on_infinite_loop():
     prompt = "Expected: never"
     candidate = "```python\nwhile True: pass\n```"
     assert verify("code", prompt, candidate) is False
+
+
+def test_code_verify_works_from_worker_thread():
+    """Regression: ``signal.signal`` is main-thread-only; off-thread callers
+    used to silently drop to ``None`` because ``verify`` swallowed the
+    ``ValueError``. The guard in ``_run_sandboxed`` skips alarm install off
+    the main thread so the verification itself still runs."""
+    prompt = "Expected: ok"
+    candidate = "```python\nprint('ok')\n```"
+
+    results: list[object] = []
+
+    def _run():
+        results.append(verify("code", prompt, candidate))
+
+    t = threading.Thread(target=_run)
+    t.start()
+    t.join(timeout=5.0)
+    assert not t.is_alive()
+    assert results == [True]
