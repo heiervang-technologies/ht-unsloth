@@ -82,6 +82,27 @@ class ServeConfig:
     # to the live merged_deltas rather than session-start.
     frozen_ref: bool = False
 
+    # --- per-objective optimizer instances ---------------------------------
+    # When true, ``TrainEngine`` keeps a separate ``torch.optim.AdamW``
+    # instance per objective name (``sft``, ``kto``, ``coh``, ...) so the
+    # Adam second-moment ``v`` tracks each family's gradient scale
+    # independently. PyTorch keys ``optimizer.state[param]`` by tensor id,
+    # so sharing one optimizer across objectives — even with separate
+    # param_groups — shares ``m``/``v``; only LR would isolate. Multiple
+    # instances are the only way to isolate the running variance.
+    #
+    # Default off because VRAM cost is real: plain 32-bit Adam state doubles
+    # the LoRA param memory per instance (≈400MB-1.6GB for LoRA r=64 on 7B+
+    # depending on target_modules), times N objectives. Turn on only when
+    # mixing objectives with substantially different grad magnitudes.
+    #
+    # Deliberately plain ``torch.optim.AdamW`` (not ``bnb.AdamW8bit``):
+    # bitsandbytes' ``GlobalOptimManager`` is a process-wide singleton that
+    # does not cleanly support multiple AdamW8bit instances over the same
+    # params. See ``docs/research/optimizer-sample-efficiency.md`` §3.
+    per_objective_optim: bool = False
+    per_objective_lr: dict[str, float] = field(default_factory=dict)
+
 
 @dataclass
 class KLAnchorSpec:
