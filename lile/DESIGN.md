@@ -18,7 +18,7 @@ Why: Qwen3-0.6B is small enough that a full forward+backward+LoRA step is a coup
 
 ## Tier targets (depth > breadth)
 
-**Commit:** T1.1 (weighted SFT), T1.2 (KTO), T1.3 (CoH), T2.2 (hinge contrastive) as baseline. Plus the compute queue, state manager, trajectory log, snapshot manager, server, and tests. Progressive-merge path from §3.1 with the 4-bit dequant-merge gotcha (§6) resolved correctly.
+**Commit:** T1.1 (weighted SFT), T1.2 (KTO), T1.3 (CoH), T2.2 (hinge contrastive) as baseline. Plus the compute queue, state manager, trajectory log, snapshot manager, server, and tests. Progressive-merge path from §3.1 with the 4-bit dequant-merge gotcha (§6) resolved correctly. (For the "Razin-safe" tag used throughout the code, see `GLOSSARY.md`.)
 
 **Gated on §11 benchmark:** T2.1 (CCPD v2 light) — auxiliary sampling + detached `r_c` + rank-advantage REINFORCE + SFT on top-m + KL anchor. Implemented only if Spearman on `r_c` rankings lands above the 0.2 floor; shipped as the T2 default only if above 0.5. The benchmark script is always shipped so anyone can re-run it on their own hardware. **Result (`STATUS.md` §11): Qwen3-8B Spearman mean +0.207 → shipped as per-event opt-in; hinge remains primary T2.**
 

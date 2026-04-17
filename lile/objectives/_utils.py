@@ -51,8 +51,18 @@ def build_chat_inputs(tokenizer: Any, prompt: str, response: str,
     which naive string-concatenation tokenization misaligns against.
     """
     if getattr(tokenizer, "chat_template", None):
-        messages_prompt = [{"role": "user", "content": prompt}]
-        messages_full = messages_prompt + [{"role": "assistant", "content": response}]
+        # Multimodal processors (Qwen3.5, Gemma 4 E4B, …) crash on string
+        # content because apply_chat_template pulls `image`/`video` entries
+        # out of the list. Wrap as [{"type":"text","text":...}] when we
+        # detect a Processor (has image_processor or video_processor).
+        is_processor = (hasattr(tokenizer, "image_processor")
+                        or hasattr(tokenizer, "video_processor"))
+        user_content = ([{"type": "text", "text": prompt}] if is_processor
+                        else prompt)
+        asst_content = ([{"type": "text", "text": response}] if is_processor
+                        else response)
+        messages_prompt = [{"role": "user", "content": user_content}]
+        messages_full = messages_prompt + [{"role": "assistant", "content": asst_content}]
         prompt_raw = tokenizer.apply_chat_template(
             messages_prompt, add_generation_prompt=True, tokenize=True,
             return_tensors=None,

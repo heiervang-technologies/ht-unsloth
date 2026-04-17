@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import Any, Callable
 
 from .sft import sft_loss, weighted_sft_loss
+from .ntp import ntp_loss
 from .kto import kto_loss
 from .coh import coh_loss
 from .hinge import hinge_contrastive_loss
@@ -21,6 +22,7 @@ from .kl import kl_anchor_loss
 OBJECTIVES: dict[str, Callable[..., dict[str, Any]]] = {
     "sft": sft_loss,
     "weighted_sft": weighted_sft_loss,
+    "ntp": ntp_loss,
     "kto": kto_loss,
     "coh": coh_loss,
     "hinge": hinge_contrastive_loss,

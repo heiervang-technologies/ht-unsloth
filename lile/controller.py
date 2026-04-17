@@ -143,6 +143,72 @@ class Controller:
                 self._response_index.pop(k, None)
         return {"response_id": rid, "response": text}
 
+    async def stream_generate(self, messages: list[dict[str, str]],
+                              **kwargs: Any):
+        """Async generator yielding {delta, response_id} chunks, then a final
+        {final: True, response_id, full, commit_cursor} event.
+
+        Runs the generator thread-side (see engine.generate_chat_stream) and
+        shuttles chunks through an asyncio.Queue so the FastAPI event loop
+        stays responsive.
+        """
+        wait_for = kwargs.pop("after_commit_token", None)
+        if wait_for is not None:
+            try:
+                await self.queue.wait_for(int(wait_for), timeout=60.0)
+            except (asyncio.TimeoutError, KeyError):
+                pass
+
+        from .engine.inference import generate_chat_stream
+        import threading
+        loop = asyncio.get_running_loop()
+        q: asyncio.Queue = asyncio.Queue()
+        DONE = object()
+        ERR: dict[str, Any] = {}
+
+        def _producer():
+            try:
+                for chunk in generate_chat_stream(
+                    self.state.model, self.state.tokenizer, messages,
+                    mode_lock=self.state.mode_lock, **kwargs,
+                ):
+                    asyncio.run_coroutine_threadsafe(q.put(chunk), loop)
+            except Exception as e:
+                ERR["exc"] = e
+            finally:
+                asyncio.run_coroutine_threadsafe(q.put(DONE), loop)
+
+        threading.Thread(target=_producer, daemon=True).start()
+        rid = new_response_id()
+        full_parts: list[str] = []
+        while True:
+            chunk = await q.get()
+            if chunk is DONE:
+                break
+            full_parts.append(chunk)
+            yield {"delta": chunk, "response_id": rid}
+
+        if "exc" in ERR:
+            yield {"error": str(ERR["exc"]), "response_id": rid}
+            return
+
+        full_text = "".join(full_parts).strip()
+        self.trajectory.log_inference(
+            response_id=rid,
+            prompt=str(messages[-1].get("content", "")),
+            response=full_text,
+            model_fingerprint=self.state.residual_fingerprint()[:16],
+        )
+        self._response_index[rid] = {
+            "messages": messages, "response": full_text, "ts": time.time(),
+        }
+        if len(self._response_index) > 4096:
+            oldest = sorted(self._response_index.items(), key=lambda kv: kv[1]["ts"])[:1024]
+            for k, _ in oldest:
+                self._response_index.pop(k, None)
+        yield {"final": True, "response_id": rid, "full": full_text,
+               "commit_cursor": self.queue.committed}
+
     async def submit_train(self, spec: dict[str, Any]) -> dict[str, Any]:
         """Chunk a train batch into queue tasks and return the final commit_token."""
         batch_id = new_batch_id()

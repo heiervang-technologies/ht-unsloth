@@ -7,8 +7,10 @@ invariant from DESIGN.md).
 """
 from __future__ import annotations
 
+import contextlib
 import logging
-from typing import Any
+from threading import Thread
+from typing import Any, Iterator
 
 import torch
 
@@ -60,3 +62,63 @@ def generate_chat(model: Any, tokenizer: Any, messages: list[dict[str, str]],
     gen = out[0, input_ids.size(-1):]
     text = tokenizer.decode(gen, skip_special_tokens=True).strip()
     return text
+
+
+def generate_chat_stream(model: Any, tokenizer: Any, messages: list[dict[str, str]],
+                         max_new_tokens: int = 256, temperature: float = 0.7,
+                         top_p: float = 0.95,
+                         mode_lock: Any = None) -> Iterator[str]:
+    """Yield decoded text chunks as the model generates them.
+
+    Uses ``TextIteratorStreamer`` — generate() runs in a background thread,
+    chunks are pushed onto a queue that this generator drains. The caller
+    MUST fully drain the iterator; bailing early leaves the generate thread
+    writing into an abandoned queue and keeps the mode_lock held until the
+    thread finishes its full ``max_new_tokens``.
+    """
+    from transformers import TextIteratorStreamer
+
+    prompt_text = tokenizer.apply_chat_template(
+        messages, add_generation_prompt=True, tokenize=False,
+    )
+    enc = tokenizer(text=prompt_text, return_tensors="pt", add_special_tokens=False)
+    device = next(model.parameters()).device
+    input_ids = enc["input_ids"].to(device)
+    attn = enc.get("attention_mask")
+    if attn is not None:
+        attn = attn.to(device)
+
+    lock_cm = mode_lock if mode_lock is not None else contextlib.nullcontext()
+
+    with lock_cm:
+        try:
+            from unsloth import FastLanguageModel
+            FastLanguageModel.for_inference(model)
+        except Exception:
+            pass
+
+        streamer = TextIteratorStreamer(
+            tokenizer, skip_prompt=True, skip_special_tokens=True,
+        )
+
+        def _run():
+            with torch.no_grad():
+                model.generate(
+                    input_ids=input_ids,
+                    attention_mask=attn,
+                    max_new_tokens=max_new_tokens,
+                    do_sample=True,
+                    temperature=temperature,
+                    top_p=top_p,
+                    pad_token_id=tokenizer.pad_token_id or tokenizer.eos_token_id,
+                    streamer=streamer,
+                )
+
+        thread = Thread(target=_run, daemon=True)
+        thread.start()
+        try:
+            for chunk in streamer:
+                if chunk:
+                    yield chunk
+        finally:
+            thread.join()

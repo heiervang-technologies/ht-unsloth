@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import logging
 import os
 import time
@@ -12,6 +13,7 @@ from typing import Any
 
 import uvicorn
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from .config import ServeConfig
@@ -32,6 +34,7 @@ class ChatRequest(BaseModel):
     max_tokens: int | None = 256
     temperature: float = 0.7
     top_p: float = 0.95
+    stream: bool = False
     after_commit_token: int | None = Field(
         default=None,
         description="If provided, block until this training commit_token is reflected.",
@@ -105,11 +108,70 @@ def create_app(cfg: ServeConfig | None = None) -> FastAPI:
 
     # --------------------------------------------------------------- chat
     @app.post("/v1/chat/completions")
-    async def chat(req: ChatRequest) -> dict[str, Any]:
+    async def chat(req: ChatRequest):
         c: Controller = app.state.controller
         t0 = time.time()
+        messages = [m.model_dump() for m in req.messages]
+
+        if req.stream:
+            async def sse():
+                try:
+                    async for ev in c.stream_generate(
+                        messages,
+                        max_new_tokens=req.max_tokens or 256,
+                        temperature=req.temperature,
+                        top_p=req.top_p,
+                        after_commit_token=req.after_commit_token,
+                    ):
+                        if "error" in ev:
+                            payload = {
+                                "object": "chat.completion.chunk",
+                                "model": cfg.model,
+                                "choices": [{"index": 0, "delta": {}, "finish_reason": "error"}],
+                                "lile": {"error": ev["error"],
+                                         "response_id": ev["response_id"]},
+                            }
+                            yield f"data: {json.dumps(payload)}\n\n"
+                            yield "data: [DONE]\n\n"
+                            return
+                        if ev.get("final"):
+                            payload = {
+                                "id": ev["response_id"],
+                                "object": "chat.completion.chunk",
+                                "model": cfg.model,
+                                "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
+                                "lile": {"latency_s": time.time() - t0,
+                                         "commit_cursor": ev["commit_cursor"],
+                                         "response_id": ev["response_id"]},
+                            }
+                            yield f"data: {json.dumps(payload)}\n\n"
+                            yield "data: [DONE]\n\n"
+                            return
+                        # delta event
+                        payload = {
+                            "id": ev["response_id"],
+                            "object": "chat.completion.chunk",
+                            "model": cfg.model,
+                            "choices": [{"index": 0,
+                                         "delta": {"role": "assistant",
+                                                   "content": ev["delta"]}}],
+                            "lile": {"response_id": ev["response_id"]},
+                        }
+                        yield f"data: {json.dumps(payload)}\n\n"
+                except Exception as exc:
+                    err_payload = {
+                        "object": "chat.completion.chunk",
+                        "choices": [{"index": 0, "delta": {}, "finish_reason": "error"}],
+                        "lile": {"error": f"{type(exc).__name__}: {exc}"},
+                    }
+                    yield f"data: {json.dumps(err_payload)}\n\n"
+                    yield "data: [DONE]\n\n"
+
+            return StreamingResponse(sse(), media_type="text/event-stream")
+
+        # non-streaming path
         result = await c.generate(
-            [m.model_dump() for m in req.messages],
+            messages,
             max_new_tokens=req.max_tokens or 256,
             temperature=req.temperature,
             top_p=req.top_p,
