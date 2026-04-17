@@ -517,7 +517,12 @@ async function runGeneration(userTurnIdx) {
         if (data === "[DONE]") { buf = ""; break; }
         let ev; try { ev = JSON.parse(data); } catch { continue; }
         const lile = ev.lile || {};
-        if (lile.error) { errMsg = lile.error; continue; }
+        if (lile.error) {
+          // Post-#19 lile.error is an object {code,message,retryable,request_id}.
+          // Fall back to the raw value for older servers that still emit a string.
+          errMsg = lile.error.message || lile.error;
+          continue;
+        }
         if (lile.response_id) rid = lile.response_id;
         if (lile.commit_cursor != null) commit = lile.commit_cursor;
         const d = ev.choices?.[0]?.delta || {};

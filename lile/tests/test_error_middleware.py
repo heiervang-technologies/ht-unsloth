@@ -48,6 +48,14 @@ def _build_app() -> FastAPI:
     async def boom_http_404() -> dict:
         raise HTTPException(status_code=404, detail="not here")
 
+    @app.get("/boom-http-500")
+    async def boom_http_500() -> dict:
+        raise HTTPException(status_code=500, detail="internal")
+
+    @app.get("/boom-http-502")
+    async def boom_http_502() -> dict:
+        raise HTTPException(status_code=502, detail="bad gateway")
+
     @app.get("/boom-invalid")
     async def boom_invalid() -> dict:
         raise InvalidInputError("samples must be non-empty")
@@ -167,6 +175,24 @@ def test_shutting_down_is_retryable_503():
         r = client.get("/boom-shutting-down")
     assert r.status_code == 503
     _assert_envelope(r.json(), code="shutting_down", retryable=True)
+
+
+def test_http_500_is_not_retryable():
+    """Align with ``_fallback_handler`` — plain 500 is internal, not transient."""
+    app = _build_app()
+    with TestClient(app) as client:
+        r = client.get("/boom-http-500")
+    assert r.status_code == 500
+    _assert_envelope(r.json(), code="internal", retryable=False)
+
+
+def test_http_502_is_retryable():
+    """Upstream gateway errors are the only 5xx statuses we flag retryable."""
+    app = _build_app()
+    with TestClient(app) as client:
+        r = client.get("/boom-http-502")
+    assert r.status_code == 502
+    _assert_envelope(r.json(), code="internal", retryable=True)
 
 
 def test_pydantic_validation_error_becomes_envelope_400():

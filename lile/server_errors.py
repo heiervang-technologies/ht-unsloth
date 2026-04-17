@@ -101,11 +101,15 @@ def register_error_handlers(app: FastAPI) -> None:
             status,
             "internal" if status >= 500 else "invalid_input",
         )
+        # Only transient upstream statuses are retryable. 500 stays non-retryable
+        # to match ``_fallback_handler`` (which also catches uncaught exceptions
+        # and hands them back as 500 internal) — clients should not blind-retry
+        # an internal server error.
         return _respond(
             status_code=status,
             code=code,
             message=str(exc.detail) if exc.detail else code,
-            retryable=status >= 500 and status != 501,
+            retryable=status in (502, 503, 504),
         )
 
     @app.exception_handler(Exception)
