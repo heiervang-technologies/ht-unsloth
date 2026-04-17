@@ -18,6 +18,9 @@ from pydantic import BaseModel, Field
 
 from .config import ServeConfig
 from .controller import Controller
+from .errors import NotFoundError
+from .middleware import RequestIDMiddleware, current_request_id
+from .server_errors import register_error_handlers
 
 log = logging.getLogger(__name__)
 
@@ -98,6 +101,8 @@ def create_app(cfg: ServeConfig | None = None) -> FastAPI:
     app = FastAPI(title="lile", version="0.1.0-dev")
     app.state.cfg = cfg
     app.state.controller = Controller(cfg)
+    app.add_middleware(RequestIDMiddleware)
+    register_error_handlers(app)
 
     @app.on_event("startup")
     async def _startup() -> None:
@@ -139,12 +144,20 @@ def create_app(cfg: ServeConfig | None = None) -> FastAPI:
                         parse_reasoning=req.parse_reasoning,
                     ):
                         if "error" in ev:
+                            rid = current_request_id() or ""
                             payload = {
                                 "object": "chat.completion.chunk",
                                 "model": cfg.model,
                                 "choices": [{"index": 0, "delta": {}, "finish_reason": "error"}],
-                                "lile": {"error": ev["error"],
-                                         "response_id": ev["response_id"]},
+                                "lile": {
+                                    "error": {
+                                        "code": "internal",
+                                        "message": str(ev["error"]),
+                                        "retryable": False,
+                                        "request_id": rid,
+                                    },
+                                    "response_id": ev["response_id"],
+                                },
                             }
                             yield f"data: {json.dumps(payload)}\n\n"
                             yield "data: [DONE]\n\n"
@@ -180,10 +193,18 @@ def create_app(cfg: ServeConfig | None = None) -> FastAPI:
                         }
                         yield f"data: {json.dumps(payload)}\n\n"
                 except Exception as exc:
+                    rid = current_request_id() or ""
                     err_payload = {
                         "object": "chat.completion.chunk",
                         "choices": [{"index": 0, "delta": {}, "finish_reason": "error"}],
-                        "lile": {"error": f"{type(exc).__name__}: {exc}"},
+                        "lile": {
+                            "error": {
+                                "code": "internal",
+                                "message": f"{type(exc).__name__}: {exc}",
+                                "retryable": False,
+                                "request_id": rid,
+                            },
+                        },
                     }
                     yield f"data: {json.dumps(err_payload)}\n\n"
                     yield "data: [DONE]\n\n"
@@ -268,7 +289,7 @@ def create_app(cfg: ServeConfig | None = None) -> FastAPI:
         except asyncio.TimeoutError:
             return {"committed": False, "reason": "timeout"}
         except KeyError:
-            raise HTTPException(404, detail=f"unknown token {token}")
+            raise NotFoundError(f"unknown commit token {token}")
 
     return app
 

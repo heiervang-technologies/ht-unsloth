@@ -391,12 +391,16 @@ class Controller:
 
     async def submit_feedback(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Route feedback to the appropriate training objective (see §5b.3/§5c.16)."""
+        from .errors import InvalidInputError, UnknownResponseIdError
+
         rid = payload.get("response_id")
         kind = payload.get("kind")
         prior = self._response_index.get(rid) if rid else None
         if prior is None and "prompt" not in payload:
-            return {"error": f"unknown response_id {rid!r}; include prompt in payload "
-                             "to bypass index lookup"}
+            raise UnknownResponseIdError(
+                f"unknown response_id {rid!r}; include prompt in payload "
+                "to bypass index lookup"
+            )
 
         prompt_fallback = (prior.get("messages", [{}])[-1].get("content")
                            if prior else None)
@@ -420,7 +424,9 @@ class Controller:
             response_fallback=response_fallback,
         )
         if spec is None:
-            return {"error": f"unsupported or under-specified feedback kind {kind!r}"}
+            raise InvalidInputError(
+                f"unsupported or under-specified feedback kind {kind!r}"
+            )
         return await self.submit_train(spec)
 
     async def request_merge(self) -> dict[str, Any]:

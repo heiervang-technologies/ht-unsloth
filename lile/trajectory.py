@@ -50,8 +50,22 @@ class TrajectoryLog:
         return offset
 
     def log_event(self, kind: str, data: dict[str, Any]) -> int:
-        """Append a `{kind, ts, ...data}` line. Returns byte offset of the new line."""
-        payload = {"kind": kind, "ts": time.time(), **data}
+        """Append a `{kind, ts, ...data}` line. Returns byte offset of the new line.
+
+        If a request-scoped id is bound via ``lile.middleware.current_request_id``,
+        it is stamped into the record under ``request_id``. Internal tasks
+        (replay, queue-driven retrains) leave it absent.
+        """
+        payload: dict[str, Any] = {"kind": kind, "ts": time.time(), **data}
+        # Lazy import to keep trajectory importable without starlette (tests
+        # that exercise only the writer don't need the web stack).
+        try:
+            from .middleware import current_request_id  # noqa: PLC0415
+            rid = current_request_id()
+        except Exception:
+            rid = None
+        if rid is not None and "request_id" not in payload:
+            payload["request_id"] = rid
         return self.append_raw(payload)
 
     def log_inference(self, response_id: str, prompt: str, response: str,
