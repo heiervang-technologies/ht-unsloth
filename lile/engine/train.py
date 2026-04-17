@@ -18,33 +18,59 @@ from ..state import ModelState
 log = logging.getLogger(__name__)
 
 
+_SHARED_KEY = ""  # Key used when per_objective=False — all objectives share one opt.
+
+
 class TrainEngine:
     def __init__(self, state: ModelState, lr: float = 1e-5,
-                 grad_clip: float = 1.0) -> None:
+                 grad_clip: float = 1.0, per_objective: bool = False,
+                 per_objective_lr: dict[str, float] | None = None) -> None:
         self.state = state
         self.lr = lr
         self.grad_clip = grad_clip
-        self._opt: torch.optim.Optimizer | None = None
+        self.per_objective = per_objective
+        self.per_objective_lr = dict(per_objective_lr or {})
+        # Map objective_name -> optimizer. When per_objective=False, the only
+        # key is _SHARED_KEY and every step reuses it. When True, each
+        # objective gets its own torch.optim.AdamW so Adam m/v stay isolated
+        # per family — PyTorch keys optimizer.state by tensor id, so
+        # param_groups alone won't isolate moments.
+        self._opts: dict[str, torch.optim.Optimizer] = {}
 
-    def _optimizer(self) -> torch.optim.Optimizer:
-        if self._opt is None:
+    def _optimizer(self, objective: str = _SHARED_KEY) -> torch.optim.Optimizer:
+        key = objective if self.per_objective else _SHARED_KEY
+        opt = self._opts.get(key)
+        if opt is None:
             params = [p for p in self.state.model.parameters() if p.requires_grad]
-            # 8-bit Adam if bitsandbytes is present, else plain AdamW.
-            try:
-                import bitsandbytes as bnb
-                self._opt = bnb.optim.AdamW8bit(params, lr=self.lr)
-                log.info("using bitsandbytes AdamW8bit (lr=%g)", self.lr)
-            except Exception:
-                self._opt = torch.optim.AdamW(params, lr=self.lr)
-                log.info("using torch AdamW (lr=%g)", self.lr)
-        return self._opt
+            if self.per_objective:
+                # Plain 32-bit AdamW per objective. bitsandbytes AdamW8bit is
+                # deliberately avoided here: its GlobalOptimManager is a
+                # process-wide singleton that does not cleanly support
+                # multiple instances over the same params. See
+                # optimizer-sample-efficiency.md §3 + anti-patterns.
+                lr = self.per_objective_lr.get(objective, self.lr)
+                opt = torch.optim.AdamW(params, lr=lr)
+                log.info("per-objective AdamW for %r (lr=%g)", objective, lr)
+            else:
+                # 8-bit Adam if bitsandbytes is present, else plain AdamW.
+                try:
+                    import bitsandbytes as bnb
+                    opt = bnb.optim.AdamW8bit(params, lr=self.lr)
+                    log.info("using bitsandbytes AdamW8bit (lr=%g)", self.lr)
+                except Exception:
+                    opt = torch.optim.AdamW(params, lr=self.lr)
+                    log.info("using torch AdamW (lr=%g)", self.lr)
+            self._opts[key] = opt
+        return opt
 
     def reset_optimizer(self) -> None:
         # Adam-family `m`/`v` moments are conditioned on the weight trajectory
         # that produced recent gradients. After a snapshot_load jumps weights
         # to an earlier point, those moments mis-scale the first few steps —
-        # see `optimizer-sample-efficiency.md` §1 concern #3.
-        self._opt = None
+        # see `optimizer-sample-efficiency.md` §1 concern #3. In
+        # per-objective mode we drop every instance, not just one — snapshot
+        # rewinds the shared weights that every optimizer's state is keyed to.
+        self._opts.clear()
 
     def step(self, spec: dict[str, Any]) -> dict[str, Any]:
         """Execute one training step according to `spec`.
@@ -101,7 +127,7 @@ class TrainEngine:
                 log.info("objective %s returned None (skipped: %s)", name, components)
                 return {"loss": None, "components": components, "skipped": True}
 
-            opt = self._optimizer()
+            opt = self._optimizer(name)
             opt.zero_grad()
             loss.backward()
             grad_norm_total: float | None = None

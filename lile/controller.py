@@ -83,7 +83,12 @@ class Controller:
         )
         if self.cfg.frozen_ref:
             self.state.load_frozen_ref()
-        self.train_engine = TrainEngine(self.state, lr=self.cfg.default_lr)
+        self.train_engine = TrainEngine(
+            self.state,
+            lr=self.cfg.default_lr,
+            per_objective=self.cfg.per_objective_optim,
+            per_objective_lr=self.cfg.per_objective_lr,
+        )
         # Stamp run-level params into the external logger once the state is
         # loaded; NullLogger swallows this, real backends record it as
         # hyperparameters on the run.
