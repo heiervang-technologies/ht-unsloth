@@ -1,0 +1,615 @@
+{
+  "model": "unsloth/Qwen3-8B-unsloth-bnb-4bit",
+  "k": 8,
+  "max_new_tokens": 96,
+  "temperature": 0.9,
+  "seed": 0,
+  "n_cases": 15,
+  "n_valid": 8,
+  "mean_spearman": 0.16371187087554637,
+  "median_spearman": 0.17368639620620807,
+  "frac_positive": 0.75,
+  "decision": "FALLBACK_T2_2_HINGE",
+  "cases": [
+    {
+      "name": "concise_paris",
+      "n_candidates": 8,
+      "spearman": 0.8434347122457898,
+      "r_c_top": "Paris is a city in France, known for art, fashion, history, and landmarks like the Eiffel Tower and Louvre.",
+      "r_c_bottom": "Paris is a city in France known for its art, history, and culture. It has iconic landmarks like the Eiffel Tower, Louvre Museum, and Notre-Dame Cathedral. Paris is famous for its fashion, cuisine, and romantic atmosphere. It is a major global city and a center for tourism and culture.",
+      "gt_top": "Paris is a city in France, known for art, fashion, history, and landmarks like the Eiffel Tower and Louvre.",
+      "gt_bottom": "Paris is a city in France known for its art, history, and culture. It has iconic landmarks like the Eiffel Tower, Louvre Museum, and Notre-Dame Cathedral. Paris is famous for its fashion, cuisine, and romantic atmosphere. It is a major global city and a center for tourism and culture.",
+      "candidates": [
+        "Paris is a city in France known for its art, history, and culture. It has iconic landmarks like the Eiffel Tower, Louvre Museum, and Notre-Dame Cathedral. Paris is famous for its fashion, cuisine, and romantic atmosphere. It is a major global city and a center for tourism and culture.",
+        "Paris is a city in France, known for art, history, and culture. Famous landmarks include the Eiffel Tower, Louvre Museum, and Notre-Dame Cathedral. It is a major global center for fashion, gastronomy, and the arts.",
+        "Paris is a city in France, known for its art, history, and culture. Famous landmarks include the Eiffel Tower, Louvre Museum, and Notre-Dame Cathedral. It is a major global center for fashion, gastronomy, and entertainment.",
+        "Paris is a city in France. It is famous for art, fashion, and history. Landmarks include the Eiffel Tower and Louvre Museum. It is a major cultural and economic center.",
+        "Paris is a city in France, known for art, fashion, and history. Famous landmarks include the Eiffel Tower, Louvre Museum, and Notre-Dame Cathedral. It's a major cultural and economic center.",
+        "Paris is a city in France, known for art, history, and culture. Famous landmarks include the Eiffel Tower, Louvre Museum, and Notre-Dame Cathedral. It is a major center for fashion, cuisine, and tourism.",
+        "Paris is a city in France, known for art, history, and romance. Famous landmarks include the Eiffel Tower, Louvre Museum, and Notre-Dame Cathedral. It's a major cultural and economic center.",
+        "Paris is a city in France, known for art, fashion, history, and landmarks like the Eiffel Tower and Louvre."
+      ],
+      "r_c_scores": [
+        0.6424998044967651,
+        0.841460153168323,
+        0.8593139554940018,
+        1.0283019065856933,
+        0.936253244226629,
+        1.0307923555374146,
+        1.005240635438399,
+        1.7090657905296043
+      ],
+      "gt_scores": [
+        -50.0,
+        -36.0,
+        -36.0,
+        -30.0,
+        -31.0,
+        -34.0,
+        -31.0,
+        -19.0
+      ],
+      "elapsed_s": 10.767435073852539
+    },
+    {
+      "name": "concise_history",
+      "n_candidates": 8,
+      "spearman": 0.5609756097560975,
+      "r_c_top": "The assassination of Archduke Franz Ferdinand of Austria-Hungary triggered a series of alliances and tensions that led to World War I.",
+      "r_c_bottom": "The assassination of Archduke Franz Ferdinand of Austria-Hungary by Gavrilo Princip, a Bosnian Serb nationalist, triggered a series of diplomatic tensions and alliances that led to the outbreak of World War I.",
+      "gt_top": "The assassination of Archduke Franz Ferdinand of Austria-Hungary triggered a chain of events leading to World War I.",
+      "gt_bottom": "The assassination of Archduke Franz Ferdinand of Austria-Hungary by Gavrilo Princip, a Bosnian Serb nationalist, triggered a series of diplomatic tensions and alliances that led to the outbreak of World War I.",
+      "candidates": [
+        "The assassination of Archduke Franz Ferdinand of Austria-Hungary by Gavrilo Princip, a Bosnian Serb nationalist, triggered a series of diplomatic tensions and alliances that led to the outbreak of World War I.",
+        "The assassination of Archduke Franz Ferdinand of Austria-Hungary in 1914 triggered a complex web of alliances, militarism, nationalism, and imperial rivalries that led to World War I.",
+        "The assassination of Archduke Franz Ferdinand of Austria-Hungary by a Serbian nationalist triggered a chain of events leading to World War I.",
+        "The assassination of Archduke Franz Ferdinand of Austria-Hungary in 1914 triggered a chain of events leading to World War I.",
+        "The assassination of Archduke Franz Ferdinand of Austria-Hungary triggered a series of alliances and tensions that led to World War I.",
+        "The assassination of Archduke Franz Ferdinand of Austria-Hungary triggered a series of alliances and tensions that led to World War I.",
+        "The assassination of Archduke Franz Ferdinand of Austria-Hungary triggered a chain of events leading to World War I.",
+        "The assassination of Archduke Franz Ferdinand of Austria-Hungary triggered a chain of events leading to World War I."
+      ],
+      "r_c_scores": [
+        0.5641738467746311,
+        0.6091274761018299,
+        1.041865246636527,
+        0.84262113571167,
+        1.1147633305302374,
+        1.1147633305302374,
+        1.0617581009864807,
+        1.0617581009864807
+      ],
+      "gt_scores": [
+        -33.0,
+        -28.0,
+        -23.0,
+        -21.0,
+        -22.0,
+        -22.0,
+        -19.0,
+        -19.0
+      ],
+      "elapsed_s": 7.3455727100372314
+    },
+    {
+      "name": "concise_explain",
+      "n_candidates": 8,
+      "spearman": 0.236227795630767,
+      "r_c_top": "Photosynthesis is how plants convert sunlight into energy using carbon dioxide and water.",
+      "r_c_bottom": "Plants use sunlight to convert carbon dioxide and water into glucose and oxygen.",
+      "gt_top": "Plants use sunlight to convert carbon dioxide and water into glucose and oxygen.",
+      "gt_bottom": "Photosynthesis is how plants use sunlight to convert carbon dioxide and water into glucose and oxygen.",
+      "candidates": [
+        "Photosynthesis is how plants convert sunlight, water, and carbon dioxide into glucose and oxygen.",
+        "Photosynthesis is how plants convert sunlight, water, and carbon dioxide into glucose and oxygen.",
+        "Photosynthesis is how plants convert sunlight into energy using carbon dioxide and water.",
+        "Photosynthesis is how plants convert sunlight, water, and carbon dioxide into glucose and oxygen.",
+        "Photosynthesis is how plants convert sunlight, water, and carbon dioxide into glucose and oxygen.",
+        "Photosynthesis is how plants use sunlight to convert carbon dioxide and water into glucose and oxygen.",
+        "Plants use sunlight to convert carbon dioxide and water into glucose and oxygen.",
+        "Photosynthesis is how plants convert sunlight, water, and carbon dioxide into glucose and oxygen."
+      ],
+      "r_c_scores": [
+        2.008263521724277,
+        2.008263521724277,
+        2.7482378323872885,
+        2.008263521724277,
+        2.008263521724277,
+        1.8129754861195881,
+        1.2761545181274414,
+        2.008263521724277
+      ],
+      "gt_scores": [
+        -14.0,
+        -14.0,
+        -13.0,
+        -14.0,
+        -14.0,
+        -16.0,
+        -13.0,
+        -14.0
+      ],
+      "elapsed_s": 4.6929967403411865
+    },
+    {
+      "name": "one_word_answer",
+      "n_candidates": 8,
+      "spearman": NaN,
+      "r_c_top": "4",
+      "r_c_bottom": "4",
+      "gt_top": "4",
+      "gt_bottom": "4",
+      "candidates": [
+        "4",
+        "4",
+        "4",
+        "4",
+        "4",
+        "4",
+        "4",
+        "4"
+      ],
+      "r_c_scores": [
+        14.879823446663067,
+        14.879823446663067,
+        14.879823446663067,
+        14.879823446663067,
+        14.879823446663067,
+        14.879823446663067,
+        14.879823446663067,
+        14.879823446663067
+      ],
+      "gt_scores": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "elapsed_s": 1.626796007156372
+    },
+    {
+      "name": "bullets_pros",
+      "n_candidates": 8,
+      "spearman": -0.7784570702436183,
+      "r_c_top": "- **Pros of Python:**\n  - Easy to learn and read due to simple syntax and English-like keywords.\n  - Large standard library that provides built-in functions for various tasks.\n  - Strong community support with extensive documentation and resources.\n  - Cross-platform compatibility, working on Windows, macOS, and Linux.\n  - Versatile language used in web development, data science, AI, automation, and more.\n  - Supports multiple programming paradigms (procedural,",
+      "r_c_bottom": "- **Pros of Python:**\n  - **Easy to Learn:** Simple syntax makes it beginner-friendly.\n  - **Versatile:** Used in web development, data science, AI, automation, and more.\n  - **Large Community:** Extensive resources, libraries, and frameworks.\n  - **Cross-Platform:** Works on Windows, macOS, Linux, and more.\n  - **Readability:** Code is clean and easy to read, which aids in collaboration.\n  -",
+      "gt_top": "- **Pros of Python:**\n  - **Easy to Learn:** Simple syntax makes it beginner-friendly.\n  - **Versatile:** Used in web development, data science, AI, automation, and more.\n  - **Large Community:** Extensive resources, libraries, and frameworks.\n  - **Cross-Platform:** Works on Windows, macOS, Linux, and more.\n  - **Readability:** Code is clean and easy to read, which aids in collaboration.\n  -",
+      "gt_bottom": "- **Pros of Python:**\n  - Easy to learn and read due to simple syntax and English-like keywords.\n  - Large standard library that provides built-in functions for various tasks.\n  - Strong community support with extensive documentation and resources.\n  - Cross-platform compatibility, working on Windows, macOS, and Linux.\n  - Versatile language used in web development, data science, AI, automation, and more.\n  - Supports multiple programming paradigms (procedural,",
+      "candidates": [
+        "- **Pros of Python:**\n  - Easy to learn and read due to simple syntax.\n  - Large standard library and extensive third-party packages.\n  - Supports multiple programming paradigms (procedural, object-oriented, functional).\n  - Strong community support and active development.\n  - Great for data science, machine learning, and AI.\n  - Cross-platform compatibility.\n  - Excellent for scripting and automation.\n\n- **Cons of Python:**\n  - Slower performance",
+        "- **Pros of Python:**\n  - Easy to learn and read due to simple syntax.\n  - Large standard library with built-in modules for various tasks.\n  - Cross-platform compatibility (works on Windows, macOS, Linux, etc.).\n  - Strong community support and extensive documentation.\n  - Versatile language used in web development, data science, AI, automation, and more.\n  - Supports multiple programming paradigms (procedural, object-oriented, functional).",
+        "- **Pros of Python:**\n  - **Easy to Learn:** Simple syntax makes it beginner-friendly.\n  - **Versatile:** Used in web development, data science, AI, automation, and more.\n  - **Large Community:** Extensive resources, libraries, and frameworks.\n  - **Cross-Platform:** Works on Windows, macOS, Linux, and more.\n  - **Readability:** Code is clean and easy to read, which aids in collaboration.\n  -",
+        "- **Pros of Python:**\n  - **Easy to Learn:** Simple and readable syntax makes it beginner-friendly.\n  - **Versatile:** Used in web development, data science, AI, automation, and more.\n  - **Large Community:** Active community and extensive resources for support.\n  - **Cross-Platform:** Runs on multiple operating systems (Windows, macOS, Linux).\n  - **Rich Libraries:** Vast standard library and third-party packages (e.g., Num",
+        "- **Pros of Python:**\n  - **Readability and Simplicity:** Python's syntax is clean and easy to read, making it beginner-friendly.\n  - **Versatile:** It can be used for web development, data analysis, AI, machine learning, automation, and more.\n  - **Large Community:** Python has a vast and active community, offering extensive support and resources.\n  - **Rich Libraries:** It has a vast standard library and numerous third-party libraries",
+        "- **Pros of Python:**\n  - Easy to learn and read due to simple syntax and English-like keywords.\n  - Large standard library that provides built-in functions for various tasks.\n  - Strong community support with extensive documentation and resources.\n  - Cross-platform compatibility, working on Windows, macOS, and Linux.\n  - Versatile language used in web development, data science, AI, automation, and more.\n  - Supports multiple programming paradigms (procedural,",
+        "- **Pros of Python:**\n  - Easy to learn and read due to simple syntax.\n  - Large standard library and extensive third-party packages.\n  - Cross-platform compatibility.\n  - Support for multiple programming paradigms (procedural, object-oriented, functional).\n  - Strong community and active development.\n  - Great for data science, machine learning, and AI.\n  - Used in web development (with frameworks like Django and Flask).\n  - Good for automation and",
+        "- **Pros of Python:**\n  - Easy to learn and read due to simple syntax.\n  - Large standard library with modules for various tasks.\n  - Cross-platform compatibility.\n  - Strong community support and extensive documentation.\n  - Supports multiple programming paradigms (procedural, object-oriented, functional).\n  - Popular for data science, machine learning, and AI.\n  - Great for web development with frameworks like Django and Flask.\n  - Dynamic typing and interpreted nature"
+      ],
+      "r_c_scores": [
+        0.3206334908803304,
+        0.36002572377522785,
+        0.2917667229970296,
+        0.2975058952967326,
+        0.335811714331309,
+        0.3685769736766815,
+        0.3309870958328247,
+        0.3472979664802551
+      ],
+      "gt_scores": [
+        0.945,
+        0.943,
+        0.949,
+        0.944,
+        0.9390000000000001,
+        0.9390000000000001,
+        0.941,
+        0.94
+      ],
+      "elapsed_s": 19.435587406158447
+    },
+    {
+      "name": "bullets_steps",
+      "n_candidates": 8,
+      "spearman": -0.2891776156271279,
+      "r_c_top": "- Preheat the oven to the recommended temperature (usually around 350\u00b0F or 175\u00b0C)  \n- Gather all ingredients: flour, sugar, eggs, butter, baking powder, salt, and any additional flavorings like vanilla extract  \n- Grease and flour a cake pan to prevent sticking  \n- In a large mixing bowl, cream the butter and sugar until light and fluffy  \n- Add eggs one at a time, mixing well after each addition  \n-",
+      "r_c_bottom": "- Preheat your oven according to the recipe (usually around 350\u00b0F or 175\u00b0C).\n- Grease and flour a cake pan to prevent sticking.\n- In a mixing bowl, combine the dry ingredients (flour, sugar, baking powder, salt, etc.).\n- In another bowl, mix the wet ingredients (milk, oil, eggs, vanilla extract, etc.).\n- Gradually add the dry ingredients to the wet ingredients and mix",
+      "gt_top": "- Preheat your oven according to the recipe (usually around 350\u00b0F or 175\u00b0C).\n- Grease and flour a cake pan to prevent sticking.\n- In a mixing bowl, combine the dry ingredients (flour, sugar, baking powder, salt, etc.).\n- In another bowl, mix the wet ingredients (milk, oil, eggs, vanilla extract, etc.).\n- Gradually add the dry ingredients to the wet ingredients and mix",
+      "gt_bottom": "- Preheat your oven to the recommended temperature, usually around 350\u00b0F (175\u00b0C), as specified in your cake recipe.\n- Grease and flour a cake pan to prevent the cake from sticking.\n- In a large mixing bowl, cream the butter and sugar together until light and fluffy.\n- Add the eggs one at a time, mixing well after each addition.\n- Gradually add the dry ingredients (flour, baking powder, and salt) to",
+      "candidates": [
+        "- Preheat the oven to the recommended temperature, usually around 350\u00b0F (175\u00b0C), as specified in your cake recipe.  \n- Grease and flour a cake pan to prevent the cake from sticking.  \n- In a large mixing bowl, combine the dry ingredients (flour, sugar, baking powder, salt, etc.) and mix well.  \n- In a separate bowl, whisk together the wet ingredients (milk, oil, eggs, vanilla",
+        "- Preheat your oven to the recommended temperature, usually around 350\u00b0F (175\u00b0C), as specified in your cake recipe.\n- Grease and flour a cake pan to prevent the cake from sticking.\n- In a large mixing bowl, cream the butter and sugar together until light and fluffy.\n- Add the eggs one at a time, mixing well after each addition.\n- Gradually add the dry ingredients (flour, baking powder, and salt) to",
+        "- Preheat the oven to the recommended temperature (usually around 350\u00b0F or 175\u00b0C)  \n- Gather all ingredients: flour, sugar, eggs, butter, baking powder, salt, and any additional flavorings like vanilla extract  \n- Grease and flour a cake pan to prevent sticking  \n- In a large mixing bowl, cream the butter and sugar until light and fluffy  \n- Add eggs one at a time, mixing well after each addition  \n-",
+        "- Preheat your oven according to the recipe (usually around 350\u00b0F or 175\u00b0C).\n- Grease and flour a cake pan to prevent sticking.\n- In a mixing bowl, combine the dry ingredients (flour, sugar, baking powder, salt, etc.).\n- In another bowl, mix the wet ingredients (milk, oil, eggs, vanilla extract, etc.).\n- Gradually add the dry ingredients to the wet ingredients and mix",
+        "- Preheat your oven to the recommended temperature, usually 350\u00b0F (175\u00b0C), as specified in your cake recipe.  \n- Grease and flour a cake pan to prevent the cake from sticking.  \n- In a large mixing bowl, combine the dry ingredients like flour, sugar, baking powder, and salt.  \n- In a separate bowl, mix the wet ingredients such as eggs, milk, oil, and vanilla extract.  \n- Gradually add",
+        "- Preheat your oven according to the recipe (usually around 350\u00b0F or 175\u00b0C).  \n- Grease and flour a cake pan to prevent sticking.  \n- In a large mixing bowl, cream the butter and sugar until light and fluffy.  \n- Add the eggs one at a time, beating well after each addition.  \n- Mix in the dry ingredients (flour, baking powder, salt) alternately with the milk or buttermilk",
+        "- Preheat your oven according to the recipe (usually 350\u00b0F or 180\u00b0C for most cakes).  \n- Grease and flour a cake pan to prevent sticking.  \n- In a large bowl, mix the dry ingredients (flour, sugar, baking powder, salt, etc.).  \n- In another bowl, cream the butter and sugar together until light and fluffy.  \n- Add eggs one at a time, mixing well after each addition.",
+        "- Preheat your oven to the recommended temperature, usually around 350\u00b0F (175\u00b0C), as specified in your cake recipe.  \n- Grease and flour a cake pan to prevent the cake from sticking.  \n- In a large mixing bowl, combine the dry ingredients (flour, sugar, baking powder, salt, etc.) and mix well.  \n- In a separate bowl, mix the wet ingredients (eggs, milk, oil, vanilla extract"
+      ],
+      "r_c_scores": [
+        0.48664290209611255,
+        0.44071220358212787,
+        0.499237060546875,
+        0.41528379917144775,
+        0.4963429669539134,
+        0.4406290650367737,
+        0.46510624634592157,
+        0.4751464029153188
+      ],
+      "gt_scores": [
+        0.938,
+        0.931,
+        0.935,
+        0.9390000000000001,
+        0.9359999999999999,
+        0.9359999999999999,
+        0.937,
+        0.938
+      ],
+      "elapsed_s": 19.32899022102356
+    },
+    {
+      "name": "numbered_list",
+      "n_candidates": 8,
+      "spearman": 0.11114499678164916,
+      "r_c_top": "1. Mercury  \n2. Venus  \n3. Earth  \n4. Mars  \n5. Jupiter  \n6. Saturn  \n7. Uranus  \n8. Neptune",
+      "r_c_bottom": "1. **Mercury** \u2013 The closest planet to the Sun, it has no atmosphere and extreme temperature variations.  \n2. **Venus** \u2013 Known for its thick atmosphere and high surface temperatures, it is often called Earth's \"sister planet.\"  \n3. **Earth** \u2013 The only planet known to support life, with liquid water and a breathable atmosphere.  \n4. **Mars** \u2013 Often called the \"Red Planet\" due to its reddish appearance",
+      "gt_top": "1. Mercury  \n2. Venus  \n3. Earth  \n4. Mars  \n5. Jupiter  \n6. Saturn  \n7. Uranus  \n8. Neptune",
+      "gt_bottom": "1. **Mercury** \u2013 The closest planet to the Sun, it has no moons and has extreme temperature variations.  \n2. **Venus** \u2013 Known for its thick atmosphere and high surface temperatures, it is often called Earth\u2019s sister planet.  \n3. **Earth** \u2013 The only known planet to support life, it has one natural satellite, the Moon.  \n4. **Mars** \u2013 Often called the Red Planet due to its reddish appearance, it",
+      "candidates": [
+        "1. **Mercury** \u2013 The closest planet to the Sun, it is small and has no atmosphere.  \n2. **Venus** \u2013 Known for its thick atmosphere and high surface temperature.  \n3. **Earth** \u2013 The only planet known to support life.  \n4. **Mars** \u2013 Often called the \"Red Planet\" due to its reddish appearance.  \n5. **Jupiter** \u2013 The largest planet in the solar system, a gas giant",
+        "1. **Mercury** \u2013 The closest planet to the Sun, it is small and has no atmosphere.  \n2. **Venus** \u2013 Known for its thick atmosphere and high surface temperature.  \n3. **Earth** \u2013 The only planet known to support life.  \n4. **Mars** \u2013 Often called the \"Red Planet\" due to its reddish appearance.  \n5. **Jupiter** \u2013 The largest planet in the solar system, a gas giant",
+        "1. **Mercury** \u2013 The closest planet to the Sun, it is small and has no moons.  \n2. **Venus** \u2013 Known as Earth's sister planet, it has a thick atmosphere and is the hottest planet.  \n3. **Earth** \u2013 The only planet known to support life, it has one natural satellite, the Moon.  \n4. **Mars** \u2013 Often called the Red Planet due to its reddish color, it has two small",
+        "1. Mercury  \n2. Venus  \n3. Earth  \n4. Mars  \n5. Jupiter  \n6. Saturn  \n7. Uranus  \n8. Neptune",
+        "1. **Mercury** \u2013 The closest planet to the Sun, it has no moons and has extreme temperature variations.  \n2. **Venus** \u2013 Known for its thick atmosphere and high surface temperatures, it is often called Earth\u2019s sister planet.  \n3. **Earth** \u2013 The only known planet to support life, it has one natural satellite, the Moon.  \n4. **Mars** \u2013 Often called the Red Planet due to its reddish appearance, it",
+        "1. **Mercury** \u2013 The closest planet to the Sun, it has no moons and is known for its extreme temperature variations.  \n2. **Venus** \u2013 The second planet, known for its thick atmosphere and extreme surface temperatures.  \n3. **Earth** \u2013 The third planet, the only known planet to support life.  \n4. **Mars** \u2013 The fourth planet, often called the \"Red Planet\" due to its reddish appearance.  \n5",
+        "1. **Mercury** \u2013 The closest planet to the Sun, it has no atmosphere and extreme temperature variations.  \n2. **Venus** \u2013 Known for its thick atmosphere and high surface temperatures, it is often called Earth's \"sister planet.\"  \n3. **Earth** \u2013 The only planet known to support life, with liquid water and a breathable atmosphere.  \n4. **Mars** \u2013 Often called the \"Red Planet\" due to its reddish appearance",
+        "1. **Mercury** \u2013 The closest planet to the Sun, it is small and has no atmosphere.  \n2. **Venus** \u2013 Known for its thick atmosphere and extreme temperatures, it is often called Earth\u2019s \"sister planet.\"  \n3. **Earth** \u2013 The only planet known to support life, it has liquid water and a breathable atmosphere.  \n4. **Mars** \u2013 Often called the \"Red Planet\" due to its reddish appearance,"
+      ],
+      "r_c_scores": [
+        0.32591669509808224,
+        0.32591669509808224,
+        0.3345803419748942,
+        0.861851405352354,
+        0.3317830562591553,
+        0.29957346121470135,
+        0.29915425181388855,
+        0.3405999739964803
+      ],
+      "gt_scores": [
+        0.941,
+        0.941,
+        0.9359999999999999,
+        0.984,
+        0.935,
+        0.938,
+        0.938,
+        0.938
+      ],
+      "elapsed_s": 17.6147518157959
+    },
+    {
+      "name": "no_code",
+      "n_candidates": 8,
+      "spearman": NaN,
+      "r_c_top": "To compute the factorial of a number, you multiply all positive integers from 1 up to that number. The factorial of a non-negative integer **n**, denoted as **n!**, is the product of all integers from 1 to **n**. \n\nFor example, the factorial of 5 (written as 5!) is calculated as:\n5 \u00d7 4 \u00d7 3 \u00d7 2 \u00d7 1 = 120\n\nBy definition, the factorial of",
+      "r_c_bottom": "To compute the factorial of a non-negative integer $ n $, you multiply all positive integers from 1 up to $ n $. The factorial of a number $ n $, denoted as $ n! $, is defined as:\n\n$$\nn! = n \\times (n-1) \\times (n-2) \\times \\dots \\times 2 \\times 1\n$$\n\nFor example:\n\n- $ 5! = 5 \\times",
+      "gt_top": "To compute the factorial of a number, you multiply all positive integers from 1 up to that number. The factorial of a number $ n $, written as $ n! $, is the product of every whole number from 1 to $ n $. \n\nFor example, the factorial of 5, written as $ 5! $, is calculated as:\n\n$$\n5! = 5 \\times 4 \\times 3 \\times 2 \\times 1",
+      "gt_bottom": "To compute the factorial of a number, you multiply all the positive integers from 1 up to that number. For example, the factorial of 5 (written as 5!) is calculated as 5 \u00d7 4 \u00d7 3 \u00d7 2 \u00d7 1. The factorial of a non-negative integer n, denoted as n!, is the product of all positive integers less than or equal to n. By definition, the factorial of 0 is 1. This process",
+      "candidates": [
+        "To compute the factorial of a number, you multiply all the positive integers from 1 up to that number. For example, the factorial of 5 (written as 5!) is calculated as 5 \u00d7 4 \u00d7 3 \u00d7 2 \u00d7 1. The factorial of a non-negative integer n, denoted as n!, is the product of all positive integers less than or equal to n. By definition, the factorial of 0 is 1. This process",
+        "To compute the factorial of a number, you multiply all the positive integers from 1 up to that number. For example, the factorial of 5 (written as 5!) is calculated as 5 \u00d7 4 \u00d7 3 \u00d7 2 \u00d7 1. The factorial of a non-negative integer n is the product of all positive integers less than or equal to n. By definition, the factorial of 0 is 1. This process continues recursively, where the factorial",
+        "To compute the factorial of a non-negative integer $ n $, you multiply all positive integers from 1 up to $ n $. The factorial of a number $ n $, denoted as $ n! $, is defined as:\n\n$$\nn! = n \\times (n-1) \\times (n-2) \\times \\dots \\times 2 \\times 1\n$$\n\nFor example:\n\n- $ 5! = 5 \\times",
+        "To compute the factorial of a non-negative integer $ n $, you multiply all positive integers from 1 up to $ n $. The factorial of $ n $, denoted as $ n! $, is defined as:\n\n$$\nn! = n \\times (n-1) \\times (n-2) \\times \\dots \\times 2 \\times 1\n$$\n\nFor example:\n- $ 5! = 5 \\times 4 \\",
+        "To compute the factorial of a non-negative integer, you multiply all the positive integers from 1 up to that number. The factorial of a number $ n $, denoted as $ n! $, is the product of all integers from 1 to $ n $. \n\nFor example, the factorial of 5, written as $ 5! $, is calculated as:\n\n$$\n5! = 5 \\times 4 \\times 3 \\times 2 \\",
+        "To compute the factorial of a number, you multiply all positive integers from 1 up to that number. The factorial of a non-negative integer **n**, denoted as **n!**, is the product of all integers from 1 to **n**. \n\nFor example, the factorial of 5 (written as 5!) is calculated as:\n5 \u00d7 4 \u00d7 3 \u00d7 2 \u00d7 1 = 120\n\nBy definition, the factorial of",
+        "To compute the factorial of a number, you multiply all positive integers from 1 up to that number. The factorial of a positive integer $ n $, denoted as $ n! $, is the product of all integers from 1 to $ n $. \n\nFor example, the factorial of 5, written as $ 5! $, is calculated as:\n$$ 5! = 5 \\times 4 \\times 3 \\times 2 \\times",
+        "To compute the factorial of a number, you multiply all positive integers from 1 up to that number. The factorial of a number $ n $, written as $ n! $, is the product of every whole number from 1 to $ n $. \n\nFor example, the factorial of 5, written as $ 5! $, is calculated as:\n\n$$\n5! = 5 \\times 4 \\times 3 \\times 2 \\times 1"
+      ],
+      "r_c_scores": [
+        0.48966537912686664,
+        0.5283212661743164,
+        0.15657054499575968,
+        0.16005047162373862,
+        0.3887119839588801,
+        0.5766024589538574,
+        0.36053404557077506,
+        0.3606058557828267
+      ],
+      "gt_scores": [
+        -0.0,
+        -0.0,
+        -0.0,
+        -0.0,
+        -0.0,
+        -0.0,
+        -0.0,
+        -0.0
+      ],
+      "elapsed_s": 19.390273332595825
+    },
+    {
+      "name": "include_code",
+      "n_candidates": 8,
+      "spearman": NaN,
+      "r_c_top": "```python\nprint(\"hello world\")\n```",
+      "r_c_bottom": "```python\nprint(\"Hello, World!\")\n```",
+      "gt_top": "```python\nprint(\"Hello, world!\")\n```",
+      "gt_bottom": "```python\nprint(\"hello world\")\n```",
+      "candidates": [
+        "```python\nprint(\"hello world\")\n```",
+        "```python\nprint(\"Hello, world!\")\n```",
+        "```python\nprint(\"Hello, world!\")\n```",
+        "```python\nprint(\"Hello, world!\")\n```",
+        "```python\nprint(\"Hello, World!\")\n```",
+        "```python\nprint(\"Hello, world!\")\n```",
+        "```python\nprint(\"Hello, world!\")\n```",
+        "```python\nprint(\"Hello, world!\")\n```"
+      ],
+      "r_c_scores": [
+        2.6803000503116183,
+        2.54181222319603,
+        2.54181222319603,
+        2.54181222319603,
+        2.48911429643631,
+        2.54181222319603,
+        2.54181222319603,
+        2.54181222319603
+      ],
+      "gt_scores": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "elapsed_s": 3.3424935340881348
+    },
+    {
+      "name": "start_with_certainly",
+      "n_candidates": 8,
+      "spearman": NaN,
+      "r_c_top": "Certainly, the capital of Japan is Tokyo.",
+      "r_c_bottom": "Certainly, the capital of Japan is Tokyo.",
+      "gt_top": "Certainly, the capital of Japan is Tokyo.",
+      "gt_bottom": "Certainly, the capital of Japan is Tokyo.",
+      "candidates": [
+        "Certainly, the capital of Japan is Tokyo.",
+        "Certainly, the capital of Japan is Tokyo.",
+        "Certainly, the capital of Japan is Tokyo.",
+        "Certainly, the capital of Japan is Tokyo.",
+        "Certainly, the capital of Japan is Tokyo.",
+        "Certainly, the capital of Japan is Tokyo.",
+        "Certainly, the capital of Japan is Tokyo.",
+        "Certainly, the capital of Japan is Tokyo."
+      ],
+      "r_c_scores": [
+        2.943895472420814,
+        2.943895472420814,
+        2.943895472420814,
+        2.943895472420814,
+        2.943895472420814,
+        2.943895472420814,
+        2.943895472420814,
+        2.943895472420814
+      ],
+      "gt_scores": [
+        0.993,
+        0.993,
+        0.993,
+        0.993,
+        0.993,
+        0.993,
+        0.993,
+        0.993
+      ],
+      "elapsed_s": 3.250761032104492
+    },
+    {
+      "name": "start_with_honestly",
+      "n_candidates": 8,
+      "spearman": 0.04819626927118799,
+      "r_c_top": "Honestly, yes, jogging is good for you, but it depends on how you approach it. Jogging is a form of moderate-intensity aerobic exercise that can offer numerous health benefits, including:\n\n- **Improved cardiovascular health**: Jogging strengthens the heart and improves circulation, which can lower the risk of heart disease and stroke.\n- **Weight management**: It burns calories and can help with weight loss or maintaining a healthy weight.\n- **Stress relief**: Physical activity like jogging releases",
+      "r_c_bottom": "Honestly, yes, jogging is generally good for you, but it depends on how you do it and your overall health. Here's the breakdown:\n\n1. **Cardiovascular Health**: Jogging is a form of aerobic exercise that can improve your heart and lung function, lower blood pressure, and reduce the risk of heart disease.\n\n2. **Weight Management**: It burns calories, which can help with weight loss or maintaining a healthy weight, especially when combined with a balanced diet.",
+      "gt_top": "Honestly, yes, jogging is generally good for you, but it depends on how you approach it. Jogging is a form of aerobic exercise that offers numerous health benefits, including:\n\n- **Cardiovascular health**: It strengthens the heart and improves circulation.\n- **Weight management**: It burns calories and can help with weight loss or maintenance.\n- **Stress relief**: It can reduce stress and improve mood by releasing endorphins.\n- **Bone health**: Weight-bearing exercise like",
+      "gt_bottom": "Honestly, jogging can be good for you, but it depends on how you approach it. It's a form of aerobic exercise that can improve cardiovascular health, help with weight management, boost mood through endorphin release, and even strengthen bones and muscles. However, it's not without risks. If done incorrectly, jogging can lead to injuries like stress fractures, shin splints, or joint pain, especially if you push too hard or don't warm up properly.\n\nIt's important",
+      "candidates": [
+        "Honestly, yes, jogging is generally good for you, but it depends on how you approach it. Jogging is a form of moderate-intensity aerobic exercise that offers several health benefits, such as:\n\n- **Improving cardiovascular health**: It helps strengthen the heart and lungs, lowers blood pressure, and improves circulation.\n- **Boosting endurance**: Regular jogging can increase your stamina and overall fitness level.\n- **Weight management**: It burns calories, which can help with weight loss or",
+        "Honestly, yes, jogging is good for you, but it depends on how you approach it. Jogging is a form of moderate-intensity aerobic exercise that can offer numerous health benefits, including:\n\n- **Improved cardiovascular health**: Jogging strengthens the heart and improves circulation, which can lower the risk of heart disease and stroke.\n- **Weight management**: It burns calories and can help with weight loss or maintaining a healthy weight.\n- **Stress relief**: Physical activity like jogging releases",
+        "Honestly, yes, jogging is generally good for you, but it depends on how it's done and how your body responds. Here's the breakdown:\n\n1. **Cardiovascular Health**: Jogging is a form of moderate-intensity aerobic exercise that can improve heart health, lower blood pressure, and boost circulation.\n\n2. **Weight Management**: It burns calories, which can help with weight loss or maintenance if combined with a healthy diet.\n\n3. **Mental Health**: Jog",
+        "Honestly, jogging can be good for you, but it depends on how you approach it. It's a form of aerobic exercise that can improve cardiovascular health, help with weight management, boost mood through endorphin release, and even strengthen bones and muscles. However, it's not without risks. If done incorrectly, jogging can lead to injuries like stress fractures, shin splints, or joint pain, especially if you push too hard or don't warm up properly.\n\nIt's important",
+        "Honestly, yes, jogging is generally good for you, but it depends on how you do it and your overall health. Here's the breakdown:\n\n1. **Cardiovascular Health**: Jogging is a form of aerobic exercise that can improve your heart and lung function, lower blood pressure, and reduce the risk of heart disease.\n\n2. **Weight Management**: It burns calories, which can help with weight loss or maintaining a healthy weight, especially when combined with a balanced diet.",
+        "Honestly, yes, jogging is good for you\u2014especially when done correctly and consistently. It's a form of moderate-intensity aerobic exercise that offers a wide range of health benefits. Here's a breakdown of why it can be beneficial:\n\n1. **Cardiovascular Health**: Jogging strengthens the heart and improves circulation, which can lower the risk of heart disease, stroke, and high blood pressure.\n\n2. **Weight Management**: It burns calories and can help with weight loss or",
+        "Honestly, yes, jogging is generally good for you, but it depends on how you approach it. It's a form of moderate-intensity aerobic exercise that offers a range of health benefits, including:\n\n- **Improved cardiovascular health**: Regular jogging can strengthen your heart and lungs, lowering the risk of heart disease and high blood pressure.\n- **Weight management**: Jogging burns calories, helping with weight control or loss when combined with a healthy diet.\n- **Mental health benefits**:",
+        "Honestly, yes, jogging is generally good for you, but it depends on how you approach it. Jogging is a form of aerobic exercise that offers numerous health benefits, including:\n\n- **Cardiovascular health**: It strengthens the heart and improves circulation.\n- **Weight management**: It burns calories and can help with weight loss or maintenance.\n- **Stress relief**: It can reduce stress and improve mood by releasing endorphins.\n- **Bone health**: Weight-bearing exercise like"
+      ],
+      "r_c_scores": [
+        0.443150798479716,
+        0.5133536458015442,
+        0.4391244947910309,
+        0.46120532353719074,
+        0.3967747688293457,
+        0.45898526906967163,
+        0.4565110007921855,
+        0.47117743889490765
+      ],
+      "gt_scores": [
+        0.9279999999999999,
+        0.926,
+        0.9299999999999999,
+        0.925,
+        0.925,
+        0.926,
+        0.927,
+        0.931
+      ],
+      "elapsed_s": 19.42201590538025
+    },
+    {
+      "name": "end_with_question",
+      "n_candidates": 8,
+      "spearman": 0.5773502691896257,
+      "r_c_top": "Cats are fascinating creatures known for their independence, agility, and playful nature. They are mammals with sharp senses, particularly their hearing and night vision, which make them excellent hunters. Cats are often kept as pets due to their affectionate yet independent personalities. They communicate through a variety of sounds, body language, and behaviors. Did you know that cats can leap up to six times their body length in a single jump? What interests you most about cats?",
+      "r_c_bottom": "Cats are fascinating creatures known for their independence, agility, and grace. They are mammals that belong to the family Felidae and have been companions to humans for thousands of years. Domestic cats (Felis catus) are one of the most popular pets worldwide, cherished for their affectionate nature, playful behavior, and ability to adapt to various living environments.\n\nCats are known for their keen senses, particularly their excellent night vision, hearing, and sense of smell. Their",
+      "gt_top": "Cats are fascinating creatures known for their independence, agility, and playful nature. They are mammals with sharp senses, particularly their hearing and night vision, which make them excellent hunters. Cats are often kept as pets due to their affectionate yet independent personalities. They communicate through a variety of sounds, body language, and behaviors. Did you know that cats can leap up to six times their body length in a single jump? What interests you most about cats?",
+      "gt_bottom": "Cats are fascinating creatures known for their independence, agility, and grace. They are domesticated mammals that have been companions to humans for thousands of years. With their sleek bodies, expressive eyes, and purring ability, they are beloved pets worldwide. Cats are skilled hunters, using their sharp claws and keen senses to track prey, and they are crepuscular\u2014most active during dawn and dusk. They are also known for their cleanliness, often grooming themselves meticulously. Despite their alo",
+      "candidates": [
+        "Cats are fascinating creatures known for their independence, agility, and grace. They are domesticated mammals that have been companions to humans for thousands of years. With their sleek bodies, expressive eyes, and purring ability, they are beloved pets worldwide. Cats are skilled hunters, using their sharp claws and keen senses to track prey, and they are crepuscular\u2014most active during dawn and dusk. They are also known for their cleanliness, often grooming themselves meticulously. Despite their alo",
+        "Cats are fascinating creatures known for their independence, agility, and unique behaviors. They are domesticated animals that have been companions to humans for thousands of years, with some evidence suggesting a relationship dating back over 9,000 years. Cats are incredibly adaptable, thriving in a variety of environments, from urban apartments to rural homes.\n\nThey are skilled hunters, equipped with sharp claws, keen eyesight, and a strong sense of hearing. Despite their hunting prowess, many domestic",
+        "Cats are fascinating creatures known for their agility, independence, and mysterious nature. They are domesticated animals that have lived alongside humans for thousands of years, with their ancestors, the African wildcat, being domesticated as early as 7500 BCE. Cats are known for their cleanliness, spending a significant amount of time grooming themselves. They also have excellent night vision and hearing, which makes them skilled hunters.\n\nCats have a unique ability to land on their feet,",
+        "Cats are fascinating creatures known for their independence, agility, and unique behaviors. They are domesticated animals that have been companions to humans for thousands of years. With their sleek bodies, sharp claws, and expressive eyes, cats have a way of capturing our hearts.\n\nThey are highly intelligent and curious, often engaging in playful activities that mimic hunting behaviors. Despite their playful nature, cats are also independent and can be quite aloof at times, which is one of the reasons they are",
+        "Cats are fascinating creatures known for their independence, agility, and unique personalities. They are domesticated animals that have been companions to humans for thousands of years, originating from wild species like the African wildcat. Cats are skilled hunters, with sharp claws, keen senses, and the ability to leap great distances. They are also highly intelligent, often solving puzzles or learning tricks. Their behavior can be mysterious, as they often seem to have their own agenda. Despite their aloof nature",
+        "Cats are fascinating creatures known for their independence, agility, and playful nature. They are mammals with sharp senses, particularly their hearing and night vision, which make them excellent hunters. Cats are often kept as pets due to their affectionate yet independent personalities. They communicate through a variety of sounds, body language, and behaviors. Did you know that cats can leap up to six times their body length in a single jump? What interests you most about cats?",
+        "Cats are fascinating creatures known for their independence, agility, and grace. They are mammals that belong to the family Felidae and have been companions to humans for thousands of years. Domestic cats (Felis catus) are one of the most popular pets worldwide, cherished for their affectionate nature, playful behavior, and ability to adapt to various living environments.\n\nCats are known for their keen senses, particularly their excellent night vision, hearing, and sense of smell. Their",
+        "Cats are fascinating creatures known for their independence, agility, and curious nature. They are domesticated mammals that have lived alongside humans for thousands of years. With their sleek bodies, sharp claws, and keen senses, cats are natural hunters, though many now live comfortably as companions in homes.\n\nThey are incredibly adaptable, thriving in a variety of environments, from urban apartments to rural estates. Cats are known for their cleanliness, often grooming themselves meticulously, and they have a strong instinct to"
+      ],
+      "r_c_scores": [
+        0.39282870292663574,
+        0.3770868380864461,
+        0.33517815669377643,
+        0.36447203159332275,
+        0.3539663553237915,
+        0.5008855337625021,
+        0.3019975622495015,
+        0.3570444981257121
+      ],
+      "gt_scores": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "elapsed_s": 19.45348596572876
+    },
+    {
+      "name": "no_apology",
+      "n_candidates": 8,
+      "spearman": NaN,
+      "r_c_top": "The sky appears blue because of the way sunlight interacts with the Earth's atmosphere. Sunlight is made up of different colors, each with its own wavelength. When sunlight enters the atmosphere, it collides with gas molecules and small particles in the air. This interaction causes the light to scatter in all directions\u2014a process called Rayleigh scattering. \n\nBlue light has a shorter wavelength and is scattered more efficiently than longer wavelengths like red or yellow. As a result, blue light is scattered in",
+      "r_c_bottom": "The sky appears blue due to a phenomenon called Rayleigh scattering. When sunlight enters Earth's atmosphere, it collides with molecules and small particles in the air. Sunlight is made up of different colors, each with its own wavelength. Blue light has a shorter wavelength and is scattered in all directions by the gases and particles in the atmosphere more than the longer wavelengths, such as red or yellow. This scattered blue light is what reaches our eyes from all directions, making the sky appear",
+      "gt_top": "The sky appears blue due to a phenomenon called Rayleigh scattering. When sunlight enters Earth's atmosphere, it collides with gas molecules and small particles. Shorter wavelengths of light (like blue and violet) are scattered more than longer wavelengths (like red and yellow). Although violet light is scattered even more than blue, our eyes are more sensitive to blue light, and some of the violet light is absorbed by the upper atmosphere. This combination of factors makes the sky appear blue to us",
+      "gt_bottom": "The sky appears blue due to a phenomenon called Rayleigh scattering. When sunlight enters Earth's atmosphere, it interacts with gas molecules and small particles in the air. Sunlight is made up of different colors, each with its own wavelength. Blue light has a shorter wavelength and is scattered more efficiently by the gases in the atmosphere than longer wavelengths like red or yellow. This scattered blue light is what reaches our eyes from all directions, making the sky appear blue during the day.",
+      "candidates": [
+        "The sky appears blue due to a phenomenon called Rayleigh scattering. When sunlight enters Earth's atmosphere, it interacts with gas molecules and small particles in the air. Sunlight is made up of different colors, each with its own wavelength. Blue light has a shorter wavelength and is scattered more efficiently by the gases in the atmosphere than longer wavelengths like red or yellow. This scattered blue light is what reaches our eyes from all directions, making the sky appear blue during the day.",
+        "The sky appears blue due to a phenomenon called Rayleigh scattering. When sunlight enters Earth's atmosphere, it interacts with molecules and small particles in the air. Sunlight is made up of different colors, each with different wavelengths. Blue light has a shorter wavelength and is scattered more efficiently by the gases in the atmosphere than longer wavelengths like red or yellow. This scattered blue light is what reaches our eyes from all directions, making the sky appear blue.",
+        "The sky appears blue due to a phenomenon called Rayleigh scattering. When sunlight enters Earth's atmosphere, it collides with gas molecules and small particles in the air. Sunlight is made up of different colors, each with its own wavelength. Blue light has a shorter wavelength and is scattered in all directions by the gases and particles in the atmosphere more than other colors. This scattered blue light is what we see when we look up at the sky.",
+        "The sky appears blue because of the way sunlight interacts with the Earth's atmosphere. Sunlight is made up of different colors, each with its own wavelength. When sunlight enters the atmosphere, it collides with gas molecules and small particles in the air. This interaction causes the light to scatter in all directions\u2014a process called Rayleigh scattering. \n\nBlue light has a shorter wavelength and is scattered more efficiently than longer wavelengths like red or yellow. As a result, blue light is scattered in",
+        "The sky appears blue due to a phenomenon called Rayleigh scattering. When sunlight enters Earth's atmosphere, it interacts with gas molecules and small particles in the air. Shorter wavelengths of light (like blue and violet) are scattered more efficiently by these particles than longer wavelengths (like red and yellow). \n\nAlthough violet light has an even shorter wavelength than blue, the sun emits more blue light than violet, and human eyes are more sensitive to blue. Combined with the scattering effect, this",
+        "The sky appears blue because of the way sunlight interacts with the Earth's atmosphere. Sunlight is made up of different colors, each with different wavelengths. When sunlight enters the atmosphere, the shorter wavelengths (like blue and violet) are scattered more than the longer wavelengths (like red and yellow) due to a process called Rayleigh scattering. \n\nBlue light is scattered in all directions by the gases and particles in the atmosphere, which makes the sky appear blue to our eyes. Even though",
+        "The sky appears blue due to a phenomenon called Rayleigh scattering. When sunlight enters Earth's atmosphere, it collides with molecules and small particles in the air. Sunlight is made up of different colors, each with its own wavelength. Blue light has a shorter wavelength and is scattered in all directions by the gases and particles in the atmosphere more than the longer wavelengths, such as red or yellow. This scattered blue light is what reaches our eyes from all directions, making the sky appear",
+        "The sky appears blue due to a phenomenon called Rayleigh scattering. When sunlight enters Earth's atmosphere, it collides with gas molecules and small particles. Shorter wavelengths of light (like blue and violet) are scattered more than longer wavelengths (like red and yellow). Although violet light is scattered even more than blue, our eyes are more sensitive to blue light, and some of the violet light is absorbed by the upper atmosphere. This combination of factors makes the sky appear blue to us"
+      ],
+      "r_c_scores": [
+        0.2340945690236193,
+        0.21345556987805314,
+        0.20505407954869645,
+        0.36907384792963666,
+        0.2848656177520752,
+        0.32894668976465863,
+        0.19341392318407694,
+        0.22555572787920633
+      ],
+      "gt_scores": [
+        -0.0,
+        -0.0,
+        -0.0,
+        -0.0,
+        -0.0,
+        -0.0,
+        -0.0,
+        -0.0
+      ],
+      "elapsed_s": 19.868391036987305
+    },
+    {
+      "name": "metric_units",
+      "n_candidates": 8,
+      "spearman": NaN,
+      "r_c_top": "Mount Everest is approximately **8,848 metres** tall.",
+      "r_c_bottom": "Mount Everest is approximately **8,848 metres** tall. This is the height measured from sea level to its peak, and it is the highest mountain above sea level on Earth.",
+      "gt_top": "Mount Everest is approximately **8,848 metres** tall.",
+      "gt_bottom": "Mount Everest is approximately **8,848 metres** tall.",
+      "candidates": [
+        "Mount Everest is approximately **8,848 metres** tall.",
+        "Mount Everest is approximately **8,848 metres** tall. This is the height from sea level to its summit, measured in metres.",
+        "Mount Everest is approximately **8,848 metres** tall. This is the height measured from sea level to its peak, and it is the highest mountain above sea level on Earth.",
+        "Mount Everest is approximately **8,848 metres** tall. It is the highest mountain above sea level on Earth.",
+        "Mount Everest is approximately **8,848 metres** tall.",
+        "Mount Everest is approximately **8,848 metres** tall.",
+        "Mount Everest is approximately **8,848 metres** tall. This is the height measured from sea level to its peak, and it is the highest mountain above sea level on Earth.",
+        "Mount Everest is approximately **8,848 metres** tall."
+      ],
+      "r_c_scores": [
+        2.383213466831616,
+        1.373342201627534,
+        0.9534508178108617,
+        1.569633355140686,
+        2.383213466831616,
+        2.383213466831616,
+        0.9534508178108617,
+        2.383213466831616
+      ],
+      "gt_scores": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "elapsed_s": 6.2086501121521
+    },
+    {
+      "name": "emoji_only_no",
+      "n_candidates": 8,
+      "spearman": NaN,
+      "r_c_top": "I don't have personal preferences or feelings, so I don't have a favourite colour. However, I can provide information about colours, their symbolism, or help with colour-related topics if that's what you're interested in. Let me know how I can assist!",
+      "r_c_bottom": "I don't have personal preferences or feelings, so I don't have a favourite colour. However, I can provide information about colours, their symbolism, or even help you choose a colour scheme for a project. Let me know how I can assist!",
+      "gt_top": "I do not have personal preferences or feelings. However, I can provide information about colors and their meanings, or help you explore color theory if that interests you. What would you like to know?",
+      "gt_bottom": "I don't have personal preferences or emotions, so I don't have a favorite color. However, I can provide information about colors, their meanings, or help with color-related topics. Let me know how I can assist!",
+      "candidates": [
+        "I don't have personal preferences or emotions, so I don't have a favorite color. However, I can provide information about colors, their meanings, or help with color-related topics. Let me know how I can assist!",
+        "I don't have personal preferences or feelings, so I don't have a favourite colour. However, I can provide information about colours, their symbolism, or help with colour-related topics if that's what you're interested in. Let me know how I can assist!",
+        "I don't have personal preferences or feelings, so I don't have a favorite color. However, I can provide information about colors, their meanings, or help with color-related topics if you're interested. What would you like to know?",
+        "I don't have personal preferences or feelings, so I don't have a favourite colour. However, I can provide information about colours, their symbolism, or even help you choose a colour scheme for a project. Let me know how I can assist!",
+        "I don't have personal preferences or emotions, so I don't have a favorite color. However, I can provide information about colors, their meanings, or help with color-related topics. Let me know how I can assist!",
+        "I don't have personal preferences or the ability to experience colors as humans do. However, I can provide information about colors, their symbolism, or help with color-related topics. Let me know how I can assist!",
+        "I don't have personal preferences or feelings, so I don't have a favorite color. However, I can provide information about colors, their symbolism, or help with color-related topics if you're interested. What would you like to know?",
+        "I do not have personal preferences or feelings. However, I can provide information about colors and their meanings, or help you explore color theory if that interests you. What would you like to know?"
+      ],
+      "r_c_scores": [
+        0.4948483361138238,
+        0.8861479129431382,
+        0.6889853378136953,
+        0.45423892974853514,
+        0.4948483361138238,
+        0.5310772296994232,
+        0.6953249176343282,
+        0.7041313709356846
+      ],
+      "gt_scores": [
+        -0.0,
+        -0.0,
+        -0.0,
+        -0.0,
+        -0.0,
+        -0.0,
+        -0.0,
+        -0.0
+      ],
+      "elapsed_s": 11.102885723114014
+    }
+  ]
+}

@@ -1,0 +1,615 @@
+{
+  "model": "unsloth/qwen3-0.6b-unsloth-bnb-4bit",
+  "k": 8,
+  "max_new_tokens": 96,
+  "temperature": 0.9,
+  "seed": 0,
+  "n_cases": 15,
+  "n_valid": 10,
+  "mean_spearman": 0.32694370340909606,
+  "median_spearman": 0.4394455771886726,
+  "frac_positive": 0.7,
+  "decision": "SHIP_CCPD_V2_GATED",
+  "cases": [
+    {
+      "name": "concise_paris",
+      "n_candidates": 8,
+      "spearman": 0.9999999999999999,
+      "r_c_top": "Paris.",
+      "r_c_bottom": "Paris is a city in France, known for its beautiful architecture, cultural landmarks, and history.",
+      "gt_top": "Paris.",
+      "gt_bottom": "Paris is a city in France, known for its beautiful architecture, cultural landmarks, and history.",
+      "candidates": [
+        "Paris.",
+        "Paris.",
+        "Paris.",
+        "Paris, France.",
+        "Paris.",
+        "Paris.",
+        "Paris is a city in France, known for its beautiful architecture, cultural landmarks, and history.",
+        "Paris, France."
+      ],
+      "r_c_scores": [
+        5.798891723155975,
+        5.798891723155975,
+        5.798891723155975,
+        2.5244739055633545,
+        5.798891723155975,
+        5.798891723155975,
+        0.1458172045255962,
+        2.5244739055633545
+      ],
+      "gt_scores": [
+        -1.0,
+        -1.0,
+        -1.0,
+        -2.0,
+        -1.0,
+        -1.0,
+        -15.0,
+        -2.0
+      ],
+      "elapsed_s": 2.0427980422973633
+    },
+    {
+      "name": "concise_history",
+      "n_candidates": 8,
+      "spearman": 0.8503146459584139,
+      "r_c_top": "World War I was caused by territorial disputes, militarism, and nationalism.",
+      "r_c_bottom": "World War I was caused by a complex web of national and social grievances, including the Treaty of Versailles, economic instability, and the Treaty of San trevor.",
+      "gt_top": "World War I was primarily caused by militarism, imperialism, and nationalism.",
+      "gt_bottom": "World War I was caused by the Treaty of Versailles, which ended the First World War and set up a system of international law, leading to long-term economic and social consequences.",
+      "candidates": [
+        "World War I was caused by the assassination of Archduke Franz Alexander of Austria, and an unprovoked attack by the German Empire.",
+        "World War I was caused by the assassination of Archduke Franz Bismarck, the leader of Germany, and his unification of Germany.",
+        "World War I was caused by the Treaty of Versailles, which ended the First World War and set up a system of international law, leading to long-term economic and social consequences.",
+        "World War I was caused by complex political, economic, and social factors.",
+        "World War I was caused by territorial disputes, militarism, and nationalism.",
+        "World War I was caused by a complex web of national and social grievances, including the Treaty of Versailles, economic instability, and the Treaty of San trevor.",
+        "World War I was primarily caused by militarism, imperialism, and nationalism.",
+        "World War I was caused by the assassination of Archduke Franz Josef and the subsequent political and social consequences."
+      ],
+      "r_c_scores": [
+        0.4693488393511091,
+        0.3852930704752604,
+        0.2947743733723958,
+        0.4500613530476888,
+        0.9847752253214518,
+        0.1429783214222301,
+        0.7155974706013998,
+        0.6106843081387606
+      ],
+      "gt_scores": [
+        -22.0,
+        -21.0,
+        -32.0,
+        -12.0,
+        -11.0,
+        -27.0,
+        -11.0,
+        -19.0
+      ],
+      "elapsed_s": 3.8922958374023438
+    },
+    {
+      "name": "concise_explain",
+      "n_candidates": 8,
+      "spearman": 0.466498104956184,
+      "r_c_top": "Photosynthesis is the process by which plants convert carbon dioxide and water into glucose and oxygen.",
+      "r_c_bottom": "Photosynthesis is the process by which plants, algae, and some other organisms convert light energy into chemical energy.",
+      "gt_top": "Photosynthesis is the process by which plants convert carbon dioxide and water into glucose and oxygen.",
+      "gt_bottom": "Photosynthesis is the process by which plants use sunlight to convert water, carbon dioxide, and minerals into glucose and oxygen.",
+      "candidates": [
+        "Photosynthesis is the process by which plants use sunlight to convert water and CO\u2082 into glucose and O\u2082.",
+        "Photosynthesis is the process by which plants use sunlight, water, and CO\u2082 to create glucose and release oxygen.",
+        "Photosynthesis is the process by which plants, algae, and some other organisms convert light energy into chemical energy.",
+        "Photosynthesis is the process by which plants, algae, and some other organisms convert light energy into chemical energy.",
+        "Photosynthesis is the process by which plants use sunlight, water, and carbon dioxide to produce glucose and release oxygen.",
+        "Photosynthesis is the process by which plants use sunlight, water, and CO\u2082 to produce glucose and release oxygen.",
+        "Photosynthesis is the process by which plants convert carbon dioxide and water into glucose and oxygen.",
+        "Photosynthesis is the process by which plants use sunlight to convert water, carbon dioxide, and minerals into glucose and oxygen."
+      ],
+      "r_c_scores": [
+        0.41257229718295013,
+        0.2942288854847784,
+        0.12761709906838156,
+        0.12761709906838156,
+        0.18117579169895337,
+        0.2702517716780953,
+        0.6527715788947211,
+        0.25313015778859455
+      ],
+      "gt_scores": [
+        -18.0,
+        -18.0,
+        -18.0,
+        -18.0,
+        -19.0,
+        -18.0,
+        -16.0,
+        -20.0
+      ],
+      "elapsed_s": 3.583387851715088
+    },
+    {
+      "name": "one_word_answer",
+      "n_candidates": 8,
+      "spearman": NaN,
+      "r_c_top": "2",
+      "r_c_bottom": "2",
+      "gt_top": "2",
+      "gt_bottom": "2",
+      "candidates": [
+        "2",
+        "2",
+        "2",
+        "2",
+        "2",
+        "2",
+        "2",
+        "2"
+      ],
+      "r_c_scores": [
+        0.5919697685167193,
+        0.5919697685167193,
+        0.5919697685167193,
+        0.5919697685167193,
+        0.5919697685167193,
+        0.5919697685167193,
+        0.5919697685167193,
+        0.5919697685167193
+      ],
+      "gt_scores": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "elapsed_s": 0.8841359615325928
+    },
+    {
+      "name": "bullets_pros",
+      "n_candidates": 8,
+      "spearman": 0.5181098946652709,
+      "r_c_top": "- **Pros**  \n  1. Cross-platform support across multiple operating systems.  \n  2. Strong community and extensive libraries for a wide range of applications.  \n  3. Large ecosystem of tools and frameworks.  \n  4. High-level programming language, which can make development faster.  \n  5. High readability and maintainability of code.  \n\n- **Cons**  \n  1. Learning curve is relatively high for new developers.",
+      "r_c_bottom": "- **Pros**:\n  - **Cross-Platform**: Python works on Windows, Linux, macOS, and web browsers.\n  - **Simplicity**: Code is easy to write and read, making it suitable for beginners.\n  - **Community support**: A large and active community provides a wealth of resources and help.\n  - **Extensibility**: Python can be extended with libraries, making it highly adaptable.\n  - **Highly versatile**: It is widely used in",
+      "gt_top": "- **Pros**  \n  1. Cross-platform support across multiple operating systems.  \n  2. Strong community and extensive libraries for a wide range of applications.  \n  3. Large ecosystem of tools and frameworks.  \n  4. High-level programming language, which can make development faster.  \n  5. High readability and maintainability of code.  \n\n- **Cons**  \n  1. Learning curve is relatively high for new developers.",
+      "gt_bottom": "- Pros:\n  - Large and diverse community, leading to a wide range of libraries, frameworks, and tools.\n  - Cross-platform support across multiple operating systems.\n  - Strong syntax and readability, making code more maintainable.\n  - Support for a variety of programming languages, though not all languages are supported in every environment.\n  - Efficient performance, which is a notable advantage for high-performance applications.\n\n- Cons:\n  - May not be the fastest or most optimized for certain",
+      "candidates": [
+        "- **Pros**:\n  - **Cross-platform compatibility** \u2013 Python can run on multiple operating systems.\n  - **Large community and libraries** \u2013 Access to a wide range of tools and libraries for various tasks.\n  - **Readability** \u2013 The syntax is clean and easy to understand for both beginners and experts.\n  - **High performance** \u2013 Python is optimized for speed, making it efficient for tasks that require speed.\n  - **Scalability** \u2013 It is",
+        "- **Pros**:  \n  - **Ease of learning**: Python is widely used and has a large community, making it easy to learn and use.  \n  - **Interpretable code**: Python is interpreted, making it easier to test and debug code quickly.  \n  - **Cross-platform**: It works on multiple operating systems.  \n  - **Rich ecosystem**: Python has a vast and diverse ecosystem of libraries and tools.  \n\n- **Cons**:  \n  - **Performance",
+        "- Pros:\n  - Large and diverse community, leading to a wide range of libraries, frameworks, and tools.\n  - Cross-platform support across multiple operating systems.\n  - Strong syntax and readability, making code more maintainable.\n  - Support for a variety of programming languages, though not all languages are supported in every environment.\n  - Efficient performance, which is a notable advantage for high-performance applications.\n\n- Cons:\n  - May not be the fastest or most optimized for certain",
+        "- **Pros:**\n  - Cross-platform compatibility (work with Windows, macOS, Linux, etc.).\n  - Large and active community, ensuring software updates and support.\n  - Strong typing, which helps prevent common mistakes.\n  - Easy to learn and use, especially for developers who are familiar with other programming languages.\n  - Large libraries and frameworks for building complex applications.\n\n- **Cons:**\n  - Some developers may find Python less intuitive than other languages like JavaScript or",
+        "- **Pros**  \n  - Cross-platform support across multiple operating systems.  \n  - High-level programming languages, making coding easier.  \n  - Large community and libraries for various applications.  \n  - Strong syntax and readability.  \n  - Excellent for data science and machine learning.  \n  - Strong support for AI and deep learning.  \n\n- **Cons**  \n  - Performance can be slower for some tasks compared to C++.  \n  - Learning curve may be steeper",
+        "- **Pros**  \n  1. Cross-platform support across multiple operating systems.  \n  2. Strong community and extensive libraries for a wide range of applications.  \n  3. Large ecosystem of tools and frameworks.  \n  4. High-level programming language, which can make development faster.  \n  5. High readability and maintainability of code.  \n\n- **Cons**  \n  1. Learning curve is relatively high for new developers.",
+        "- Pros:\n  - Cross-platform support (works on Windows, macOS, Linux, etc.).\n  - Strong community and extensive libraries.\n  - Efficient and scalable for data analysis and machine learning.\n  - Easy to learn and use with interactive tools.\n  - High level of customization and flexibility.\n\n- Cons:\n  - Learning curve can be steeper for beginners.\n  - Performance can be slower for certain tasks compared to other languages.\n  - May be less efficient for very",
+        "- **Pros**:\n  - **Cross-Platform**: Python works on Windows, Linux, macOS, and web browsers.\n  - **Simplicity**: Code is easy to write and read, making it suitable for beginners.\n  - **Community support**: A large and active community provides a wealth of resources and help.\n  - **Extensibility**: Python can be extended with libraries, making it highly adaptable.\n  - **Highly versatile**: It is widely used in"
+      ],
+      "r_c_scores": [
+        0.20286226272583008,
+        0.2601351737976074,
+        0.21360603968302408,
+        0.2086493968963623,
+        0.3059272766113281,
+        0.3671464311315658,
+        0.2382043997446696,
+        0.17216157913208008
+      ],
+      "gt_scores": [
+        0.941,
+        0.943,
+        0.9319999999999999,
+        0.937,
+        0.944,
+        0.945,
+        0.937,
+        0.943
+      ],
+      "elapsed_s": 12.872727632522583
+    },
+    {
+      "name": "bullets_steps",
+      "n_candidates": 8,
+      "spearman": 0.3976192214873009,
+      "r_c_top": "- Gather all the ingredients needed for baking a cake.  \n- Preheat your oven to 350\u00b0F (176\u00b0C) or 325\u00b0F (160\u00b0C) (depending on the type of cake).  \n- Mix the ingredients (flour, sugar, eggs, butter, and milk) in a bowl.  \n- Pour the batter into a cake or cake pan and let it rest for 1 hour.  \n- Bake the cake",
+      "r_c_bottom": "- Gather all the ingredients, such as flour, sugar, eggs, butter, and flour.  \n- Preheat your oven to 350\u00b0F (176\u00b0C).  \n- In a mixing bowl, combine all the ingredients and whisk until everything is mixed.  \n- Add flour to the bowl and stir.  \n- Add eggs and stir.  \n- Add the butter and stir.  \n- Pour the batter into the pan and fill it to the level of the",
+      "gt_top": "- Gather all the ingredients needed for baking a cake.  \n- Preheat your oven to 350\u00b0F (176\u00b0C) or 325\u00b0F (160\u00b0C) (depending on the type of cake).  \n- Mix the ingredients (flour, sugar, eggs, butter, and milk) in a bowl.  \n- Pour the batter into a cake or cake pan and let it rest for 1 hour.  \n- Bake the cake",
+      "gt_bottom": "- Mix the dry ingredients together, such as flour, sugar, cocoa, and salt.\n- Add the wet ingredients, such as milk, eggs, butter, and vanilla.\n- Combine the dry and wet ingredients in a mixing bowl.\n- Add a bit of water to make the cake easier to mix.\n- Transfer the ingredients into a cake mixing machine or a bowl.\n- Pour the batter into a cake pan.\n- Cook the cake until it's cooked, usually for 2",
+      "candidates": [
+        "- Gather all the ingredients you\u2019ll need for a cake, including flour, sugar, eggs, butter, milk, and baking powder.  \n- Preheat your oven to 350\u00b0F (176\u00b0C).  \n- In a mixing bowl, combine the flour, sugar, eggs, and milk.  \n- Whisk the mixture until it becomes smooth.  \n- Add the butter and mix until the mixture is incorporated.  \n- Add the baking powder and mix again",
+        "- Plan the recipe, ingredients, and time for the cake.  \n- Prepare all the ingredients, including flour, sugar, eggs, butter, and others.  \n- Mix the ingredients in a bowl and combine them.  \n- Preheat your oven to the desired temperature (e.g., 350\u00b0F for a classic cake).  \n- Add the cake mix into the oven and bake for the desired time.  \n- Once the cake is done, cool it.",
+        "- Gather all the ingredients needed for baking a cake.  \n- Preheat your oven to 350\u00b0F (176\u00b0C) or 325\u00b0F (160\u00b0C) (depending on the type of cake).  \n- Mix the ingredients (flour, sugar, eggs, butter, and milk) in a bowl.  \n- Pour the batter into a cake or cake pan and let it rest for 1 hour.  \n- Bake the cake",
+        "- Gather all the ingredients you need for baking a cake.  \n- Preheat your oven to 350\u00b0F (176\u00b0C) and set the oven rack inside the cake tin.  \n- Add the ingredients (cake flour, sugar, butter, eggs, etc.) and mix them together in a bowl.  \n- Combine the ingredients in the bowl and mix until you have a dough.  \n- Once you have the dough, add the warm cake mixture and let",
+        "- Mix the dry ingredients together, such as flour, sugar, cocoa, and salt.\n- Add the wet ingredients, such as milk, eggs, butter, and vanilla.\n- Combine the dry and wet ingredients in a mixing bowl.\n- Add a bit of water to make the cake easier to mix.\n- Transfer the ingredients into a cake mixing machine or a bowl.\n- Pour the batter into a cake pan.\n- Cook the cake until it's cooked, usually for 2",
+        "- Start by mixing the dry ingredients: flour, sugar, baking powder, and cocoa powder.  \n- Add a few eggs and a bit of milk to mix the ingredients together.  \n- Once all the ingredients are mixed, pour the batter into a cake pan.  \n- Place the pan in the oven and bake for 30 to 40 minutes.  \n- Let the cake cool down and then serve it.",
+        "- Start by mixing all the ingredients together in a bowl.  \n- Use a spoon to mix them until they are all mixed.  \n- Turn the bowl and carefully add the flour to the mixture.  \n- Add the egg mixture to the bowl and stir until everything is combined.  \n- Add the butter and mix until the mixture is smooth.  \n- Pour the mixture into a cake mold.  \n- Let it cool and then bake it as needed.",
+        "- Gather all the ingredients, such as flour, sugar, eggs, butter, and flour.  \n- Preheat your oven to 350\u00b0F (176\u00b0C).  \n- In a mixing bowl, combine all the ingredients and whisk until everything is mixed.  \n- Add flour to the bowl and stir.  \n- Add eggs and stir.  \n- Add the butter and stir.  \n- Pour the batter into the pan and fill it to the level of the"
+      ],
+      "r_c_scores": [
+        0.2079375982284546,
+        0.21148408588610199,
+        0.23371398448944092,
+        0.22722776730855307,
+        0.18176579475402832,
+        0.18556514066808363,
+        0.19447829697158311,
+        0.17740062872568765
+      ],
+      "gt_scores": [
+        0.938,
+        0.9359999999999999,
+        0.941,
+        0.9319999999999999,
+        0.9279999999999999,
+        0.938,
+        0.929,
+        0.9359999999999999
+      ],
+      "elapsed_s": 12.920397281646729
+    },
+    {
+      "name": "numbered_list",
+      "n_candidates": 8,
+      "spearman": -0.45205479452054803,
+      "r_c_top": "- Mercury  \n- Venus  \n- Earth  \n- Mars",
+      "r_c_bottom": "1. Mercury  \n2. Venus  \n3. Earth  \n4. Mars  \n5. Jupiter  \n6. Saturn  \n7. Uranus  \n8. Neptune",
+      "gt_top": "1. Mercury  \n2. Venus  \n3. Earth  \n4. Mars",
+      "gt_bottom": "- Mercury  \n- Venus  \n- Earth  \n- Mars  \n- Jupiter  \n- Saturn  \n- Uranus  \n- Neptune",
+      "candidates": [
+        "1. Mercury  \n2. Venus  \n3. Earth  \n4. Mars  \n5. Jupiter  \n6. Saturn  \n7. Uranus  \n8. Neptune",
+        "1. Mercury  \n2. Venus  \n3. Earth  \n4. Mars  \n5. Jupiter  \n6. Saturn  \n7. Uranus  \n8. Neptune",
+        "1. Mercury  \n2. Venus  \n3. Earth  \n4. Mars",
+        "- Mercury  \n- Venus  \n- Earth  \n- Mars  \n- Jupiter  \n- Saturn  \n- Uranus  \n- Neptune",
+        "1. Mercury  \n2. Venus  \n3. Earth  \n4. Mars  \n5. Jupiter  \n6. Saturn  \n7. Uranus  \n8. Neptune",
+        "- Mercury  \n- Venus  \n- Earth  \n- Mars",
+        "- Mercury  \n- Venus  \n- Earth  \n- Mars",
+        "1. Mercury  \n2. Venus  \n3. Earth  \n4. Mars  \n5. Jupiter  \n6. Saturn  \n7. Uranus  \n8. Neptune"
+      ],
+      "r_c_scores": [
+        0.46633029729127884,
+        0.46633029729127884,
+        0.9684183041254679,
+        0.560697873433431,
+        0.46633029729127884,
+        1.2505496306852861,
+        1.2505496306852861,
+        0.46633029729127884
+      ],
+      "gt_scores": [
+        0.984,
+        0.984,
+        0.992,
+        -0.008,
+        0.984,
+        -0.004,
+        -0.004,
+        0.984
+      ],
+      "elapsed_s": 3.835333824157715
+    },
+    {
+      "name": "no_code",
+      "n_candidates": 8,
+      "spearman": NaN,
+      "r_c_top": "To compute the factorial of a number, you can use the formula: $ n! = n \\times (n - 1)! $, where $ n $ is the number you want to compute the factorial for, and $ 0! $ is defined as 1. You can compute this recursively or iteratively. For a larger number, you can use a loop that multiplies the result from 1 up to the number. For example, to compute $ 5",
+      "r_c_bottom": "To compute a factorial, you can use the following steps:\n\n1. Start with a variable initialized to 1.\n2. Multiply this variable by all integers from 1 up to n (inclusive).\n3. The result is the product of all integers from 1 to n, and this is denoted as $ n! $, the factorial of n.\n\nFor example:\n- $ 5! = 5 \\times 4 \\times 3 \\times 2 \\",
+      "gt_top": "To compute a factorial, you can use a loop, a recursive function, or a mathematical formula. The mathematical formula is:\n\n$$\nn! = \\prod_{i=1}^n i\n$$\n\nWhere $ n! $ is the product of all integers from 1 up to $ n $. You can compute this by multiplying each number by $ n $ and then dividing by $ i $, which is equivalent to calculating the product iteratively.",
+      "gt_bottom": "To compute the factorial of a number, you can use the formula: $ n! = n \\times (n - 1)! $, where $ n $ is the number you want to compute the factorial for, and $ 0! $ is defined as 1. You can compute this recursively or iteratively. For a larger number, you can use a loop that multiplies the result from 1 up to the number. For example, to compute $ 5",
+      "candidates": [
+        "To compute the factorial of a number, you can use the formula: $ n! = n \\times (n - 1)! $, where $ n $ is the number you want to compute the factorial for, and $ 0! $ is defined as 1. You can compute this recursively or iteratively. For a larger number, you can use a loop that multiplies the result from 1 up to the number. For example, to compute $ 5",
+        "To compute a factorial of a number, you can use the following steps:\n\n1. Start with a variable initialized to 1 (this is the base case).\n2. Loop from 1 up to the input number, multiplying the current value by the number at each step.\n3. The result will be the product of all integers from 1 up to the given number. For example, $5! = 5 \\times 4 \\times 3 \\times 2",
+        "To compute a factorial, you can use a recursive definition or a loop. The recursive definition is $ n! = n \\times (n-1)! $, with the base case $ 0! = 1 $ and $ 1! = 1 $. For a loop, you can start with 1 and multiply it by each integer less than $ n $. For example, to compute $ 5! $, you would calculate $ 5 \\times 4",
+        "To compute a factorial, you can use a recursive approach where you start by multiplying all integers from 1 up to a given number, often starting with 1 and multiplying each subsequent integer by the current product. For example, if you want to compute 5!, you can use the formula $5! = 5 \\times 4 \\times 3 \\times 2 \\times 1$. This process can be implemented iteratively or recursively, depending on the implementation.",
+        "To compute a factorial, you can use a loop. Start with a variable called `n` set to 1. Then, increment the variable from 1 to `n`, and multiply it by `n` in each iteration. For example, if `n` is 5, the loop would multiply 1\u00d75, 2\u00d710, 3\u00d720, 4\u00d740, and 5\u00d7120, resulting in",
+        "To compute a factorial, you can use the following steps:\n\n1. Start with a variable initialized to 1.\n2. Multiply this variable by all integers from 1 up to n (inclusive).\n3. The result is the product of all integers from 1 to n, and this is denoted as $ n! $, the factorial of n.\n\nFor example:\n- $ 5! = 5 \\times 4 \\times 3 \\times 2 \\",
+        "To compute a factorial of a number $ n $, you can use the formula:  \n$$ n! = n \\times (n-1) \\times (n-2) \\times \\ldots \\times 1 $$  \n\nHere, $ n $ is a positive integer, and the product is taken from the number down to 1. You can compute the factorial iteratively or recursively, but for larger values, it's more efficient to use a loop or a",
+        "To compute a factorial, you can use a loop, a recursive function, or a mathematical formula. The mathematical formula is:\n\n$$\nn! = \\prod_{i=1}^n i\n$$\n\nWhere $ n! $ is the product of all integers from 1 up to $ n $. You can compute this by multiplying each number by $ n $ and then dividing by $ i $, which is equivalent to calculating the product iteratively."
+      ],
+      "r_c_scores": [
+        0.21810599168141684,
+        0.11258673667907715,
+        0.21311092376708984,
+        0.213425079981486,
+        0.19857053254780016,
+        0.0778410832087199,
+        0.09960532188415527,
+        0.14703816952912704
+      ],
+      "gt_scores": [
+        -0.0,
+        -0.0,
+        -0.0,
+        -0.0,
+        -0.0,
+        -0.0,
+        -0.0,
+        -0.0
+      ],
+      "elapsed_s": 12.78523564338684
+    },
+    {
+      "name": "include_code",
+      "n_candidates": 8,
+      "spearman": NaN,
+      "r_c_top": "```plaintext\nprint(\"Hello, World!\")\n```",
+      "r_c_bottom": "```python\nprint(\"Hello, world!\")\n```",
+      "gt_top": "```python\nprint(\"Hello, world!\")\n```",
+      "gt_bottom": "```python\nprint(\"Hello, World!\")\n```",
+      "candidates": [
+        "```python\nprint(\"Hello, World!\")\n```",
+        "```python\nprint(\"Hello, world!\")\n```",
+        "```python\nprint(\"Hello, World!\")\n```",
+        "```python\nprint(\"Hello, world!\")\n```",
+        "```python\nprint(\"Hello, World!\")\n```",
+        "```python\nprint(\"Hello, World!\")\n```",
+        "```plaintext\nprint(\"Hello, World!\")\n```",
+        "```python\nprint(\"Hello, world!\")\n```"
+      ],
+      "r_c_scores": [
+        1.4953339159488679,
+        1.4681860685348511,
+        1.4953339159488679,
+        1.4681860685348511,
+        1.4953339159488679,
+        1.4953339159488679,
+        2.013706159591675,
+        1.4681860685348511
+      ],
+      "gt_scores": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "elapsed_s": 2.035661458969116
+    },
+    {
+      "name": "start_with_certainly",
+      "n_candidates": 8,
+      "spearman": NaN,
+      "r_c_top": "Certainly, the capital of Japan is Tokyo.",
+      "r_c_bottom": "Certainly, the capital of Japan is Tokyo. \ud83d\uddc2\ufe0f",
+      "gt_top": "Certainly, the capital of Japan is Tokyo. \ud83d\uddc2\ufe0f",
+      "gt_bottom": "Certainly, the capital of Japan is Tokyo.",
+      "candidates": [
+        "Certainly, the capital of Japan is Tokyo.",
+        "Certainly, the capital of Japan is Tokyo.",
+        "Certainly, the capital of Japan is Tokyo.",
+        "Certainly, the capital of Japan is Tokyo.",
+        "Certainly, the capital of Japan is Tokyo.",
+        "Certainly, the capital of Japan is Tokyo.",
+        "Certainly, the capital of Japan is Tokyo.",
+        "Certainly, the capital of Japan is Tokyo. \ud83d\uddc2\ufe0f"
+      ],
+      "r_c_scores": [
+        3.012060579326418,
+        3.012060579326418,
+        3.012060579326418,
+        3.012060579326418,
+        3.012060579326418,
+        3.012060579326418,
+        3.012060579326418,
+        2.0419163337120643
+      ],
+      "gt_scores": [
+        0.993,
+        0.993,
+        0.993,
+        0.993,
+        0.993,
+        0.993,
+        0.993,
+        0.993
+      ],
+      "elapsed_s": 1.9364285469055176
+    },
+    {
+      "name": "start_with_honestly",
+      "n_candidates": 8,
+      "spearman": 0.5714285714285714,
+      "r_c_top": "Honestly, I can't say that I have any information about jogging. I don't have access to any detailed information about the benefits of jogging. If you have other questions, please feel free to ask them.",
+      "r_c_bottom": "Honestly, I can't answer the question with an opinion, but I can tell you that jogging is a great way to stay healthy and improve your well-being. It's been shown to help with weight management, heart health, and even stress relief. It's also an excellent way to increase your daily activity and promote a healthy lifestyle. I hope this helps!",
+      "gt_top": "Honestly, I can't say that I have any information about jogging. I don't have access to any detailed information about the benefits of jogging. If you have other questions, please feel free to ask them.",
+      "gt_bottom": "Honestly, yes, jogging is an excellent exercise that can improve your cardiovascular health, build muscle, and enhance your overall well-being. It can be a great way to burn calories, strengthen your bones, and promote relaxation. Whether you're looking to lose weight, improve fitness, or just enjoy the benefits of a daily walk, incorporating a small amount of jogging into your daily routine can make a positive impact.",
+      "candidates": [
+        "Honestly, yes, jogging is an excellent exercise that can improve your cardiovascular health, build muscle, and enhance your overall well-being. It can be a great way to burn calories, strengthen your bones, and promote relaxation. Whether you're looking to lose weight, improve fitness, or just enjoy the benefits of a daily walk, incorporating a small amount of jogging into your daily routine can make a positive impact.",
+        "Honestly, jogging is a popular and healthy way to improve your cardiovascular health, build muscle, and promote weight loss. It can also help with mental well-being and reduce stress. However, it's important to note that it should be approached with caution and consultation with a healthcare provider if you have any specific concerns.",
+        "Honestly, yes, jogging can be a great way to improve your health and well-being. It can help you burn calories, increase your heart rate, and even help with weight management. It's also good for mental health, as it can reduce stress and help with a sense of control. Whether you're looking to lose weight or just enjoy a quick walk, jogging is a great starting point.",
+        "Honestly, jogging can be good for you, but the benefits depend on your fitness level and goals. It can improve cardiovascular health, build muscle, and enhance mental well-being. However, it's important to be cautious and consider consulting a healthcare provider before starting any regular exercise regimen.",
+        "Honestly, jogging can be a good and healthy activity for your body, providing you with some physical benefits. It can help you improve your cardiovascular health, burn calories, and promote weight loss. It also can reduce stress, help with mental well-being, and support muscle growth. So, it\u2019s a great way to stay active and improve your overall fitness.",
+        "Honestly, jogging can be good for you in many ways. It can improve your heart health, help with weight management, and increase your mood. It's also a fun and simple way to stay active and enjoy your life. However, it's important to start slowly and be consistent. Whether you're looking to improve your fitness, manage weight, or just have fun, jogging is a great choice.",
+        "Honestly, I can't answer the question with an opinion, but I can tell you that jogging is a great way to stay healthy and improve your well-being. It's been shown to help with weight management, heart health, and even stress relief. It's also an excellent way to increase your daily activity and promote a healthy lifestyle. I hope this helps!",
+        "Honestly, I can't say that I have any information about jogging. I don't have access to any detailed information about the benefits of jogging. If you have other questions, please feel free to ask them."
+      ],
+      "r_c_scores": [
+        0.37890361267843364,
+        0.4580969656667402,
+        0.31725359566604033,
+        0.4243122509547642,
+        0.2973134215448944,
+        0.2935349464416504,
+        0.2347100575764974,
+        0.473559334164574
+      ],
+      "gt_scores": [
+        0.9319999999999999,
+        0.946,
+        0.933,
+        0.953,
+        0.94,
+        0.935,
+        0.9390000000000001,
+        0.965
+      ],
+      "elapsed_s": 9.554129838943481
+    },
+    {
+      "name": "end_with_question",
+      "n_candidates": 8,
+      "spearman": -0.24743582965269675,
+      "r_c_top": "Tell me about cats.",
+      "r_c_bottom": "Of course! Cats are fascinating pets. They are small, mostly gray, and they love to live in their homes. They have their own way of thinking and can show a lot of intelligence. They are known for their loyalty, and they will often stay with their owners for a long time. They are also very smart and curious, so they can learn a lot from their environment. I'd love to hear about you! \ud83d\ude0a",
+      "gt_top": "Sure! Cats are fascinating animals with a variety of traits. They are mammals, and they have fur, which is a significant feature. They are also known for their intelligence, social behavior, and can live in different habitats. What I would say is that cats are not only great pets but also have a lot of unique characteristics. Do you have a question about them?",
+      "gt_bottom": "Sure! Cats are fascinating animals. They have long, graceful bodies, are social, and they are good at hunting. They love their play and they are often seen playing in homes. I'd be happy to help you learn more! \ud83d\udc3e",
+      "candidates": [
+        "Sure! Cats are fascinating animals. They have long, graceful bodies, are social, and they are good at hunting. They love their play and they are often seen playing in homes. I'd be happy to help you learn more! \ud83d\udc3e",
+        "Sure! Cats are fascinating animals with a variety of traits. They are mammals, and they have fur, which is a significant feature. They are also known for their intelligence, social behavior, and can live in different habitats. What I would say is that cats are not only great pets but also have a lot of unique characteristics. Do you have a question about them?",
+        "Certainly! Cats are curious, playful, and often lead their own lives. They are mammals, so they have four legs, breathe through their lungs, and reproduce. As pets, they can be good companions, but there are also other pets like dogs. Do you have a cat or want to learn more about them? \ud83d\ude0a",
+        "Sure! Cats are amazing pets, right? They are known for their loyalty, intelligence, and ability to learn. They can follow their owners around, even though they don't \"see\" like humans do. They also love to play and engage in various activities with their owners. I'm happy to help you learn more about them! What do you want to know? \ud83d\ude0a",
+        "Tell me about cats.",
+        "Of course, cats are fascinating creatures. Are you curious about something specific about them? \ud83d\ude0a",
+        "Of course, cats are fascinating animals! They are mammals, and they live in the world. Are you curious about their behavior, their diet, or something else? Let me know! \ud83d\udc3e",
+        "Of course! Cats are fascinating pets. They are small, mostly gray, and they love to live in their homes. They have their own way of thinking and can show a lot of intelligence. They are known for their loyalty, and they will often stay with their owners for a long time. They are also very smart and curious, so they can learn a lot from their environment. I'd love to hear about you! \ud83d\ude0a"
+      ],
+      "r_c_scores": [
+        0.32357208251953123,
+        0.20575332641601562,
+        0.1934297735040838,
+        0.2294413917943051,
+        2.710430693626404,
+        0.8687610626220703,
+        0.36341495513916017,
+        0.15139121570806394
+      ],
+      "gt_scores": [
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "elapsed_s": 9.161587715148926
+    },
+    {
+      "name": "no_apology",
+      "n_candidates": 8,
+      "spearman": NaN,
+      "r_c_top": "The sky is blue because it contains a large number of molecules that reflect the blue light of the sun, which is the color we perceive. This combination of light and color creates the apparent blue color in the sky.",
+      "r_c_bottom": "The sky appears blue because the atmosphere in the Earth's atmosphere is composed primarily of nitrogen and oxygen gases, which are mostly composed of nitrogen, oxygen, and argon. These gases play a crucial role in the way light is scattered and scattered by the Earth's atmosphere, allowing the sky to appear blue when visible.",
+      "gt_top": "The sky appears blue because it contains a large amount of nitrogen gas, which absorbs all the visible light, making the sky appear as a continuous, smooth blue. This property of the atmosphere is related to the way nitrogen molecules interact with the electromagnetic spectrum.",
+      "gt_bottom": "The sky appears blue because it contains a large amount of nitrogen in the atmosphere. This nitrogen absorbs certain wavelengths of light, particularly those in the blue spectrum, causing the sky to appear blue under the Earth's surface.",
+      "candidates": [
+        "The sky appears blue because it contains a large amount of nitrogen in the atmosphere. This nitrogen absorbs certain wavelengths of light, particularly those in the blue spectrum, causing the sky to appear blue under the Earth's surface.",
+        "The sky appears blue due to the way sunlight interacts with the Earth's atmosphere. When sunlight enters the atmosphere, it scatters and bends, causing the colors we see to spread out in a way that gives the sky its blue hue. This phenomenon is a result of the scattering of sunlight by molecules in the atmosphere, which leads to a continuous, visible blue sky.",
+        "The sky appears blue because of the way light interacts with the Earth's surface. When sunlight travels through the atmosphere, it scatters and reflects off the molecules of the air, causing the colors to be scattered in a way that the sky appears blue. This is due to the wavelength of light being in the visible spectrum, which is scattered by the atmosphere.",
+        "The sky appears blue because the atmosphere in the Earth's atmosphere is composed primarily of nitrogen and oxygen gases, which are mostly composed of nitrogen, oxygen, and argon. These gases play a crucial role in the way light is scattered and scattered by the Earth's atmosphere, allowing the sky to appear blue when visible.",
+        "The sky appears blue because of the way sunlight interacts with the atmosphere. When the sun emits light in a range of visible wavelengths, it hits the Earth's atmosphere, which\u6563\u5c04 and refracts the light. This scattering creates a blue sky, making the color appear blue.",
+        "The sky is blue because it contains a large number of molecules that reflect the blue light of the sun, which is the color we perceive. This combination of light and color creates the apparent blue color in the sky.",
+        "The sky appears blue because it contains a large amount of nitrogen gas in the atmosphere, which absorbs visible light, leaving only the blue light to pass through.",
+        "The sky appears blue because it contains a large amount of nitrogen gas, which absorbs all the visible light, making the sky appear as a continuous, smooth blue. This property of the atmosphere is related to the way nitrogen molecules interact with the electromagnetic spectrum."
+      ],
+      "r_c_scores": [
+        0.09425504817519077,
+        0.0895928683346265,
+        0.085510038993728,
+        0.05326643444242932,
+        0.13687917535955255,
+        0.2739917843840843,
+        0.14790713402532762,
+        0.08591629028320312
+      ],
+      "gt_scores": [
+        -0.0,
+        -0.0,
+        -0.0,
+        -0.0,
+        -0.0,
+        -0.0,
+        -0.0,
+        -0.0
+      ],
+      "elapsed_s": 8.004839420318604
+    },
+    {
+      "name": "metric_units",
+      "n_candidates": 8,
+      "spearman": -0.24743582965269675,
+      "r_c_top": "Mount Everest is **2.392 metres** tall.",
+      "r_c_bottom": "The height of Mount Everest is approximately **2.69 kilometers**.",
+      "gt_top": "Mount Everest is approximately **2,490 metres** high.",
+      "gt_bottom": "Mount Everest is approximately 8,890 metres (29,000 feet).",
+      "candidates": [
+        "The height of Mount Everest is approximately **2.69 kilometers**.",
+        "The height of Mount Everest is approximately **2,090.66 metres**. This measurement is based on precise data collected using satellite imagery and ground-based measurements.",
+        "Mount Everest is approximately **2.9168181918192 meters** tall.",
+        "Mount Everest is **2.392 metres** tall.",
+        "Mount Everest is approximately 8,890 metres (29,000 feet).",
+        "Mount Everest is approximately **2,449.6 meters** tall.",
+        "Mount Everest is a tall mountain. Its height is approximately **2,460.51 meters**.",
+        "Mount Everest is approximately **2,490 metres** high."
+      ],
+      "r_c_scores": [
+        0.3001082102457682,
+        0.3966454097202846,
+        0.3385721842447917,
+        0.6534143594595102,
+        0.5336907386779786,
+        0.3714202642440796,
+        0.38629133804984717,
+        0.6364357130868095
+      ],
+      "gt_scores": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "elapsed_s": 3.282557964324951
+    },
+    {
+      "name": "emoji_only_no",
+      "n_candidates": 8,
+      "spearman": 0.4123930494211613,
+      "r_c_top": "I don't have a favorite color, but I can help you find the most popular one.",
+      "r_c_bottom": "I don't have a personal preference for colors, but I can help you with anything related to colors. Let me know what you'd like to learn about!",
+      "gt_top": "I don't have a personal preference for colors, but I can help you with anything related to colors. Let me know what you'd like to learn about!",
+      "gt_bottom": "I don't have a specific favorite color, but I can tell you that I believe in colors that help us connect and make life better. Let me know if you have a favorite color too! \ud83c\udf08",
+      "candidates": [
+        "I don't have a favorite color, but I can help you choose one. Let me know what color you prefer!",
+        "I don't have a favorite color. However, I can provide you with some interesting facts about colors in general. For example, there are six basic colors: red, yellow, blue, green, and their complements. Each pair can have a unique combination, making the color palette rich and diverse.",
+        "I don't have a favorite color, but I can help you find the most popular one.",
+        "I don't have a personal favorite color, but I can tell you that the color blue is one of the most commonly preferred colors in various contexts, often associated with calm, peace, and understanding.",
+        "I don't have a specific favorite color, but I can tell you that I believe in colors that help us connect and make life better. Let me know if you have a favorite color too! \ud83c\udf08",
+        "I don't have a favorite color, but I can tell you that I'm a language model and I can help you with questions and topics related to language. If you have any other questions, feel free to ask!",
+        "I don't have a personal preference for a color. I'm an AI assistant, so I don't have feelings. Let me know if there's something else I can help with!",
+        "I don't have a personal preference for colors, but I can help you with anything related to colors. Let me know what you'd like to learn about!"
+      ],
+      "r_c_scores": [
+        0.08610041936238606,
+        0.039927123022861166,
+        0.18754647907457853,
+        0.0208648681640625,
+        0.02007747831798735,
+        0.06705279783769087,
+        0.047068518561285896,
+        0.003950715065002441
+      ],
+      "gt_scores": [
+        -0.0,
+        -0.0,
+        -0.0,
+        -0.0,
+        -1.0,
+        -0.0,
+        -0.0,
+        -0.0
+      ],
+      "elapsed_s": 5.582968711853027
+    }
+  ]
+}
