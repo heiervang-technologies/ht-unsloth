@@ -100,7 +100,24 @@ class SnapshotRequest(BaseModel):
 # ---------------------------------------------------------------------- app
 def create_app(cfg: ServeConfig | None = None) -> FastAPI:
     cfg = cfg or ServeConfig()
-    app = FastAPI(title="lile", version="0.1.0-dev")
+
+    @contextlib.asynccontextmanager
+    async def lifespan(app: FastAPI):
+        # Startup — Controller was constructed below (pre-lifespan) so routes
+        # can close over it without waiting for this hook.
+        await app.state.controller.start()
+        try:
+            yield
+        finally:
+            # Prefer the graceful path so pending /v1/wait callers get
+            # ShutdownDroppedError envelopes instead of hanging on their own
+            # 60s timeout (see issue #11).
+            await app.state.controller.graceful_shutdown(
+                deadline_s=cfg.shutdown_deadline_s,
+                hard_stop_grace_s=cfg.shutdown_hard_stop_grace_s,
+            )
+
+    app = FastAPI(title="lile", version="0.1.0-dev", lifespan=lifespan)
     app.state.cfg = cfg
     app.state.controller = Controller(cfg)
     metrics_mod.bind_controller(app.state.controller)
@@ -110,19 +127,6 @@ def create_app(cfg: ServeConfig | None = None) -> FastAPI:
     app.add_middleware(MetricsMiddleware)
     app.add_middleware(RequestIDMiddleware)
     register_error_handlers(app)
-
-    @app.on_event("startup")
-    async def _startup() -> None:
-        await app.state.controller.start()
-
-    @app.on_event("shutdown")
-    async def _shutdown() -> None:
-        # Prefer the graceful path so pending /v1/wait callers get
-        # ShutdownDroppedError envelopes instead of hanging on their own
-        # 60s timeout (see issue #11).
-        await app.state.controller.graceful_shutdown(
-            deadline_s=cfg.shutdown_deadline_s,
-        )
 
     # --------------------------------------------------------------- metrics
     @app.get("/metrics")

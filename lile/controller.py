@@ -105,7 +105,12 @@ class Controller:
         except Exception as exc:  # pragma: no cover
             log.warning("metrics_logger close failed: %s", exc)
 
-    async def graceful_shutdown(self, deadline_s: float | None = 30.0) -> dict[str, Any]:
+    async def graceful_shutdown(
+        self,
+        deadline_s: float | None = 30.0,
+        *,
+        hard_stop_grace_s: float = 30.0,
+    ) -> dict[str, Any]:
         """Drain the queue with a deadline, then release resources.
 
         Ordered so that no new work lands after the flag flips:
@@ -117,7 +122,10 @@ class Controller:
         3. Delegate the queue drain to :meth:`ComputeQueue.graceful_drain`
            (closes the queue, lets in-flight finish, resolves remainders
            with :class:`ShutdownDroppedError` so every ``wait_for`` caller
-           gets a deterministic result).
+           gets a deterministic result). ``hard_stop_grace_s`` bounds the
+           post-deadline window for the in-flight task so operators can size
+           the total shutdown budget against k8s's
+           ``terminationGracePeriodSeconds``.
         4. Close the metrics logger (swallow errors — logger is optional).
 
         Idempotent — a second call returns immediately with
@@ -129,7 +137,10 @@ class Controller:
         if self._replay is not None:
             await self._replay.stop()
             self._replay = None
-        drain = await self.queue.graceful_drain(deadline_s=deadline_s)
+        drain = await self.queue.graceful_drain(
+            deadline_s=deadline_s,
+            hard_stop_grace_s=hard_stop_grace_s,
+        )
         try:
             self.metrics_logger.close()
         except Exception as exc:  # pragma: no cover — logger is optional

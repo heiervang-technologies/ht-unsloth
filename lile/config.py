@@ -26,6 +26,14 @@ class ServeConfig:
     # with ``ShutdownDroppedError`` — so no ``wait_for(token)`` ever hangs.
     shutdown_deadline_s: float = 30.0
 
+    # Extra grace after the deadline expires with a still-running in-flight
+    # task. We never cancel mid-GPU-step (would tear the LoRA), so the queue
+    # worker needs a bounded post-deadline window to finish. Operators should
+    # size ``shutdown_deadline_s + shutdown_hard_stop_grace_s`` to stay under
+    # ``terminationGracePeriodSeconds`` on k8s — otherwise the pod is
+    # SIGKILLed mid-flight regardless of the graceful path.
+    shutdown_hard_stop_grace_s: float = 30.0
+
     default_lr: float = 1e-5
     default_objective: str = "sft"
 

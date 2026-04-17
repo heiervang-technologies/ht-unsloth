@@ -198,19 +198,19 @@ def test_in_flight_pending_tasks_resolve_with_shutdown_dropped(tmp_path):
 # ---------------------------------------------------------------- server.py
 
 
-def test_server_startup_wires_shutdown_hook(tmp_path, monkeypatch):
-    """The FastAPI shutdown event must call ``controller.graceful_shutdown``
-    rather than the legacy abrupt ``stop``. Enumerate the registered event
-    handlers without spinning up a Controller or a model."""
+def test_server_wires_lifespan(tmp_path):
+    """Startup + shutdown are handled by a FastAPI lifespan context manager,
+    which calls ``controller.graceful_shutdown`` on exit. We enumerate the
+    router config without spinning up a Controller or a model (behavior is
+    covered by the Controller-level tests above)."""
     from lile.config import ServeConfig
     from lile.server import create_app
 
     cfg = ServeConfig(data_dir=tmp_path)
     app = create_app(cfg)
-    handlers = app.router.on_shutdown
-    # There's a single shutdown handler — the one we register.
-    assert len(handlers) >= 1
-    # It's an async function named `_shutdown` in server.py — we don't
-    # want to load the model, so just check it's wired; behavior is covered
-    # by the Controller-level tests above.
-    assert any(getattr(h, "__name__", "") == "_shutdown" for h in handlers)
+    # Lifespan replaces the legacy on_startup/on_shutdown callbacks, so the
+    # router's event-handler lists should be empty.
+    assert app.router.on_startup == []
+    assert app.router.on_shutdown == []
+    # The lifespan context manager is bound on the router.
+    assert app.router.lifespan_context is not None
