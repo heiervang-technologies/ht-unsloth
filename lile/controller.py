@@ -135,6 +135,9 @@ class Controller:
         elif kind == "snapshot_load":
             name = payload["name"]
             manifest = self.snapshots.load(name, self.state)
+            # Adam m/v from the old trajectory no longer match the restored
+            # weights. Drop the optimizer so the next train step rebuilds fresh.
+            self.train_engine.reset_optimizer()
             return {"loaded": name, "manifest": manifest, "wall": time.time() - t0}
         elif kind == "reset_adapter":
             self.state.reset_active_adapter()
