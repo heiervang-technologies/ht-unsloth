@@ -19,13 +19,29 @@ import { useLileCapsuleStore } from "../stores/lile-capsule-store";
 
 type SnapshotRow = { name: string; created_at?: string };
 
-function normalizeSnapshots(result: unknown): SnapshotRow[] {
-  if (Array.isArray(result)) return result as SnapshotRow[];
-  if (result && typeof result === "object" && "snapshots" in result) {
-    const r = result as { snapshots?: unknown };
-    return Array.isArray(r.snapshots) ? (r.snapshots as SnapshotRow[]) : [];
+function toRow(item: unknown): SnapshotRow | null {
+  if (typeof item === "string") return { name: item };
+  if (item && typeof item === "object" && "name" in item) {
+    const o = item as { name: unknown; created_at?: unknown };
+    if (typeof o.name === "string") {
+      return {
+        name: o.name,
+        created_at: typeof o.created_at === "string" ? o.created_at : undefined,
+      };
+    }
   }
-  return [];
+  return null;
+}
+
+export function normalizeSnapshots(result: unknown): SnapshotRow[] {
+  const items = Array.isArray(result)
+    ? result
+    : result && typeof result === "object" && "snapshots" in result
+      ? Array.isArray((result as { snapshots?: unknown }).snapshots)
+        ? ((result as { snapshots: unknown[] }).snapshots)
+        : []
+      : [];
+  return items.map(toRow).filter((x): x is SnapshotRow => x !== null);
 }
 
 export function SnapshotsTab(): ReactElement {

@@ -47,7 +47,7 @@ export const lileClient = {
     }).then((r) => json<unknown>(r));
   },
   getSnapshots(): Promise<unknown> {
-    return fetch(`${BASE}/v1/state/snapshot/list`).then((r) => json<unknown>(r));
+    return fetch(`${BASE}/v1/state/snapshots`).then((r) => json<unknown>(r));
   },
   postSnapshot(name: string): Promise<unknown> {
     return fetch(`${BASE}/v1/state/snapshot/save`, {
