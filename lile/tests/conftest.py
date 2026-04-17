@@ -30,6 +30,7 @@ _TORCHLESS_OK = {
     "test_queue_cursor.py",    # lile.queue is pure Python
     "test_reasoning.py",       # lile.reasoning is pure Python
     "test_trajectory_tail.py", # lile.trajectory is pure Python
+    "test_replay_streams.py",  # replay_streams scaffold — stdlib-only imports
     "conftest.py",
     "__init__.py",
 }
