@@ -4,7 +4,7 @@ Hackathon build of the LiveLearn daemon spec in `LIVELEARN.md`, built in one ses
 
 ## TL;DR
 
-A production-clean local-LLM training-plus-inference daemon. Core invariant from the plan — *"one model, one state; POST feedback, next inference sees it"* — is wired from HTTP entry down to LoRA gradient and back, under test with a real model. The §11 ranking-reliability benchmark ran on both Qwen3-0.6B (mean Spearman +0.183) and Qwen3-8B (+0.207, median +0.319). **The 8B result crosses the pre-registered 0.2 mid-threshold**, so CCPD v2 ships as **per-event opt-in** with hinge contrastive as the primary T2 default. Every objective, every invariant, and every HTTP surface is covered by a test you can re-run.
+A production-clean local-LLM training-plus-inference daemon. Core invariant from the plan — *"one model, one state; POST feedback, next inference sees it"* — is wired from HTTP entry down to LoRA gradient and back, under test with a real model. The §11 ranking-reliability benchmark ran on both Qwen3-8B and Qwen3-0.6B at matched k=6 (N=20, repeats=2): mean Spearman **+0.207** (8B, median +0.319) and **+0.231** (0.6B, median +0.393). **Both cross the pre-registered 0.2 mid-threshold**, so CCPD v2 ships as **per-event opt-in** with hinge contrastive as the primary T2 default. A secondary 0.6B k=8 run (+0.183) is retained to show the objective is more candidate-count-sensitive than scale-sensitive at this size. Every objective, every invariant, and every HTTP surface is covered by a test you can re-run.
 
 ## What's novel vs. existing unsloth/TRL
 
@@ -40,7 +40,7 @@ A production-clean local-LLM training-plus-inference daemon. Core invariant from
 
 **Default model split — Qwen3-0.6B for tests, Qwen3-8B for §11.** 0.6B gives a 2 s forward+backward step → tight test loop. For the §11 gate I started on Qwen3.5-9B (nearest 7–14B in the HF cache) but it turned out to be `Qwen3_5ForConditionalGeneration` — a multimodal processor whose chat-template contract differs (content must be `[{"type": "text", ...}]`, not a string). Pivoted to `unsloth/Qwen3-8B-unsloth-bnb-4bit` (text-only, same family) rather than writing a VL-content-wrapper shim. Peak VRAM 8.21 GB — well within budget.
 
-**Decision thresholds pre-registered, not post-hoc.** `DESIGN.md` locked them before the run: ≥0.5 → default, 0.2–0.5 → opt-in, <0.2 → experimental. Mean +0.207 on 8B falls in the mid bucket. CCPD v2 ships as opt-in; hinge is primary T2. Mean +0.183 on 0.6B falls in the bottom bucket — which is exactly the IM-RM pathology the plan predicts at small scale, and corroborates the gate rather than contradicting it.
+**Decision thresholds pre-registered, not post-hoc.** `DESIGN.md` locked them before the run: ≥0.5 → default, 0.2–0.5 → opt-in, <0.2 → experimental. At matched k=6 both bases land in the mid bucket — 8B mean +0.207, 0.6B mean +0.231 — so CCPD v2 ships as opt-in and hinge is primary T2 regardless of which base you boot. The secondary 0.6B k=8 run (+0.183) landed in the bottom bucket; a cross-review (blue, #4) correctly flagged that the original 0.6B vs 8B scaling claim was confounded by k=8 vs k=6. The matched-k rerun (this run) reports the clean number. At this scale, **candidate count (k) matters more than base-model size for ranking reliability on this benchmark** — the IM-RM pathology the plan warns about is still visible in per-item behavior but does not dominate the headline mean.
 
 **π_ref — EMA-1 (`disable_adapter()`) as default, frozen-snapshot as opt-in.** For a single-GPU daemon, keeping a second copy of the 8B weights on-card or on-host is only sometimes worth it. Default: PEFT's `disable_adapter()` context turns LoRA off on the live model for the duration of a forward — anchors KL toward `base + merged_deltas` at zero memory cost. Opt-in (`cfg.frozen_ref=True`): `ModelState.load_frozen_ref` loads a second base-only model in eval/no-grad mode and `TrainEngine.step` auto-injects it as `pi_ref=` on every objective call. Changes the anchor semantics from "this session's committed state minus active LoRA" to "session-start base model." Users who want frozen-at-start KL (e.g. long-running daemons where merged_deltas have drifted meaningfully) flip one flag; everyone else pays no VRAM for it.
 
@@ -68,6 +68,8 @@ I also brought back T3.1 trace infilling, which I had scoped out as "needs CoT a
 
 A second peer review (Claude Opus 4.6, "blue") had shipped T4.1 idle replay as a standalone scheduler with a pure-function batch-reconstructor, plus a clean config-flag frozen-ref toggle. I had deliberately scoped those out ("nice-to-have"; "one flag"). Seeing it work in ~200 LOC changed my mind — the two prerequisites (`ComputeQueue.is_idle_for` and `Controller.feedback_to_batch` as a pure staticmethod) are tiny, and once they exist the scheduler itself is just weighted-choice + per-record cap + the idle gate. I stole the shape and adapted to my asyncio-native queue: an `IdleReplayScheduler` task that `asyncio.create_task`s in `Controller.start` and cancels in `Controller.stop`, polling `queue.is_idle_for(threshold)` at a coarse cadence. The frozen-ref flag is now `cfg.frozen_ref=True` and `TrainEngine.step` auto-injects it as `pi_ref=` into every objective, including the batch-level ones (KL anchor, CCPD v2 inner KL).
 
+Blue's PR #5 review on my submission surfaced two more fixes I agreed with and shipped in a follow-up commit. **First, KTO was silently degenerate** on the binary-feedback path: when `Controller.submit_feedback` routes a `kind="binary"` payload to `{"objective": "kto", ...}` with no `pi_ref` provided and no frozen ref loaded, the fallback was `torch.zeros_like(policy_logprob_per_tok)` — which makes `logratio = β · log π_θ(y|x)` and collapses KTO to a weighted log-likelihood term. `kl_anchor_loss` and `ccpd_v2_loss` already did the right thing here: `model.disable_adapter()` under `torch.no_grad()` gives a base-only π_ref forward on the same weights, at zero extra memory. I added `pi_ref_mode="adapter_disabled"` as the KTO default and mirrored the pattern; the old zero-reference path is still reachable (for ablation) behind an explicit `pi_ref_mode=None`. `smoke_objectives.py` confirms KTO now reports `kto_ref_mode: 'adapter_disabled'` in components with a non-trivial `kto_z0` (was trivially batch-mean-of-policy-logprobs, is now a real reference drift). **Second, the §11 scale comparison was confounded by a k-mismatch**: the 0.6B run had been at k=8 and the 8B run at k=6. Rerunning 0.6B at matched k=6 (`lile_data/bench_rc_qwen06b_n20_k6.json`) landed at Spearman mean +0.231 — which actually edges out the 8B number. The shipped decision doesn't change (both cross 0.2), but the clean reading is that candidate count dominates base-model size on this benchmark, not the other way around.
+
 Full reviews (scoring, what I'd replace, what they got right that I missed) live on each peer's PR comment thread — purple at #6, blue at #4.
 
 ## Evidence (numbers)
@@ -84,10 +86,13 @@ Full reviews (scoring, what I'd replace, what they got right that I missed) live
 | **Concurrent-load (10 chat + 10 train)** | **3.7 s wall**, monotone contiguous tokens, chat latency max 2.28 s / mean 2.26 s, zero deadlocks | `test_concurrent_load.py` |
 | §11 Spearman mean — **Qwen3-8B**, k=6, N=20 (40 runs) | **+0.207** (median +0.319, 60% positive) | `bench_rc_ranking.py` |
 | §11 decision (8B) | **ship_T2_1_k8_with_hinge_primary** — CCPD v2 ships opt-in, hinge is primary T2 | ^ |
-| §11 Spearman mean — Qwen3-0.6B, k=8, N=20 (40 runs) | +0.183 (median +0.247, 57.5% positive) | ^ |
-| §11 decision (0.6B) | fallback_to_sft_self_refinement (below 0.2, as expected for small-model IM-RM) | ^ |
-| Peak VRAM (8B bench) | **8.21 GB** | ^ |
-| Peak VRAM (0.6B bench) | 1.25 GB | ^ |
+| §11 Spearman mean — **Qwen3-0.6B, k=6**, N=20 (40 runs) — matched-k rerun | **+0.231** (median +0.393, 65% positive) | ^ |
+| §11 decision (0.6B, k=6) | **ship_T2_1_k8_with_hinge_primary** — matched-k rerun also clears the mid bracket | ^ |
+| §11 Spearman mean — Qwen3-0.6B, k=8, N=20 (40 runs) — secondary | +0.183 (median +0.247, 57.5% positive) | ^ |
+| §11 decision (0.6B, k=8) | fallback_to_sft_self_refinement (below 0.2; kept as candidate-count-sensitivity data point) | ^ |
+| Peak VRAM (8B bench, k=6) | **8.21 GB** | ^ |
+| Peak VRAM (0.6B bench, k=6) | 1.09 GB | ^ |
+| Peak VRAM (0.6B bench, k=8) | 1.25 GB | ^ |
 | **Residual applied live after merge** | base -94.571 → trained -8.111 → merged -8.159 (drift 0.048 nats) | `test_residual_live_path.py` |
 | **T3.1 span_prefix mask geometry** | 35 → 15 supervised tokens (suffix-only), edge case full-prefix leaves 2 | `test_span_prefix.py` |
 | **T4.1 idle replay** | idle-gate blocks all replays while queue busy; per-record cap stops at 2/2; recency decay picks fresh 50/50 vs 10-half-life stale 0/50; 4-kind routing preserved | `test_replay.py` |

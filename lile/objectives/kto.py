@@ -28,13 +28,22 @@ from ._utils import build_chat_inputs, pad_and_stack, sequence_logprob
 def kto_loss(model: Any, tokenizer: Any, samples: list[dict[str, Any]],
              pi_ref: Any | None = None, beta: float = 0.1,
              lambda_desirable: float = 1.0, lambda_undesirable: float = 1.5,
+             pi_ref_mode: str | None = "adapter_disabled",
              **_: Any) -> dict[str, Any]:
     """
     `samples` items: {"prompt": str, "response": str, "label": "desirable"|"undesirable"}
 
-    `pi_ref` is the reference policy (frozen). If None, we approximate with
-    the current model's log-prob — this makes KTO degenerate to a weighted
-    log-likelihood term, which is fine as a fallback but less expressive.
+    Reference policy resolution:
+      * If `pi_ref` is supplied, it is used as π_ref (frozen forward under
+        `torch.no_grad()`).
+      * Otherwise, with the default `pi_ref_mode="adapter_disabled"`, a second
+        forward runs under `model.disable_adapter()` — base-only log-probs on
+        the same weights, zero extra memory. Same pattern as `kl_anchor_loss`
+        and `ccpd_v2_loss`.
+      * Only when `pi_ref` is None AND `pi_ref_mode` is disabled does KTO fall
+        back to a zero reference, degenerating to a weighted log-likelihood
+        term. That path is explicit opt-in, not the default, because it
+        silently weakens the binary-feedback signal.
     """
     if not samples:
         raise ValueError("kto_loss requires at least one sample")
@@ -48,15 +57,25 @@ def kto_loss(model: Any, tokenizer: Any, samples: list[dict[str, Any]],
     n_tokens = (shifted_labels != -100).sum(dim=-1).clamp_min(1).float().to(summed.device)
     policy_logprob_per_tok = summed / n_tokens   # (B,)
 
+    use_self_ref = (pi_ref is None and pi_ref_mode == "adapter_disabled"
+                    and hasattr(model, "disable_adapter"))
     if pi_ref is not None:
         with torch.no_grad():
             ref_summed = sequence_logprob(
                 pi_ref, batch["input_ids"], batch["labels"], batch["attention_mask"]
             )
         ref_logprob_per_tok = ref_summed / n_tokens
+        ref_mode = "external"
+    elif use_self_ref:
+        with torch.no_grad(), model.disable_adapter():
+            ref_summed = sequence_logprob(
+                model, batch["input_ids"], batch["labels"], batch["attention_mask"]
+            )
+        ref_logprob_per_tok = ref_summed / n_tokens
+        ref_mode = "adapter_disabled"
     else:
-        # Degenerate fallback — zero ref means logratio == policy log-prob.
         ref_logprob_per_tok = torch.zeros_like(policy_logprob_per_tok)
+        ref_mode = "degenerate_zero"
 
     logratio = beta * (policy_logprob_per_tok - ref_logprob_per_tok)
     # z0: expected drift estimated by mean logratio on the batch. This is a
@@ -78,6 +97,7 @@ def kto_loss(model: Any, tokenizer: Any, samples: list[dict[str, Any]],
         "components": {
             "kto_loss": float(loss.detach().cpu()),
             "kto_z0": float(z0.detach().cpu()),
+            "kto_ref_mode": ref_mode,
             "n_desirable": sum(1 for l in labels if l == "desirable"),
             "n_undesirable": sum(1 for l in labels if l == "undesirable"),
         },

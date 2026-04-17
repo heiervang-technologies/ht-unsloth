@@ -6,7 +6,7 @@ Honest live record of what is done, what is stubbed, and what is tested. Read `D
 
 - Phase 0 — Decisions: **done** (`DESIGN.md`).
 - Phase 1 — Skeleton + T1 objectives (SFT / KTO / CoH / hinge / KL-anchor): **done**, smoke-tested on a real model.
-- §11 Benchmark: **done on Qwen3-0.6B and Qwen3-8B** (both at N=20 items, k=8 and k=6 respectively). The 8B result (Spearman mean **+0.207**, median **+0.319**, 60% positive) crosses the pre-registered **0.2 mid threshold** → CCPD v2 ships as **per-event opt-in** (decision `ship_T2_1_k8_with_hinge_primary`). The 0.6B result stays below 0.2, confirming this is a model-scale effect, not noise.
+- §11 Benchmark: **done on Qwen3-0.6B and Qwen3-8B, both at matched k=6 and at k=8 for 0.6B as a secondary data point** (N=20 items, repeats=2). At **matched k=6** both cross the pre-registered **0.2 mid threshold**: 8B mean **+0.207** (median +0.319, 60% positive), 0.6B mean **+0.231** (median +0.393, 65% positive). Decision `ship_T2_1_k8_with_hinge_primary` in both cases → CCPD v2 ships as **per-event opt-in**, hinge stays primary T2. The earlier 0.6B k=8 run (mean +0.183, below threshold) is kept in the record: it shows the objective is more candidate-count-sensitive than scale-sensitive at this size, so the original "scale-lifts-ρ" reading was confounded by the k-mismatch. A cross-review (blue, #4) flagged the mismatch; this run is the clean comparison.
 - Phase 2 — T2 objectives: **done**. Hinge contrastive (T2.2) is the primary T2 ship default. CCPD v2 is fully implemented and callable via `objective: "ccpd_v2"`, with full forward+backward validated on a real model (see "Evidence" below).
 - Phase 3 — Queue / state / snapshot / trajectory / FastAPI server / controller: **done**. Load-bearing invariants from `DESIGN.md` are under test and passing.
 - Phase 4 — End-to-end: **done**. Merge idempotence, commit-cursor-through-HTTP, visible loss descent, CCPD v2 gradient flow, and a **concurrent-load** invariant test are all green.
@@ -29,7 +29,8 @@ Honest live record of what is done, what is stubbed, and what is tested. Read `D
 | `test_ccpd_e2e.py::test_ccpd_through_train_engine` | CCPD v2 runs through the production `TrainEngine.step` path (i.e. after `for_training()`); guards against the `temp_QA` latent bug | **pass** — loss=+0.839, 4 candidates, no AttributeError |
 | `test_concurrent_load.py` | 10 concurrent `/v1/chat` + 10 `/v1/train` through the real Controller; all five DESIGN invariants under contention | **pass** — **3.7 s wall**, monotone contiguous tokens, every `after_commit_token` chat saw cursor ≥ its token, trajectory has every `train_step` + every `inference`, chat latency max 2.28 s / mean 2.26 s |
 | `bench_rc_ranking.py` (Qwen3-8B, N=20, k=6) | §11 ranking-reliability benchmark on a text-only 7–14B model | **Spearman mean +0.207**, median +0.319, 60% positive — **decision: `ship_T2_1_k8_with_hinge_primary`** |
-| `bench_rc_ranking.py` (Qwen3-0.6B, N=20, k=8) | §11 benchmark on the small tests model | Spearman mean +0.183, median +0.247, 57.5% positive — **decision: `fallback_to_sft_self_refinement`** |
+| `bench_rc_ranking.py` (Qwen3-0.6B, N=20, k=6) | §11 benchmark on the small tests model — matched-k comparison vs the 8B run | **Spearman mean +0.231**, median +0.393, 65% positive — **decision: `ship_T2_1_k8_with_hinge_primary`** |
+| `bench_rc_ranking.py` (Qwen3-0.6B, N=20, k=8) | §11 benchmark at higher k; kept as secondary data point after the matched-k rerun | Spearman mean +0.183, median +0.247, 57.5% positive — **decision: `fallback_to_sft_self_refinement`** |
 
 ## §11 benchmark — the decision
 
@@ -57,7 +58,7 @@ The decision thresholds in `DESIGN.md` were set in advance:
 | 0.2 ≤ mean < 0.5 | ship CCPD v2 as per-event opt-in | **yes — shipped** |
 | < 0.2 | CCPD v2 stays experimental; hinge is default T2 | no |
 
-The 0.6B run (Spearman +0.183) sat in the bottom bracket; the 8B run (+0.207) just clears the mid bracket. That is the expected direction: the Instruction-Model Reward Model pathology the plan flags gets milder as the base model gets bigger. No retroactive threshold adjustment.
+At **matched k=6** the 0.6B run (Spearman +0.231) and the 8B run (+0.207) both clear the mid bracket — so the shipped decision holds for either base. The earlier 0.6B k=8 run (+0.183) sat in the bottom bracket; comparing that against the 8B k=6 number was apples-to-oranges — a cross-review (blue, #4) caught the k-mismatch and the rerun confirms the original scaling story was confounded. At this model size and benchmark, **candidate count (k) matters more than base-model scale for ranking reliability**. The IM-RM pathology the plan flags is still present (per-item `r_c` misfires on long-horizon factual critiques), just not differentiated by 0.6B vs 8B at k=6. No retroactive threshold adjustment; the pre-registered thresholds still decide the same way.
 
 Per-item range on 8B: `min −0.600, max +1.000`. Format/length critiques ("single number", "exactly one short sentence", "uppercase", "no markdown") rank reliably; long-horizon factual/specificity critiques ("what year was the transistor invented", "include a specific landmark") are where `r_c` still misfires. Consistent with the IM-RM critique in the plan.
 
@@ -68,6 +69,7 @@ Per-item range on 8B: `min −0.600, max +1.000`. Format/length critiques ("sing
 | T1 objectives smoke (batch=1, seq≤1024) | Qwen3-0.6B bnb-4bit + LoRA r=8 | **0.72 GB** | ~1.8 s / step |
 | CCPD v2 forward+backward smoke | Qwen3-0.6B bnb-4bit | ~1.2 GB | ~3–4 s / step (sampling dominated) |
 | §11 bench (k=6, 40 runs, N=20) | Qwen3-8B bnb-4bit | **8.21 GB** | **226.9 s** |
+| §11 bench (k=6, 40 runs, N=20) — matched-k rerun | Qwen3-0.6B bnb-4bit | 1.09 GB | 121.1 s |
 | §11 bench (k=8, 40 runs, N=20) | Qwen3-0.6B bnb-4bit | 1.25 GB | 111.3 s |
 | E2E loss drop (10 SFT steps, r=8) | Qwen3-0.6B bnb-4bit | ~0.9 GB | ~15 s |
 | HTTP server + E2E chat round-trip | Qwen3-0.6B bnb-4bit | ~1.1 GB | ~0.8 s / chat |
@@ -83,7 +85,7 @@ Per-item range on 8B: `min −0.600, max +1.000`. Format/length critiques ("sing
 - Snapshot manager producing a `manifest.json` + `merged_deltas.safetensors` (+ `active_adapter.safetensors`) triple, round-tripping byte-exact.
 - FastAPI server with OpenAI-compatible chat, `/v1/train`, `/v1/feedback`, `/v1/state/{merge,snapshot/save,snapshot/load,snapshots,trajectory/tail}`, `/v1/wait`.
 - T1.1 weighted SFT, T1.2 KTO (β=0.1, λ_D=1.0, λ_U=1.5), T1.3 CoH (two templates), T2.2 hinge, KL anchor, CCPD v2 (full §5c.11 composition: aux sampling + detached r_c + rank-advantage REINFORCE + top-m SFT + KL anchor + τ-spread skip).
-- **π_ref via `peft.PeftModel.disable_adapter()` context** for both `kl_anchor_loss` and `ccpd_v2_loss` when no external reference model is passed. The reference forward runs with LoRA turned off on the same weights — zero memory overhead, no separate model copy. Enabled by `pi_ref_mode="adapter_disabled"` (the default). Falls back to a zero-loss no-op only when neither an explicit `pi_ref` nor adapter-disable is available.
+- **π_ref via `peft.PeftModel.disable_adapter()` context** for `kl_anchor_loss`, `ccpd_v2_loss`, **and `kto_loss`** when no external reference model is passed. The reference forward runs with LoRA turned off on the same weights — zero memory overhead, no separate model copy. Enabled by `pi_ref_mode="adapter_disabled"` (the default). For KTO specifically this is the difference between a real preference signal and a degenerate weighted-log-likelihood fallback; earlier versions had the degenerate path as the default, which a cross-review (blue) correctly flagged. Falls back to a zero-loss no-op only when neither an explicit `pi_ref` nor adapter-disable is available.
 
 ## What's stubbed (intentional)
 
@@ -128,6 +130,12 @@ python -m lile.tests.bench_rc_ranking \
     --model unsloth/Qwen3-8B-unsloth-bnb-4bit \
     --k 6 --repeats 2 --max-new-tokens 80 \
     --output lile_data/bench_rc_qwen8b_n20.json
+
+# §11 ranking benchmark matched-k rerun (Qwen3-0.6B, ~2 min)
+python -m lile.tests.bench_rc_ranking \
+    --model unsloth/qwen3-0.6b-unsloth-bnb-4bit \
+    --k 6 --repeats 2 \
+    --output lile_data/bench_rc_qwen06b_n20_k6.json
 ```
 
 ## File-by-file status
@@ -143,7 +151,7 @@ python -m lile.tests.bench_rc_ranking \
 | `lile/server.py` | ~180 | done; HTTP smoke passes |
 | `lile/objectives/_utils.py` | ~130 | done; `use_cache=False` fix in `sequence_logprob` |
 | `lile/objectives/sft.py` | ~70 | done; tested |
-| `lile/objectives/kto.py` | ~90 | done; tested (smoke) |
+| `lile/objectives/kto.py` | ~105 | done; tested (smoke); π_ref via `disable_adapter()` when no external ref is supplied |
 | `lile/objectives/coh.py` | ~70 | done; tested (smoke) |
 | `lile/objectives/hinge.py` | ~70 | done; tested (smoke); **primary T2 ship default** |
 | `lile/objectives/kl.py` | ~65 | done; π_ref via `disable_adapter()` |
