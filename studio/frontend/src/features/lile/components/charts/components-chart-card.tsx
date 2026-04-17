@@ -26,18 +26,22 @@ const CHART_COLORS = [
 export function ComponentsChartCard(): ReactElement {
   const series = useLileCapsuleStore(selectComponentsSeries);
 
-  // Merge per-key point arrays into flat { step, [key]: value }[] shape
-  const merged = series.reduce<Record<number, Record<string, number>>>(
-    (acc, { key, points }) => {
-      for (const { step, value } of points) {
-        if (!acc[step]) acc[step] = { step };
-        acc[step][key] = value;
+  // Merge per-key point arrays into flat { step, [key]: value }[] shape.
+  // Use a Map keyed on step so a component named "step" cannot clobber it.
+  const byStep = new Map<number, Record<string, number>>();
+  for (const { key, points } of series) {
+    for (const { step, value } of points) {
+      let row = byStep.get(step);
+      if (!row) {
+        row = {};
+        byStep.set(step, row);
       }
-      return acc;
-    },
-    {},
-  );
-  const data = Object.values(merged).sort((a, b) => (a.step as number) - (b.step as number));
+      row[key] = value;
+    }
+  }
+  const data = Array.from(byStep.entries())
+    .sort(([a], [b]) => a - b)
+    .map(([step, row]) => ({ step, ...row }));
 
   const chartConfig: ChartConfig = Object.fromEntries(
     series.map(({ key }, i) => [

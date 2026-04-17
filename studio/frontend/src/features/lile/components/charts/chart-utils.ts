@@ -16,15 +16,18 @@ function isTrainStep(e: TrajectoryEvent): e is TrainStepEvent {
 export function selectLossSeries(s: StoreState): Point[] {
   return s.trajectory
     .filter(isTrainStep)
-    .filter((e) => typeof e.loss === "number")
     .map((e) => ({ step: e.batch_id, value: e.loss }));
 }
 
 export function selectGradNormSeries(s: StoreState): Point[] {
-  return s.trajectory
-    .filter(isTrainStep)
-    .filter((e) => typeof e.grad_norm_total === "number")
-    .map((e) => ({ step: e.batch_id, value: e.grad_norm_total as number }));
+  const points: Point[] = [];
+  for (const e of s.trajectory) {
+    if (!isTrainStep(e)) continue;
+    if (typeof e.grad_norm_total === "number") {
+      points.push({ step: e.batch_id, value: e.grad_norm_total });
+    }
+  }
+  return points;
 }
 
 export function selectKlSeries(s: StoreState): Point[] {
@@ -39,9 +42,12 @@ export function selectKlSeries(s: StoreState): Point[] {
   return points;
 }
 
-// placeholder: wired in Task 17
+const EMPTY_POINTS: Point[] = [];
+
+// placeholder: wired in Task 17. Stable reference prevents zustand
+// re-subscribing on every trajectory update.
 export function selectQueueDepthSeries(_s: StoreState): Point[] {
-  return [];
+  return EMPTY_POINTS;
 }
 
 export function selectComponentsSeries(
