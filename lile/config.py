@@ -48,6 +48,21 @@ class ServeConfig:
     replay_half_life_h: float = 24.0
     replay_min_records: int = 3
 
+    # --- PR L: TTRL majority-vote pseudo-reward -----------------------------
+    # When true, an idle-time scheduler samples ``ttrl_k_rollouts`` completions
+    # for a verifier-claimed inference prompt, majority-votes over the
+    # verifier-extracted answers, and enqueues an SFT step on the winning
+    # rollout. Ships default-off; the roadmap's GSM8K eval gate is deferred
+    # until ``lile[eval]`` is CI-promoted. See ``lile/teach/ttrl_mv.py``.
+    ttrl_pseudo_reward: bool = False
+    ttrl_k_rollouts: int = 4
+    ttrl_idle_threshold_s: float = 30.0
+    ttrl_poll_interval_s: float = 2.0
+    ttrl_max_per_prompt: int = 3
+    ttrl_min_prompts: int = 3
+    ttrl_temperature: float = 0.8
+    ttrl_top_p: float = 0.95
+
     # --- metrics logging backend -------------------------------------------
     # Optional fan-out of train-step metrics to an external visualization
     # tool (wandb, tensorboard, mlflow, trackio). The trajectory JSONL
