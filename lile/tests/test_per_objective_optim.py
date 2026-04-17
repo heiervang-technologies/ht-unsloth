@@ -168,6 +168,63 @@ def _run_one_step(engine: TrainEngine, objective: str, seed: int) -> torch.Tenso
     return after - before
 
 
+def test_exp_avg_sq_buffers_isolated_after_two_steps(monkeypatch):
+    """End-to-end state isolation: step sft with grad_A, step kto with
+    grad_B, then confirm each optimizer's ``exp_avg_sq`` buffer reflects
+    only its own family's gradients. This is the definitive gate —
+    static identity plus ||Δθ|| ratio cover regressions indirectly, but
+    a malformed dispatch that accidentally routed both steps to one
+    instance would still pass those checks yet fail this one.
+
+    Adam's ``exp_avg_sq`` is an EMA of g², so with the default β₂=0.999
+    after a single step: ``exp_avg_sq = 0.001 * g²`` (plus tiny fp noise).
+    """
+    import builtins
+    real_import = builtins.__import__
+    monkeypatch.setattr(builtins, "__import__", lambda n, *a, **k: (
+        real_import(n, *a, **k) if n != "bitsandbytes"
+        else (_ for _ in ()).throw(ImportError("forced"))
+    ))
+
+    engine = _fresh_engine(per_objective=True)
+    params = [p for p in engine.state.model.parameters() if p.requires_grad]
+
+    # Step sft with one seed.
+    opt_sft = engine._optimizer("sft")
+    opt_sft.zero_grad()
+    g_sft = torch.Generator().manual_seed(100)
+    grads_sft = [torch.randn(p.shape, generator=g_sft) * 1e-2 for p in params]
+    for p, g in zip(params, grads_sft):
+        p.grad = g.clone()
+    opt_sft.step()
+
+    # Step kto with a different seed.
+    opt_kto = engine._optimizer("kto")
+    opt_kto.zero_grad()
+    g_kto = torch.Generator().manual_seed(200)
+    grads_kto = [torch.randn(p.shape, generator=g_kto) * 1e-2 for p in params]
+    for p, g in zip(params, grads_kto):
+        p.grad = g.clone()
+    opt_kto.step()
+
+    # Each optimizer's state entry for a given param must reflect ONLY
+    # that optimizer's gradient. With β₂=0.999 and one step:
+    #   exp_avg_sq ≈ (1 - β₂) * g² = 1e-3 * g²
+    for p, g_s, g_k in zip(params, grads_sft, grads_kto):
+        sft_exp_avg_sq = opt_sft.state[p]["exp_avg_sq"]
+        kto_exp_avg_sq = opt_kto.state[p]["exp_avg_sq"]
+
+        # sft's buffer should be proportional to sft's grad², not kto's.
+        assert torch.allclose(sft_exp_avg_sq, 1e-3 * g_s.pow(2), atol=1e-9), (
+            "opt_sft.exp_avg_sq diverged from sft's own grad² — state bleed"
+        )
+        assert torch.allclose(kto_exp_avg_sq, 1e-3 * g_k.pow(2), atol=1e-9), (
+            "opt_kto.exp_avg_sq diverged from kto's own grad² — state bleed"
+        )
+        # And cross-check: sft's state is not kto's gradient signature.
+        assert not torch.allclose(sft_exp_avg_sq, 1e-3 * g_k.pow(2), atol=1e-9)
+
+
 def test_delta_norm_ratio_shared_vs_per_objective_in_band(monkeypatch):
     """After the same seeded gradient, the per-objective path and the
     shared path produce weight deltas of the same order. The regression

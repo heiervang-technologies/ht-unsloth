@@ -18,7 +18,10 @@ from ..state import ModelState
 log = logging.getLogger(__name__)
 
 
-_SHARED_KEY = ""  # Key used when per_objective=False — all objectives share one opt.
+# Sentinel key used when per_objective=False — all objectives share one opt.
+# Empty string is safe because `get_objective` rejects empty names, so no real
+# objective collides with the shared slot.
+_SHARED_KEY = ""
 
 
 class TrainEngine:
