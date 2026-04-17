@@ -492,6 +492,24 @@ def run_training_process(
             )
         return
 
+    # HT fork: Prompt baking fast-path. Same pattern as embeddings above —
+    # delegate the whole flow to a self-contained runner that owns model load,
+    # dataset, trainer, and save.
+    if config.get("is_prompt_baking", False):
+        try:
+            from core.training.prompt_baking import run_prompt_baking
+            run_prompt_baking(event_queue, stop_queue, config)
+        except Exception as exc:
+            event_queue.put(
+                {
+                    "type": "error",
+                    "error": str(exc),
+                    "stack": traceback.format_exc(limit = 20),
+                    "ts": time.time(),
+                }
+            )
+        return
+
     # ── 3. Create a fresh trainer instance ──
     trainer = UnslothTrainer()
 

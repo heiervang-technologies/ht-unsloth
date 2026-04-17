@@ -86,6 +86,13 @@ const initialState: TrainingConfigState = {
   isDatasetImage: null,
   isDatasetAudio: false,
   maxPositionEmbeddings: null,
+  // HT fork — prompt baking defaults
+  bakingSystemPrompt: "",
+  bakingNumTrajectories: 4,
+  bakingTrajectoryLength: 128,
+  bakingTemperature: 1.0,
+  bakingSamplingTemperature: 0.8,
+  bakingUsePrefill: false,
   ...DEFAULT_HYPERPARAMS,
 };
 
@@ -603,6 +610,12 @@ export const useTrainingConfigStore = create<TrainingConfigStore>()(
         setFinetuneMLPModules: (finetuneMLPModules) =>
           set({ finetuneMLPModules }),
         setTargetModules: (targetModules) => set({ targetModules }),
+        setBakingSystemPrompt: (bakingSystemPrompt) => set({ bakingSystemPrompt }),
+        setBakingNumTrajectories: (bakingNumTrajectories) => set({ bakingNumTrajectories }),
+        setBakingTrajectoryLength: (bakingTrajectoryLength) => set({ bakingTrajectoryLength }),
+        setBakingTemperature: (bakingTemperature) => set({ bakingTemperature }),
+        setBakingSamplingTemperature: (bakingSamplingTemperature) => set({ bakingSamplingTemperature }),
+        setBakingUsePrefill: (bakingUsePrefill) => set({ bakingUsePrefill }),
         canProceed: () => canProceedForStep(get()),
         reset: () => {
           _trainOnCompletionsManuallySet = false;
@@ -629,7 +642,7 @@ export const useTrainingConfigStore = create<TrainingConfigStore>()(
     },
     {
       name: "unsloth_training_config_v1",
-      version: 9,
+      version: 10,
       migrate: (persisted, version) => {
         const s = persisted as Record<string, unknown>;
         if (version < 2 && s.datasetSubset == null && s.datasetConfig != null) {
@@ -664,6 +677,15 @@ export const useTrainingConfigStore = create<TrainingConfigStore>()(
           if (s.weightDecay === 0.01) {
             s.weightDecay = DEFAULT_HYPERPARAMS.weightDecay;
           }
+        }
+        if (version < 10) {
+          // HT fork — prompt baking fields added.
+          s.bakingSystemPrompt ??= "";
+          s.bakingNumTrajectories ??= 4;
+          s.bakingTrajectoryLength ??= 128;
+          s.bakingTemperature ??= 1.0;
+          s.bakingSamplingTemperature ??= 0.8;
+          s.bakingUsePrefill ??= false;
         }
         return s as unknown as TrainingConfigStore;
       },
