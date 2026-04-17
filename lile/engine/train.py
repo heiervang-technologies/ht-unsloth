@@ -97,12 +97,17 @@ class TrainEngine:
             opt = self._optimizer()
             opt.zero_grad()
             loss.backward()
+            grad_norm_total: float | None = None
             if self.grad_clip and self.grad_clip > 0:
-                torch.nn.utils.clip_grad_norm_(
+                gn = torch.nn.utils.clip_grad_norm_(
                     [p for p in self.state.model.parameters() if p.requires_grad],
                     self.grad_clip,
                 )
+                grad_norm_total = float(gn)
             opt.step()
 
             components["loss"] = float(loss.detach().cpu())
+            if grad_norm_total is not None:
+                components["grad_norm_total"] = grad_norm_total
+                components["grad_clipped"] = bool(grad_norm_total > self.grad_clip)
             return {"loss": components["loss"], "components": components, "skipped": False}

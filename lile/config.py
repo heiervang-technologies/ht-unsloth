@@ -34,6 +34,17 @@ class ServeConfig:
     replay_half_life_h: float = 24.0
     replay_min_records: int = 3
 
+    # --- metrics logging backend -------------------------------------------
+    # Optional fan-out of train-step metrics to an external visualization
+    # tool (wandb, tensorboard, mlflow, trackio). The trajectory JSONL
+    # remains canonical; this is a mirror for charting. Default "null"
+    # means no external sink and zero extra deps.
+    logger: str = "null"  # null | wandb | tensorboard | mlflow | trackio
+    logger_project: str = "lile"
+    logger_run_name: str | None = None
+    logger_log_dir: str | None = None       # tensorboard
+    logger_tracking_uri: str | None = None  # mlflow
+
     # --- frozen reference model --------------------------------------------
     # When true, ``ModelState.load_frozen_ref()`` loads a second base-only
     # model (eval, requires_grad=False) that objectives consume as ``pi_ref``

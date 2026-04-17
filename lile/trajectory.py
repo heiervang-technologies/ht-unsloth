@@ -71,14 +71,31 @@ class TrajectoryLog:
         })
 
     def log_train(self, batch_id: str, objective: str, loss: float,
-                  batch_size: int, commit_token: int) -> int:
-        return self.log_event("train_step", {
+                  batch_size: int, commit_token: int,
+                  components: dict[str, Any] | None = None) -> int:
+        data: dict[str, Any] = {
             "batch_id": batch_id,
             "objective": objective,
             "loss": float(loss),
             "batch_size": int(batch_size),
             "commit_token": int(commit_token),
-        })
+        }
+        if components:
+            serialized: dict[str, Any] = {}
+            for k, v in components.items():
+                if isinstance(v, bool):
+                    serialized[k] = v
+                elif isinstance(v, (int, float)):
+                    serialized[k] = float(v)
+                elif isinstance(v, str):
+                    serialized[k] = v
+                else:
+                    try:
+                        serialized[k] = float(v)
+                    except (TypeError, ValueError):
+                        continue
+            data["components"] = serialized
+        return self.log_event("train_step", data)
 
     # ------------------------------------------------------------------ readers
     def iter_events(self, since_offset: int = 0) -> Iterable[dict[str, Any]]:
@@ -127,6 +144,27 @@ class TrajectoryLog:
     def tail(self, n: int = 20) -> list[dict[str, Any]]:
         all_events = list(self.iter_events())
         return all_events[-n:]
+
+    def tail_structured(self, n: int = 20, since_offset: int = 0) -> dict[str, Any]:
+        """Incremental tail shape for polling clients.
+
+        Each returned event carries its byte ``offset`` so the client can
+        deduplicate and resume. ``next_offset`` is the end-of-file position
+        after the read — pass it back as ``since_offset`` on the next poll.
+        ``total_size`` is the current full file size, handy for UI progress.
+
+        When ``since_offset == 0`` the response is capped to the last ``n``
+        events (tail behavior). Otherwise all events at or after the given
+        offset are returned so followers don't drop records under load.
+        """
+        items = list(self.iter_with_offsets(since_offset=since_offset))
+        if since_offset <= 0:
+            items = items[-n:]
+        events: list[dict[str, Any]] = []
+        for offset, record in items:
+            events.append({"offset": offset, **record})
+        total = self.size()
+        return {"events": events, "next_offset": total, "total_size": total}
 
     def size(self) -> int:
         return self.path.stat().st_size if self.path.exists() else 0

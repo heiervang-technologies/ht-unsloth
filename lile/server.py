@@ -251,8 +251,12 @@ def create_app(cfg: ServeConfig | None = None) -> FastAPI:
         return {"snapshots": app.state.controller.snapshots.list()}
 
     @app.get("/v1/state/trajectory/tail")
-    async def traj_tail(n: int = 20) -> dict[str, Any]:
-        return {"events": app.state.controller.trajectory.tail(n)}
+    async def traj_tail(n: int = 20,
+                        since_offset: int | None = None) -> dict[str, Any]:
+        traj = app.state.controller.trajectory
+        if since_offset is None:
+            return {"events": traj.tail(n)}
+        return traj.tail_structured(n=n, since_offset=since_offset)
 
     # --------------------------------------------------------------- block-for-commit helper
     @app.post("/v1/wait")

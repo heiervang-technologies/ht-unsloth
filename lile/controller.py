@@ -22,6 +22,7 @@ _RESPONSE_INDEX_CAP = 4096
 from .config import ServeConfig
 from .engine.replay import IdleReplayScheduler, ReplayPolicy
 from .engine.train import TrainEngine
+from .logging_backends import LoggerConfig, MetricsLogger, flatten_scalars, get_logger
 from .queue import ComputeQueue, new_batch_id
 from .snapshot import SnapshotManager
 from .state import ModelState
@@ -38,6 +39,13 @@ class Controller:
         self.train_engine: TrainEngine | None = None
         self.trajectory = TrajectoryLog(cfg.data_dir / "trajectory.jsonl")
         self.snapshots = SnapshotManager(cfg.data_dir / "snapshots")
+        self.metrics_logger: MetricsLogger = get_logger(LoggerConfig(
+            backend=cfg.logger,
+            project=cfg.logger_project,
+            run_name=cfg.logger_run_name,
+            log_dir=cfg.logger_log_dir,
+            tracking_uri=cfg.logger_tracking_uri,
+        ))
 
         # Feedback-event bookkeeping: response_id -> original inference record.
         # OrderedDict keeps insertion order so ``popitem(last=False)`` evicts
@@ -64,6 +72,17 @@ class Controller:
         if self.cfg.frozen_ref:
             self.state.load_frozen_ref()
         self.train_engine = TrainEngine(self.state, lr=self.cfg.default_lr)
+        # Stamp run-level params into the external logger once the state is
+        # loaded; NullLogger swallows this, real backends record it as
+        # hyperparameters on the run.
+        self.metrics_logger.log_params({
+            "model": self.cfg.model,
+            "lora_rank": self.cfg.lora_rank,
+            "lora_alpha": self.cfg.lora_alpha,
+            "default_lr": self.cfg.default_lr,
+            "default_objective": self.cfg.default_objective,
+            "frozen_ref": bool(self.cfg.frozen_ref),
+        })
         await self.queue.start(self._handle_task)
         if self.cfg.idle_replay:
             self._replay = IdleReplayScheduler(self, ReplayPolicy.from_config(self.cfg))
@@ -75,6 +94,10 @@ class Controller:
             await self._replay.stop()
             self._replay = None
         await self.queue.stop()
+        try:
+            self.metrics_logger.close()
+        except Exception as exc:  # pragma: no cover
+            log.warning("metrics_logger close failed: %s", exc)
 
     # ------------------------------------------------------------------ queue handler
     def _handle_task(self, task) -> Any:
@@ -84,6 +107,7 @@ class Controller:
         payload = task.payload
         if kind == "train":
             result = self.train_engine.step(payload)
+            components = result.get("components")
             # Canonical log entry for every committed step.
             self.trajectory.log_train(
                 batch_id=task.batch_id,
@@ -91,8 +115,13 @@ class Controller:
                 loss=result.get("loss") or 0.0,
                 batch_size=len(payload.get("samples", [])),
                 commit_token=task.token,
+                components=components,
             )
-            return {"loss": result.get("loss"), "components": result.get("components"),
+            # Fan out scalar metrics to the external sink (no-op for NullLogger).
+            scalars = flatten_scalars(components or {})
+            if scalars:
+                self.metrics_logger.log_metrics(scalars, step=task.token)
+            return {"loss": result.get("loss"), "components": components,
                     "wall": time.time() - t0}
         elif kind == "merge":
             self.state.merge_active_into_residual()
