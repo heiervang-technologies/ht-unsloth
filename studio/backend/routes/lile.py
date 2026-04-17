@@ -207,8 +207,11 @@ async def proxy(path: str, request: Request):
                         status_code=upstream.status_code,
                         headers=rh,
                         media_type=upstream.headers.get("content-type"))
-    except (httpx.ConnectError, httpx.ReadError):
+    except httpx.HTTPError as exc:
         return Response(
-            content=json.dumps({"error": "proxy upstream failure"}),
+            content=json.dumps({
+                "error": "proxy upstream failure",
+                "detail": f"{type(exc).__name__}: {exc}",
+            }),
             status_code=502, media_type="application/json",
         )
