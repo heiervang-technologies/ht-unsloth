@@ -2,7 +2,7 @@
 // Copyright 2026-present the Unsloth AI Inc. team. All rights reserved. See /studio/LICENSE.AGPL-3.0
 
 import { describe, it, expect, spyOn, beforeEach } from "bun:test";
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { lileClient } from "../../api/lile-client";
 import { ChatSftCard } from "./chat-sft-card";
 
@@ -27,8 +27,7 @@ describe("ChatSftCard", () => {
     const trainBtn = screen.getByRole("button", { name: /train/i });
     fireEvent.click(trainBtn);
 
-    // wait for the async handler
-    await Promise.resolve();
+    await waitFor(() => expect(spy.mock.calls.length).toBe(1));
 
     expect(spy.mock.calls[0][0]).toMatchObject({
       objective: "sft",

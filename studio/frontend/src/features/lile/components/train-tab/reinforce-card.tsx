@@ -61,6 +61,7 @@ export function ReinforceCard(): ReactElement {
           </div>
           <div className="flex flex-col items-end gap-1">
             <Button
+              type="button"
               size="sm"
               variant="outline"
               onClick={() => handleReplay(event)}

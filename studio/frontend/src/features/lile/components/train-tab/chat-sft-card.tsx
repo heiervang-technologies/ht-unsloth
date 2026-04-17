@@ -66,6 +66,7 @@ export function ChatSftCard(): ReactElement {
                 ? "sft-assistant-0"
                 : `sft-${row.role}-${idx}`;
 
+          const turnLabel = `Turn ${idx + 1}`;
           return (
             <div key={idx} className="flex flex-col gap-1">
               <div className="flex items-center gap-2">
@@ -75,6 +76,7 @@ export function ChatSftCard(): ReactElement {
                   <Label htmlFor={textareaId}>Assistant</Label>
                 ) : (
                   <select
+                    aria-label={`${turnLabel} role`}
                     value={row.role}
                     onChange={(e) => updateRow(idx, "role", e.target.value)}
                     className="text-sm border rounded px-1 py-0.5"
@@ -87,6 +89,11 @@ export function ChatSftCard(): ReactElement {
               </div>
               <Textarea
                 id={textareaId}
+                aria-label={
+                  isFirstUser || isFirstAssistant
+                    ? undefined
+                    : `${turnLabel} ${row.role} content`
+                }
                 placeholder={row.role === "user" ? "User message…" : "Assistant message…"}
                 value={row.content}
                 onChange={(e) => updateRow(idx, "content", e.target.value)}
