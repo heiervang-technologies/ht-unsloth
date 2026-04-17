@@ -21,7 +21,10 @@ def _sample_text(s: dict[str, Any], scope: str) -> str:
     scope="prompt": prompt-only (legacy, default). Anchors how the model
         *reads* the prompt.
     scope="full_sequence": prompt + first available response-like field.
-        Anchors the joint distribution including generation.
+        Anchors the joint distribution including generation. For chat-
+        templated prompts the closing turn marker (e.g. <|im_end|>) is
+        intentionally omitted — KL anchoring targets the pre-closer
+        distribution the model actually produces during generation.
     Extending scope to response-only (mask out prompt positions) is the
     logical next step but needs per-sample boundaries; deferred until a
     downstream PR needs it. See sample-efficiency-synthesis.md §1a.
