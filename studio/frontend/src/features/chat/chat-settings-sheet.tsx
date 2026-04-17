@@ -48,6 +48,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import {
+  AiBrain01Icon,
   ArrowDown01Icon,
   CodeIcon,
   Delete02Icon,
@@ -1170,6 +1171,8 @@ export function ChatSettingsPanel({
           </div>
         </CollapsibleSection>
 
+        <LileSection />
+
         <ChatTemplateSection onReloadModel={onReloadModel} />
       </div>
       </div>
@@ -1323,6 +1326,46 @@ function AutoHealToolCallsToggle() {
         onCheckedChange={setAutoHealToolCalls}
       />
     </div>
+  );
+}
+
+function LileSection() {
+  const lileMode = useChatRuntimeStore((s) => s.lileMode);
+  const setLileMode = useChatRuntimeStore((s) => s.setLileMode);
+  const lileBlockOnLastCommit = useChatRuntimeStore(
+    (s) => s.lileBlockOnLastCommit,
+  );
+  const setLileBlockOnLastCommit = useChatRuntimeStore(
+    (s) => s.setLileBlockOnLastCommit,
+  );
+
+  return (
+    <CollapsibleSection icon={AiBrain01Icon} label="Lile">
+      <div className="flex flex-col gap-3 py-1">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-xs font-medium">Lile mode</div>
+            <div className="text-[11px] text-muted-foreground">
+              Route chat through the Lile live-learning capsule.
+            </div>
+          </div>
+          <Switch checked={lileMode} onCheckedChange={setLileMode} />
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-xs font-medium">Block on last commit</div>
+            <div className="text-[11px] text-muted-foreground">
+              Wait for the most recent capsule commit before generating.
+            </div>
+          </div>
+          <Switch
+            checked={lileBlockOnLastCommit}
+            onCheckedChange={setLileBlockOnLastCommit}
+            disabled={!lileMode}
+          />
+        </div>
+      </div>
+    </CollapsibleSection>
   );
 }
 
