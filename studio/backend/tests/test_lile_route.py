@@ -52,7 +52,7 @@ def test_start_noop_when_already_running(client, monkeypatch, respx_mock):
     assert body["externally_managed"] is True
 
 
-def test_start_spawns_subprocess_when_absent(client, monkeypatch):
+def test_start_spawns_subprocess_when_absent(client, monkeypatch, respx_mock):
     from routes import lile as lile_mod
     spawned = {}
 
@@ -63,6 +63,11 @@ def test_start_spawns_subprocess_when_absent(client, monkeypatch):
 
     monkeypatch.setenv("LILE_HOST", "127.0.0.1")
     monkeypatch.setenv("LILE_PORT", "59998")
+    # Stub the initial /health gate as unreachable so the spawn branch runs.
+    # Using respx keeps this deterministic — no real network probe on 59998.
+    respx_mock.get("http://127.0.0.1:59998/health").mock(
+        side_effect=__import__("httpx").ConnectError("refused")
+    )
     monkeypatch.setattr(lile_mod.subprocess, "Popen", FakePopen)
     async def fake_probe():
         return {"ok": True, "model": "qwen3", "queue_depth": 0,
@@ -78,6 +83,54 @@ def test_start_spawns_subprocess_when_absent(client, monkeypatch):
     assert body["pid"] == 4242
     assert "lile.server" in " ".join(spawned["argv"])
     assert "--port" in spawned["argv"]
+
+
+def test_start_closes_log_handle_when_popen_fails(client, monkeypatch, respx_mock):
+    """If Popen raises, the daemon.log file handle must not leak."""
+    import builtins
+    from routes import lile as lile_mod
+
+    monkeypatch.setenv("LILE_HOST", "127.0.0.1")
+    monkeypatch.setenv("LILE_PORT", "59998")
+    respx_mock.get("http://127.0.0.1:59998/health").mock(
+        side_effect=__import__("httpx").ConnectError("refused")
+    )
+
+    opened = []
+    real_open = builtins.open
+
+    class TrackingFH:
+        def __init__(self, *a, **kw):
+            self._real = real_open(*a, **kw)
+            self.closed_ = False
+            opened.append(self)
+        def __getattr__(self, name):
+            return getattr(self._real, name)
+        def close(self):
+            self.closed_ = True
+            return self._real.close()
+
+    def fake_open(path, *args, **kwargs):
+        # Only track daemon.log, leave everything else alone so FastAPI /
+        # logging internals keep working.
+        if str(path).endswith("daemon.log"):
+            return TrackingFH(path, *args, **kwargs)
+        return real_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "open", fake_open)
+
+    def boom(*args, **kwargs):
+        raise OSError("simulated Popen failure")
+    monkeypatch.setattr(lile_mod.subprocess, "Popen", boom)
+
+    # FastAPI will surface the OSError as a 500. What we really care about
+    # is that the daemon.log fh we opened was closed.
+    try:
+        client.post("/api/lile/capsule/start", json={})
+    except OSError:
+        pass  # propagated by TestClient in some configs
+    assert opened, "expected daemon.log to be opened"
+    assert all(fh.closed_ for fh in opened), "fh leaked on Popen failure"
 
 
 def test_stop_refuses_when_externally_managed(client, monkeypatch):
@@ -131,6 +184,26 @@ def test_proxy_502_on_upstream_down(client, monkeypatch):
     r = client.get("/api/lile/v1/foo")
     assert r.status_code == 502
     assert "proxy upstream" in r.json()["error"]
+
+
+def test_proxy_forwards_head(client, monkeypatch, respx_mock):
+    """HEAD should be accepted by the proxy so health probes work."""
+    monkeypatch.setenv("LILE_HOST", "127.0.0.1")
+    monkeypatch.setenv("LILE_PORT", "59999")
+    respx_mock.head("http://127.0.0.1:59999/healthz").respond(
+        200, headers={"x-lile-probe": "ok"},
+    )
+    r = client.head("/api/lile/healthz")
+    assert r.status_code == 200
+    assert r.headers.get("x-lile-probe") == "ok"
+
+
+def test_proxy_timeout_has_bounded_connect_unbounded_read():
+    """Regression guard: connect must fail fast, read must be None for SSE."""
+    from routes import lile as lile_mod
+    t = lile_mod._PROXY_TIMEOUT
+    assert t.connect is not None and t.connect <= 10.0
+    assert t.read is None, "SSE requires unbounded read timeout"
 
 
 def test_proxy_streams_sse_without_buffering(client, monkeypatch, respx_mock):

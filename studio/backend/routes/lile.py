@@ -98,10 +98,16 @@ async def capsule_start(req: StartRequest) -> dict:
         argv += ["--model", req.model]
 
     fh = open(log_path, "ab", buffering=0)
-    proc = subprocess.Popen(
-        argv, stdout=fh, stderr=subprocess.STDOUT,
-        start_new_session=True, close_fds=True,
-    )
+    try:
+        proc = subprocess.Popen(
+            argv, stdout=fh, stderr=subprocess.STDOUT,
+            start_new_session=True, close_fds=True,
+        )
+    except Exception:
+        # Popen failed (e.g. ENOENT on python, fork failure). Close the
+        # daemon.log handle we opened a moment ago so it doesn't leak.
+        fh.close()
+        raise
     _spawned_pid = proc.pid
 
     for _ in range(240):  # 240 * 0.5s = 120s
@@ -134,15 +140,25 @@ _HOP_BY_HOP = {"connection", "keep-alive", "proxy-authenticate",
                "proxy-authorization", "te", "trailers",
                "transfer-encoding", "upgrade", "host", "content-length"}
 
+# Fail fast on connect/pool, allow unbounded reads so SSE streams stay open
+# for as long as upstream wants to push.
+_PROXY_TIMEOUT = httpx.Timeout(connect=5.0, read=None, write=30.0, pool=5.0)
+
 
 def _forward_headers(headers) -> dict:
     return {k: v for k, v in headers.items() if k.lower() not in _HOP_BY_HOP}
 
 
 async def _proxy_stream(method: str, url: str, headers: dict, body: bytes):
-    client = httpx.AsyncClient(timeout=None)
-    req = client.build_request(method, url, content=body, headers=headers)
-    upstream = await client.send(req, stream=True)
+    client = httpx.AsyncClient(timeout=_PROXY_TIMEOUT)
+    try:
+        req = client.build_request(method, url, content=body, headers=headers)
+        upstream = await client.send(req, stream=True)
+    except BaseException:
+        # send() raised before we could hand ownership to the generator —
+        # close the client ourselves so it doesn't leak a connection pool.
+        await client.aclose()
+        raise
 
     async def gen():
         try:
@@ -166,7 +182,7 @@ async def _proxy_stream(method: str, url: str, headers: dict, body: bytes):
 
 @router.api_route(
     "/{path:path}",
-    methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    methods=["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
 )
 async def proxy(path: str, request: Request):
     url = f"{_lile_base_url()}/{path}"
@@ -181,7 +197,7 @@ async def proxy(path: str, request: Request):
         if is_sse:
             return await _proxy_stream(request.method, url, headers, body)
 
-        async with httpx.AsyncClient(timeout=None) as c:
+        async with httpx.AsyncClient(timeout=_PROXY_TIMEOUT) as c:
             upstream = await c.request(
                 request.method, url, content=body, headers=headers,
                 follow_redirects=False,
