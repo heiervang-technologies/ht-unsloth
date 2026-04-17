@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright 2026-present the Unsloth AI Inc. team. All rights reserved. See /studio/LICENSE.AGPL-3.0
 
-import type { ReactElement } from "react";
+import type { FormEvent, ReactElement } from "react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,7 @@ import { useLileCapsuleStore } from "../stores/lile-capsule-store";
 const MODEL_SUGGESTIONS = [
   "unsloth/Qwen3-0.6B-unsloth-bnb-4bit",
   "unsloth/Llama-3.2-1B-unsloth-bnb-4bit",
-];
+] as const;
 
 export function CapsuleLoadForm(): ReactElement {
   const status = useLileCapsuleStore((s) => s.status);
@@ -30,7 +30,7 @@ export function CapsuleLoadForm(): ReactElement {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function handleStart(e: React.FormEvent) {
+  async function handleStart(e: FormEvent) {
     e.preventDefault();
     setSubmitting(true);
     setError(null);
@@ -109,7 +109,10 @@ export function CapsuleLoadForm(): ReactElement {
           type="number"
           min={1}
           value={maxSeqLength}
-          onChange={(e) => setMaxSeqLength(Number(e.target.value))}
+          onChange={(e) => {
+            const v = parseInt(e.target.value, 10);
+            if (!Number.isNaN(v)) setMaxSeqLength(v);
+          }}
           disabled={submitting}
         />
       </div>
@@ -122,7 +125,10 @@ export function CapsuleLoadForm(): ReactElement {
           type="number"
           min={1}
           value={loraRank}
-          onChange={(e) => setLoraRank(Number(e.target.value))}
+          onChange={(e) => {
+            const v = parseInt(e.target.value, 10);
+            if (!Number.isNaN(v)) setLoraRank(v);
+          }}
           disabled={submitting}
         />
       </div>
