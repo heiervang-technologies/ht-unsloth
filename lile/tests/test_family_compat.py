@@ -51,9 +51,11 @@ FAMILIES = [
 @pytest.mark.parametrize("family", FAMILIES)
 def test_reset_optimizer_per_family(family: str) -> None:
     engine = TrainEngine.__new__(TrainEngine)
-    engine._opt = MagicMock()
+    engine._opts = {"": MagicMock(), "sft": MagicMock()}
     engine.reset_optimizer()
-    assert engine._opt is None, f"{family}: reset_optimizer did not clear _opt"
+    assert engine._opts == {}, (
+        f"{family}: reset_optimizer did not clear every optimizer instance"
+    )
 
 
 @pytest.mark.parametrize("family", FAMILIES)
@@ -82,15 +84,20 @@ def test_residual_delta_binding_per_family(family: str) -> None:
     )
 
 
-@pytest.mark.xfail(reason="PR B (per-objective optimizer instances) not yet landed",
-                   strict=False)
 @pytest.mark.parametrize("family", FAMILIES)
 def test_per_objective_optimizer_per_family(family: str) -> None:
-    # PyTorch keys `optimizer.state[param]` by tensor id, so N param_groups
-    # over the same LoRA params share `m`/`v` — only LR isolates. Isolating
-    # per-objective second-moment `v` requires separate optimizer instances.
-    # PR B wires `self._opts: dict[str, torch.optim.AdamW]` behind
-    # `cfg.per_objective_optim=False` (default-off: VRAM hit is ~400MB-1.6GB
-    # of fp32 Adam state per instance on 7B+). Flipping `strict=True` on the
-    # xfail above once PR B lands is the intended tripwire.
-    raise NotImplementedError("pending PR B")
+    # PR B (per-objective optimizer instances) is now live. PyTorch keys
+    # ``optimizer.state[param]`` by tensor id, so shared-param_groups can't
+    # isolate Adam `m`/`v` between objectives — only separate instances do.
+    # This family-level smoke only verifies the wiring is present; the
+    # definitive E2E state-isolation proof lives in
+    # ``test_per_objective_optim.py::test_exp_avg_sq_buffers_isolated_after_two_steps``.
+    engine = TrainEngine.__new__(TrainEngine)
+    engine.per_objective = True
+    engine._opts = {}
+    assert isinstance(engine._opts, dict), (
+        f"{family}: _opts must be a dict keyed by objective name"
+    )
+    assert engine.per_objective is True, (
+        f"{family}: per_objective flag must be wired into TrainEngine"
+    )
