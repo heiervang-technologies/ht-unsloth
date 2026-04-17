@@ -10,6 +10,17 @@ import type { FeedbackEvent, TrainStepEvent, TrajectoryEvent } from "../api/type
 import { lileClient } from "../api/lile-client";
 import { useLileCapsuleStore } from "../stores/lile-capsule-store";
 
+// The TrajectoryEvent union includes a generic `{kind: string}` fallback
+// variant, so TS can't narrow by `kind === "train_step"` alone. Use
+// explicit type guards that also check the discriminating fields.
+function isTrainStep(e: TrajectoryEvent): e is TrainStepEvent {
+  return e.kind === "train_step" && typeof (e as TrainStepEvent).batch_id === "number";
+}
+
+function isFeedback(e: TrajectoryEvent): e is FeedbackEvent {
+  return e.kind === "feedback" && typeof (e as FeedbackEvent).response_id === "string";
+}
+
 function kindVariant(kind: string): "default" | "secondary" | "outline" {
   if (kind === "train_step") return "default";
   if (kind === "feedback") return "secondary";
@@ -17,22 +28,20 @@ function kindVariant(kind: string): "default" | "secondary" | "outline" {
 }
 
 function eventLabel(event: TrajectoryEvent): string {
-  if (event.kind === "train_step") {
-    const e = event as TrainStepEvent;
-    return `batch_id ${e.batch_id}`;
+  if (isTrainStep(event)) {
+    return `batch_id ${event.batch_id}`;
   }
   return `offset ${event.offset}`;
 }
 
 function eventSummary(event: TrajectoryEvent): string {
-  if (event.kind === "train_step") {
-    const e = event as TrainStepEvent;
-    const gradNorm = e.grad_norm_total != null ? e.grad_norm_total.toFixed(3) : "\u2014";
-    return `loss=${e.loss.toFixed(4)} grad_norm=${gradNorm}`;
+  if (isTrainStep(event)) {
+    const gradNorm =
+      event.grad_norm_total != null ? event.grad_norm_total.toFixed(3) : "\u2014";
+    return `loss=${event.loss.toFixed(4)} grad_norm=${gradNorm}`;
   }
-  if (event.kind === "feedback") {
-    const e = event as FeedbackEvent;
-    return `${e.response_id.slice(0, 8)} ${e.feedback_kind}`;
+  if (isFeedback(event)) {
+    return `${event.response_id.slice(0, 8)} ${event.feedback_kind}`;
   }
   return "";
 }
@@ -101,8 +110,7 @@ export function TrajectoryTab(): ReactElement {
   return (
     <div className="flex flex-col gap-1">
       {events.map((event) => {
-        const isFeedback = event.kind === "feedback";
-        const feedbackEvent = isFeedback ? (event as FeedbackEvent) : null;
+        const feedbackEvent: FeedbackEvent | null = isFeedback(event) ? event : null;
         const replayKey = feedbackEvent?.response_id ?? "";
         const summary = eventSummary(event);
 

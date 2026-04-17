@@ -2,7 +2,7 @@
 // Copyright 2026-present the Unsloth AI Inc. team. All rights reserved. See /studio/LICENSE.AGPL-3.0
 
 import type { ReactElement } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,18 +34,25 @@ export function SnapshotsTab(): ReactElement {
   const [saving, setSaving] = useState(false);
   const [merging, setMerging] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const mountedRef = useRef(true);
 
   async function fetchSnapshots() {
     try {
       const result = await lileClient.getSnapshots();
+      if (!mountedRef.current) return;
       setSnapshots(normalizeSnapshots(result));
     } catch (err) {
+      if (!mountedRef.current) return;
       setError(err instanceof Error ? err.message : String(err));
     }
   }
 
   useEffect(() => {
+    mountedRef.current = true;
     void fetchSnapshots();
+    return () => {
+      mountedRef.current = false;
+    };
   }, []);
 
   async function handleSave() {
@@ -53,12 +60,15 @@ export function SnapshotsTab(): ReactElement {
     setError(null);
     try {
       await lileClient.postSnapshot(name);
+      if (!mountedRef.current) return;
       setName("");
       await fetchSnapshots();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      if (mountedRef.current) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
     } finally {
-      setSaving(false);
+      if (mountedRef.current) setSaving(false);
     }
   }
 
@@ -70,9 +80,11 @@ export function SnapshotsTab(): ReactElement {
       const status = await lileClient.getStatus();
       useLileCapsuleStore.getState().setStatus(status);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      if (mountedRef.current) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
     } finally {
-      setMerging(false);
+      if (mountedRef.current) setMerging(false);
     }
   }
 
