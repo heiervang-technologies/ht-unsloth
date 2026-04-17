@@ -59,6 +59,12 @@ class Controller:
         # T4.1 idle replay; instantiated in start() once state is loaded.
         self._replay: IdleReplayScheduler | None = None
 
+        # Shutdown coordination (#11). ``_shutting_down`` is read by metrics
+        # (the ``lile_shutting_down`` gauge) and by every submit_* entrypoint
+        # below so in-flight requests observe shutdown uniformly. Flipped by
+        # ``graceful_shutdown`` only.
+        self._shutting_down: bool = False
+
     # ------------------------------------------------------------------ lifecycle
     async def start(self) -> None:
         self.state = ModelState.load(
@@ -98,6 +104,41 @@ class Controller:
             self.metrics_logger.close()
         except Exception as exc:  # pragma: no cover
             log.warning("metrics_logger close failed: %s", exc)
+
+    async def graceful_shutdown(self, deadline_s: float | None = 30.0) -> dict[str, Any]:
+        """Drain the queue with a deadline, then release resources.
+
+        Ordered so that no new work lands after the flag flips:
+
+        1. Set ``self._shutting_down`` — every ``submit_*`` / ``request_*``
+           entrypoint checks this and raises :class:`ShuttingDownError`.
+        2. Stop the idle replay scheduler so it cannot enqueue after the
+           queue is draining.
+        3. Delegate the queue drain to :meth:`ComputeQueue.graceful_drain`
+           (closes the queue, lets in-flight finish, resolves remainders
+           with :class:`ShutdownDroppedError` so every ``wait_for`` caller
+           gets a deterministic result).
+        4. Close the metrics logger (swallow errors — logger is optional).
+
+        Idempotent — a second call returns immediately with
+        ``already_shut_down=True``.
+        """
+        if self._shutting_down:
+            return {"already_shut_down": True}
+        self._shutting_down = True
+        if self._replay is not None:
+            await self._replay.stop()
+            self._replay = None
+        drain = await self.queue.graceful_drain(deadline_s=deadline_s)
+        try:
+            self.metrics_logger.close()
+        except Exception as exc:  # pragma: no cover — logger is optional
+            log.warning("metrics_logger close failed: %s", exc)
+        return {
+            "already_shut_down": False,
+            "dropped": drain["dropped"],
+            "timed_out": drain["timed_out"],
+        }
 
     # ------------------------------------------------------------------ queue handler
     def _handle_task(self, task) -> Any:
@@ -296,8 +337,17 @@ class Controller:
         while len(self._response_index) > _RESPONSE_INDEX_CAP:
             self._response_index.popitem(last=False)
 
+    def _reject_if_shutting_down(self) -> None:
+        if self._shutting_down:
+            from .errors import ShuttingDownError
+
+            raise ShuttingDownError(
+                "daemon is shutting down; new work is rejected until restart",
+            )
+
     async def submit_train(self, spec: dict[str, Any]) -> dict[str, Any]:
         """Chunk a train batch into queue tasks and return the final commit_token."""
+        self._reject_if_shutting_down()
         batch_id = new_batch_id()
         samples = spec.get("samples", [])
         chunk_size = spec.get("chunk_size", 2)  # small default for 0.6B; caller can bump
@@ -403,6 +453,7 @@ class Controller:
 
     async def submit_feedback(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Route feedback to the appropriate training objective (see §5b.3/§5c.16)."""
+        self._reject_if_shutting_down()
         from . import metrics as metrics_mod
         from .errors import InvalidInputError, UnknownResponseIdError
 
@@ -444,16 +495,19 @@ class Controller:
         return await self.submit_train(spec)
 
     async def request_merge(self) -> dict[str, Any]:
+        self._reject_if_shutting_down()
         task = await self.queue.submit("merge", {})
         result = await self.queue.wait_for(task.token, timeout=300.0)
         return {"commit_token": task.token, "result": result.result, "error": str(result.error) if result.error else None}
 
     async def request_snapshot_save(self, name: str) -> dict[str, Any]:
+        self._reject_if_shutting_down()
         task = await self.queue.submit("snapshot_save", {"name": name})
         result = await self.queue.wait_for(task.token, timeout=300.0)
         return {"commit_token": task.token, "result": result.result}
 
     async def request_snapshot_load(self, name: str) -> dict[str, Any]:
+        self._reject_if_shutting_down()
         task = await self.queue.submit("snapshot_load", {"name": name})
         result = await self.queue.wait_for(task.token, timeout=300.0)
         return {"commit_token": task.token, "result": result.result}
