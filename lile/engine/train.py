@@ -39,6 +39,13 @@ class TrainEngine:
                 log.info("using torch AdamW (lr=%g)", self.lr)
         return self._opt
 
+    def reset_optimizer(self) -> None:
+        # Adam-family `m`/`v` moments are conditioned on the weight trajectory
+        # that produced recent gradients. After a snapshot_load jumps weights
+        # to an earlier point, those moments mis-scale the first few steps —
+        # see `optimizer-sample-efficiency.md` §1 concern #3.
+        self._opt = None
+
     def step(self, spec: dict[str, Any]) -> dict[str, Any]:
         """Execute one training step according to `spec`.
 
