@@ -17,9 +17,21 @@ import torch
 log = logging.getLogger(__name__)
 
 
+def _apply_template(tokenizer: Any, messages: list[dict[str, Any]],
+                    enable_thinking: bool | None) -> str:
+    """Render the chat template, forwarding ``enable_thinking`` only when
+    the caller set it — templates that don't know the flag must not see it.
+    """
+    kwargs: dict[str, Any] = {"add_generation_prompt": True, "tokenize": False}
+    if enable_thinking is not None:
+        kwargs["enable_thinking"] = enable_thinking
+    return tokenizer.apply_chat_template(messages, **kwargs)
+
+
 def generate_chat(model: Any, tokenizer: Any, messages: list[dict[str, str]],
                   max_new_tokens: int = 256, temperature: float = 0.7,
                   top_p: float = 0.95,
+                  enable_thinking: bool | None = None,
                   mode_lock: Any = None) -> str:
     """OpenAI-style messages → generated assistant text.
 
@@ -27,9 +39,7 @@ def generate_chat(model: Any, tokenizer: Any, messages: list[dict[str, str]],
     and the entire generate so concurrent training cannot tear down the
     per-layer temp buffers the fast-inference path relies on.
     """
-    prompt_text = tokenizer.apply_chat_template(
-        messages, add_generation_prompt=True, tokenize=False,
-    )
+    prompt_text = _apply_template(tokenizer, messages, enable_thinking)
     enc = tokenizer(text=prompt_text, return_tensors="pt", add_special_tokens=False)
     device = next(model.parameters()).device
     input_ids = enc["input_ids"].to(device)
@@ -67,6 +77,7 @@ def generate_chat(model: Any, tokenizer: Any, messages: list[dict[str, str]],
 def generate_chat_stream(model: Any, tokenizer: Any, messages: list[dict[str, str]],
                          max_new_tokens: int = 256, temperature: float = 0.7,
                          top_p: float = 0.95,
+                         enable_thinking: bool | None = None,
                          mode_lock: Any = None) -> Iterator[str]:
     """Yield decoded text chunks as the model generates them.
 
@@ -78,9 +89,7 @@ def generate_chat_stream(model: Any, tokenizer: Any, messages: list[dict[str, st
     """
     from transformers import TextIteratorStreamer
 
-    prompt_text = tokenizer.apply_chat_template(
-        messages, add_generation_prompt=True, tokenize=False,
-    )
+    prompt_text = _apply_template(tokenizer, messages, enable_thinking)
     enc = tokenizer(text=prompt_text, return_tensors="pt", add_special_tokens=False)
     device = next(model.parameters()).device
     input_ids = enc["input_ids"].to(device)

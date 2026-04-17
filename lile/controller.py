@@ -125,10 +125,12 @@ class Controller:
                 await self.queue.wait_for(int(wait_for), timeout=60.0)
             except (asyncio.TimeoutError, KeyError):
                 pass
+        parse_reasoning = kwargs.pop("parse_reasoning", True)
         # Run the actual generation outside the queue — training+inference
         # share weights; there is no race because training mutates atomically
         # via the compute queue's single-worker discipline.
         from .engine.inference import generate_chat
+        from .reasoning import get_parser_for_model
         loop = asyncio.get_running_loop()
         text = await loop.run_in_executor(
             None,
@@ -145,7 +147,16 @@ class Controller:
             model_fingerprint=self.state.residual_fingerprint()[:16],
         )
         self._remember_response(rid, messages, text)
-        return {"response_id": rid, "response": text}
+        reasoning: str | None = None
+        content: str = text
+        if parse_reasoning and kwargs.get("enable_thinking") is not False:
+            parser = get_parser_for_model(self.state.base_model_name or "")
+            if parser is not None:
+                r, c = parser.extract_final(text)
+                reasoning = r.strip() or None
+                content = c.strip() if c else ""
+        return {"response_id": rid, "response": content,
+                "reasoning_content": reasoning, "raw": text}
 
     async def stream_generate(self, messages: list[dict[str, str]],
                               **kwargs: Any):
@@ -162,8 +173,10 @@ class Controller:
                 await self.queue.wait_for(int(wait_for), timeout=60.0)
             except (asyncio.TimeoutError, KeyError):
                 pass
+        parse_reasoning = kwargs.pop("parse_reasoning", True)
 
         from .engine.inference import generate_chat_stream
+        from .reasoning import get_parser_for_model
         import threading
         loop = asyncio.get_running_loop()
         q: asyncio.Queue = asyncio.Queue()
@@ -185,16 +198,39 @@ class Controller:
         threading.Thread(target=_producer, daemon=True).start()
         rid = new_response_id()
         full_parts: list[str] = []
+        # Parser is active iff the request wants reasoning parsing AND the
+        # caller did not explicitly disable thinking.  When disabled, the
+        # model emits pure content (no tags) so the parser would be a no-op
+        # anyway — skipping it keeps the hot path cheap.
+        parser_state = None
+        if parse_reasoning and kwargs.get("enable_thinking") is not False:
+            parser = get_parser_for_model(self.state.base_model_name or "")
+            if parser is not None:
+                parser_state = parser.make_state()
         while True:
             chunk = await q.get()
             if chunk is DONE:
                 break
             full_parts.append(chunk)
-            yield {"delta": chunk, "response_id": rid}
+            if parser_state is not None:
+                r_delta, c_delta = parser_state.feed(chunk)
+                if r_delta or c_delta:
+                    yield {"delta": c_delta, "reasoning_delta": r_delta,
+                           "response_id": rid}
+            else:
+                yield {"delta": chunk, "reasoning_delta": "",
+                       "response_id": rid}
 
         if "exc" in ERR:
             yield {"error": str(ERR["exc"]), "response_id": rid}
             return
+
+        # Flush any bytes the parser was holding back waiting for a delimiter.
+        if parser_state is not None:
+            r_tail, c_tail = parser_state.finalize()
+            if r_tail or c_tail:
+                yield {"delta": c_tail, "reasoning_delta": r_tail,
+                       "response_id": rid}
 
         full_text = "".join(full_parts).strip()
         self.trajectory.log_inference(

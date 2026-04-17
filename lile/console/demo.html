@@ -133,6 +133,16 @@
   #traj-list .ev-body { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   #traj-list .ev-detail { margin-top: 6px; background: #0e1118; }
 
+  /* reasoning_content panel — collapsible, dim, inline with the assistant msg */
+  .msg-reasoning { margin: 0 0 6px 0; border-left: 2px solid #3d2d5a;
+    padding: 4px 0 4px 10px; font-size: 12px; color: var(--dim);
+    white-space: pre-wrap; font-family: "JetBrains Mono", monospace; }
+  .msg-reasoning summary { cursor: pointer; color: #a083d9; user-select: none;
+    font-size: 11px; letter-spacing: .5px; text-transform: uppercase;
+    margin-bottom: 4px; }
+  .msg-reasoning[open] summary { margin-bottom: 6px; }
+  .msg-reasoning .msg-reasoning-body { white-space: pre-wrap; }
+
   /* modal */
   .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.6);
     display: none; align-items: center; justify-content: center; z-index: 50; }
@@ -161,6 +171,7 @@
       <label style="margin:0">top_p <input type="number" id="opt-topp" value="0.95" step="0.05" min="0" max="1"></label>
       <label style="margin:0">max_tokens <input type="number" id="opt-maxtok" value="256" step="16" min="16" max="2048"></label>
       <label style="margin:0"><input type="checkbox" id="opt-stream" checked> stream</label>
+      <label style="margin:0"><input type="checkbox" id="opt-think"> think</label>
       <label style="margin:0 0 0 auto"><input type="checkbox" id="opt-wait"> block on last commit</label>
       <button id="btn-clear" style="margin-left:auto">clear</button>
     </div>
@@ -394,6 +405,32 @@ function updateMsgBody(el, text) {
   chatMsgs.scrollTop = chatMsgs.scrollHeight;
 }
 
+function ensureReasoningPanel(el) {
+  // Lazily create a <details> panel above the .msg-body so reasoning_content
+  // renders distinctly from the final answer. Kept open by default so users
+  // see streaming reasoning tokens live; they can collapse per-message.
+  let r = el.querySelector(".msg-reasoning");
+  if (r) return r;
+  r = document.createElement("details");
+  r.className = "msg-reasoning";
+  r.open = true;
+  const sum = document.createElement("summary");
+  sum.textContent = "reasoning";
+  const body = document.createElement("div");
+  body.className = "msg-reasoning-body";
+  r.appendChild(sum); r.appendChild(body);
+  // Insert BEFORE .msg-body so reasoning flows top-to-bottom.
+  el.insertBefore(r, el.firstChild);
+  return r;
+}
+
+function updateMsgReasoning(el, text) {
+  const panel = ensureReasoningPanel(el);
+  const body = panel.querySelector(".msg-reasoning-body");
+  if (body) body.textContent = text;
+  chatMsgs.scrollTop = chatMsgs.scrollHeight;
+}
+
 async function runGeneration(userTurnIdx) {
   // userTurnIdx = history index of the user turn that triggered generation.
   const thinking = addMsg("system", "thinking…");
@@ -406,20 +443,27 @@ async function runGeneration(userTurnIdx) {
   if ($("#opt-wait").checked && lastCommitToken != null) {
     body.after_commit_token = lastCommitToken;
   }
+  if ($("#opt-think").checked) {
+    body.enable_thinking = true;
+  }
   const streaming = $("#opt-stream").checked;
 
   if (!streaming) {
     try {
       const j = await api("/v1/chat/completions", { method: "POST", body });
       thinking.remove();
-      const resp = j.choices[0].message.content;
-      history.push({ role: "assistant", content: resp });
-      addMsg("assistant", resp, {
+      const msg = j.choices[0].message;
+      const resp = msg.content || "";
+      const reasoning = msg.reasoning_content || "";
+      history.push({ role: "assistant", content: resp,
+                     ...(reasoning ? { reasoning_content: reasoning } : {}) });
+      const el = addMsg("assistant", resp, {
         rid: j.lile.response_id,
         latency: j.lile.latency_s,
         commit: j.lile.commit_cursor,
         historyIdx: userTurnIdx,
       });
+      if (reasoning) updateMsgReasoning(el, reasoning);
     } catch (e) {
       thinking.remove();
       addMsg("system", "error: " + e.message);
@@ -452,6 +496,7 @@ async function runGeneration(userTurnIdx) {
   thinking.remove();
   const asstEl = addMsg("assistant", "");
   let full = "";
+  let reasoningFull = "";
   let rid = null, commit = null, errMsg = null;
 
   const reader = r.body.getReader();
@@ -475,8 +520,12 @@ async function runGeneration(userTurnIdx) {
         if (lile.error) { errMsg = lile.error; continue; }
         if (lile.response_id) rid = lile.response_id;
         if (lile.commit_cursor != null) commit = lile.commit_cursor;
-        const delta = ev.choices?.[0]?.delta?.content;
-        if (delta) { full += delta; updateMsgBody(asstEl, full); }
+        const d = ev.choices?.[0]?.delta || {};
+        if (d.reasoning_content) {
+          reasoningFull += d.reasoning_content;
+          updateMsgReasoning(asstEl, reasoningFull);
+        }
+        if (d.content) { full += d.content; updateMsgBody(asstEl, full); }
       }
     }
   } catch (e) {
@@ -486,7 +535,8 @@ async function runGeneration(userTurnIdx) {
   if (errMsg) {
     updateMsgBody(asstEl, full || `[stream error: ${errMsg}]`);
   }
-  history.push({ role: "assistant", content: full });
+  history.push({ role: "assistant", content: full,
+                 ...(reasoningFull ? { reasoning_content: reasoningFull } : {}) });
   const latency = (performance.now() - t0) / 1000;
   attachAssistantMeta(asstEl, {
     rid: rid || "stream",
@@ -519,9 +569,8 @@ function retryFrom(userTurnIdx) {
   chatMsgs.innerHTML = "";
   history.forEach((m, i) => {
     if (m.role === "assistant") {
-      // assistant entries that survived are the ones we kept; but
-      // after truncation there's at most the user turn at the tail.
-      addMsg("assistant", m.content);
+      const el = addMsg("assistant", m.content);
+      if (m.reasoning_content) updateMsgReasoning(el, m.reasoning_content);
     } else if (m.role === "user") {
       addMsg("user", m.content);
     } else {

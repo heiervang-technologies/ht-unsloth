@@ -26,6 +26,13 @@ log = logging.getLogger(__name__)
 class ChatMessage(BaseModel):
     role: str
     content: str
+    # Optional — lets clients re-send an earlier turn's reasoning so the
+    # chat template can thread it back in (Qwen3 re-injects reasoning_content
+    # for the latest assistant turn only; see its template).
+    reasoning_content: str | None = None
+
+    class Config:
+        extra = "allow"
 
 
 class ChatRequest(BaseModel):
@@ -39,6 +46,12 @@ class ChatRequest(BaseModel):
         default=None,
         description="If provided, block until this training commit_token is reflected.",
     )
+    # Reasoning controls.  ``enable_thinking`` is forwarded to
+    # ``apply_chat_template`` when the tokenizer supports the kwarg
+    # (Qwen3 family).  ``parse_reasoning=False`` disables the parser even
+    # when thinking is on (raw tags stay in ``content``).
+    enable_thinking: bool | None = None
+    parse_reasoning: bool = True
 
 
 class TrainSample(BaseModel):
@@ -122,6 +135,8 @@ def create_app(cfg: ServeConfig | None = None) -> FastAPI:
                         temperature=req.temperature,
                         top_p=req.top_p,
                         after_commit_token=req.after_commit_token,
+                        enable_thinking=req.enable_thinking,
+                        parse_reasoning=req.parse_reasoning,
                     ):
                         if "error" in ev:
                             payload = {
@@ -147,14 +162,20 @@ def create_app(cfg: ServeConfig | None = None) -> FastAPI:
                             yield f"data: {json.dumps(payload)}\n\n"
                             yield "data: [DONE]\n\n"
                             return
-                        # delta event
+                        # delta event — emit whichever channel(s) had bytes.
+                        delta_obj: dict[str, Any] = {"role": "assistant"}
+                        if ev.get("delta"):
+                            delta_obj["content"] = ev["delta"]
+                        if ev.get("reasoning_delta"):
+                            delta_obj["reasoning_content"] = ev["reasoning_delta"]
+                        if len(delta_obj) == 1:
+                            # Only role — nothing useful to emit.
+                            continue
                         payload = {
                             "id": ev["response_id"],
                             "object": "chat.completion.chunk",
                             "model": cfg.model,
-                            "choices": [{"index": 0,
-                                         "delta": {"role": "assistant",
-                                                   "content": ev["delta"]}}],
+                            "choices": [{"index": 0, "delta": delta_obj}],
                             "lile": {"response_id": ev["response_id"]},
                         }
                         yield f"data: {json.dumps(payload)}\n\n"
@@ -176,8 +197,14 @@ def create_app(cfg: ServeConfig | None = None) -> FastAPI:
             temperature=req.temperature,
             top_p=req.top_p,
             after_commit_token=req.after_commit_token,
+            enable_thinking=req.enable_thinking,
+            parse_reasoning=req.parse_reasoning,
         )
         latency = time.time() - t0
+        message: dict[str, Any] = {"role": "assistant",
+                                   "content": result["response"]}
+        if result.get("reasoning_content"):
+            message["reasoning_content"] = result["reasoning_content"]
         return {
             "id": result["response_id"],
             "object": "chat.completion",
@@ -185,7 +212,7 @@ def create_app(cfg: ServeConfig | None = None) -> FastAPI:
             "choices": [{
                 "index": 0,
                 "finish_reason": "stop",
-                "message": {"role": "assistant", "content": result["response"]},
+                "message": message,
             }],
             "lile": {"latency_s": latency,
                      "commit_cursor": c.queue.committed,
