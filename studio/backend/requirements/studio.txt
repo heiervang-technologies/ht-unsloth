@@ -3,6 +3,7 @@ typer
 fastapi
 uvicorn
 pydantic
+prometheus-client
 matplotlib
 pandas
 nest_asyncio
