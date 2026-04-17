@@ -16,6 +16,8 @@ const MAX_TOOL_CALLS_KEY = "unsloth_max_tool_calls_per_message";
 const TOOL_CALL_TIMEOUT_KEY = "unsloth_tool_call_timeout";
 const HF_TOKEN_KEY = "unsloth_hf_token";
 const INFERENCE_PARAMS_KEY = "unsloth_chat_inference_params";
+const LILE_MODE_KEY = "unsloth_lile_mode";
+const LILE_BLOCK_KEY = "unsloth_lile_block_on_last_commit";
 let hasShownInferencePersistenceWarning = false;
 
 function canUseStorage(): boolean {
@@ -183,6 +185,12 @@ type ChatRuntimeStore = {
     cachedTokens: number;
   } | null;
   modelLoading: boolean;
+  lileMode: boolean;
+  lileBlockOnLastCommit: boolean;
+  lileLastCommit: string | null;
+  setLileMode: (v: boolean) => void;
+  setLileBlockOnLastCommit: (v: boolean) => void;
+  setLileLastCommit: (v: string | null) => void;
   setModelLoading: (loading: boolean) => void;
   setModelRequiresTrustRemoteCode: (required: boolean) => void;
   setParams: (params: InferenceParams) => void;
@@ -250,6 +258,20 @@ export const useChatRuntimeStore = create<ChatRuntimeStore>((set) => ({
   pendingAudioName: null,
   contextUsage: null,
   modelLoading: false,
+  lileMode: loadBool(LILE_MODE_KEY, false),
+  lileBlockOnLastCommit: loadBool(LILE_BLOCK_KEY, false),
+  lileLastCommit: null,
+  setLileMode: (v) =>
+    set(() => {
+      saveBool(LILE_MODE_KEY, v);
+      return { lileMode: v };
+    }),
+  setLileBlockOnLastCommit: (v) =>
+    set(() => {
+      saveBool(LILE_BLOCK_KEY, v);
+      return { lileBlockOnLastCommit: v };
+    }),
+  setLileLastCommit: (v) => set({ lileLastCommit: v }),
   setModelLoading: (loading) => set({ modelLoading: loading }),
   setModelRequiresTrustRemoteCode: (modelRequiresTrustRemoteCode) =>
     set({ modelRequiresTrustRemoteCode }),
