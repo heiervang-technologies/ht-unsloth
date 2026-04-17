@@ -58,7 +58,7 @@ studio = [
 ]
 
 [tool.setuptools.packages.find]
-include = ["unsloth*", "unsloth_cli*", "studio", "studio.backend*"]
+include = ["unsloth*", "unsloth_cli*", "studio", "studio.backend*", "lile*"]
 exclude = ["images*", "tests*", "*.node_modules", "*.node_modules.*"]
 
 [project.optional-dependencies]
@@ -1182,5 +1182,8 @@ ignore = [
     "F601",
     "E712",
 ]
+
+[tool.ruff.format]
+
 
 [tool.ruff.format]

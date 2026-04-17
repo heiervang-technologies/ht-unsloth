@@ -1024,7 +1024,7 @@ def fast_linear_forward(proj, X, temp_lora = None, out = None):
     return out
 
 
-def matmul_lora(X, W, W_quant, A, B, s, out = None):
+def matmul_lora(X, W, W_quant, A, B, s, out = None, delta = None):
     dtype = X.dtype
 
     if X.dim() == 3:
@@ -1051,6 +1051,9 @@ def matmul_lora(X, W, W_quant, A, B, s, out = None):
         out = torch_matmul(X, W.t(), out = out)
     if W_quant is not None:
         del W
+
+    if delta is not None:
+        out = out + torch.nn.functional.linear(X, delta)
 
     if A is not None:
         # LoRA is enabled
