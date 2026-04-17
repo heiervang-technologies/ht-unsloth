@@ -12,10 +12,40 @@ import torch
 import torch.nn.functional as F
 
 
+_RESPONSE_FIELDS = ("response", "good", "chosen", "better_response")
+
+
+def _sample_text(s: dict[str, Any], scope: str) -> str:
+    """Pick the text to anchor against.
+
+    scope="prompt": prompt-only (legacy, default). Anchors how the model
+        *reads* the prompt.
+    scope="full_sequence": prompt + first available response-like field.
+        Anchors the joint distribution including generation. For chat-
+        templated prompts the closing turn marker (e.g. <|im_end|>) is
+        intentionally omitted — KL anchoring targets the pre-closer
+        distribution the model actually produces during generation.
+    Extending scope to response-only (mask out prompt positions) is the
+    logical next step but needs per-sample boundaries; deferred until a
+    downstream PR needs it. See sample-efficiency-synthesis.md §1a.
+    """
+    prompt = s["prompt"]
+    if scope == "prompt":
+        return prompt
+    if scope == "full_sequence":
+        for f in _RESPONSE_FIELDS:
+            v = s.get(f)
+            if isinstance(v, str) and v:
+                return prompt + v
+        return prompt
+    raise ValueError(f"unknown kl scope {scope!r}")
+
+
 def kl_anchor_loss(model: Any, tokenizer: Any, samples: list[dict[str, Any]],
                    pi_ref: Any | None = None, weight: float = 0.1,
                    max_len: int = 512,
                    pi_ref_mode: str | None = "adapter_disabled",
+                   scope: str = "prompt",
                    **_: Any) -> dict[str, Any]:
     # If no external pi_ref is provided, fall back to the LoRA-disabled path on
     # the same model (standard PEFT context manager). Only bail out to a no-op
@@ -24,12 +54,13 @@ def kl_anchor_loss(model: Any, tokenizer: Any, samples: list[dict[str, Any]],
                     and hasattr(model, "disable_adapter"))
     if pi_ref is None and not use_self_ref:
         zero = torch.zeros((), device=next(model.parameters()).device, requires_grad=True)
-        return {"loss": zero * weight, "components": {"kl": 0.0, "kl_weight": weight}}
+        return {"loss": zero * weight,
+                "components": {"kl": 0.0, "kl_weight": weight, "kl_scope": scope}}
     if not samples:
         raise ValueError("kl_anchor_loss requires at least one sample")
 
-    prompts = [s["prompt"] for s in samples]
-    tok = tokenizer(text=prompts, return_tensors="pt", padding=True, truncation=True,
+    texts = [_sample_text(s, scope) for s in samples]
+    tok = tokenizer(text=texts, return_tensors="pt", padding=True, truncation=True,
                     max_length=max_len)
     device = next(model.parameters()).device
     tok = {k: v.to(device) for k, v in tok.items()}
@@ -59,5 +90,6 @@ def kl_anchor_loss(model: Any, tokenizer: Any, samples: list[dict[str, Any]],
         "components": {
             "kl": float(kl_mean.detach().cpu()),
             "kl_weight": weight,
+            "kl_scope": scope,
         },
     }
