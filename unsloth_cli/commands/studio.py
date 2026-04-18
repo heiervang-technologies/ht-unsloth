@@ -23,11 +23,9 @@ import typer
 
 studio_app = typer.Typer(help = "Unsloth Studio commands.")
 
-
 # Resolve install root: UNSLOTH_STUDIO_HOME, then STUDIO_HOME alias, then
 # sys.prefix inference (so a direct call to <root>/bin/unsloth resolves after
 # the installer's env var has expired), then legacy ~/.unsloth/studio.
-# UNSLOTH_STUDIO_HOME wins when both env vars are set.
 def _looks_like_installer_managed_studio_home(candidate: Path) -> bool:
     """Sentinel check (studio.conf or bin shim) so a dev venv named
     unsloth_studio is not misidentified as a custom Studio root.
@@ -62,6 +60,14 @@ def _resolve_studio_home() -> tuple[Path, bool]:
 
 
 STUDIO_HOME, _STUDIO_HOME_IS_CUSTOM = _resolve_studio_home()
+
+# HT fork override: prefer an in-repo `.venv` when present (editable / fork
+# installs). Treated as a custom root so `_ensure_studio_env_exported` still
+# propagates UNSLOTH_STUDIO_HOME to subprocesses.
+_PACKAGE_ROOT = Path(__file__).resolve().parent.parent.parent
+if (_PACKAGE_ROOT / ".venv").is_dir():
+    STUDIO_HOME = _PACKAGE_ROOT
+    _STUDIO_HOME_IS_CUSTOM = True
 
 
 def _ensure_studio_env_exported() -> None:
@@ -98,10 +104,6 @@ API_KEY_PBKDF2_SALT_KEY = "api_key_pbkdf2_salt"
 DESKTOP_SECRET_HASH_KEY = "desktop_secret_hash"
 DESKTOP_SECRET_CREATED_AT_KEY = "desktop_secret_created_at"
 PBKDF2_ITERATIONS = 100_000
-
-# __file__ is unsloth_cli/commands/studio.py -- two parents up is the package root
-# (either site-packages or the repo root for editable installs).
-_PACKAGE_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
 def _should_hide_windows_subprocesses() -> bool:
