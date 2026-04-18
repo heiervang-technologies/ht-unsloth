@@ -76,11 +76,14 @@ The canonical cautionary tale is the filter-to-misses result: an interim recover
 
 **Objective-specific mandatory labels.** When the A/B involves a composite-safe
 objective (unlike + SFT-on-good), the regime tuple extends with the safe-window
-triple `(η_min, η_max, ε_*)` per `unlike-kl-step-size-bound.md` §4–§5. A run that
-executed below `η_min` or with `ε < ε_*` is labeled `unsafe-window` and its
-accuracy numbers are quoted only alongside the window-violation note. A run
-inside the window is labeled `composite-safe(η_min=…, η_max=…, ε_*=…)`. No
-unlike A/B without the window tuple.
+triple `(η_min^{emp}, η_max, ε_*)` per `unlike-kl-step-size-bound.md` §4–§5
+(rev2). `η_min^{emp}` is the per-sample bisection floor; `η_min^{lin}` is logged
+alongside as a conservative sanity metric but is not the operational bound. A
+run that executed below `η_min^{emp}` or with `ε < ε_*` is labeled
+`unsafe-window` and its accuracy numbers are quoted only alongside the
+window-violation note. A run inside the window is labeled
+`composite-safe(η_min^{emp}=…, η_max=…, ε_*=…)`. No unlike A/B without the
+window tuple.
 
 ## Length-compression observation (NOT yet a finding)
 

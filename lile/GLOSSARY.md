@@ -66,11 +66,16 @@ is **composite-safe** at `(p, w_+, ε, η)` iff `η ∈ [η_min(p, w_+), η_max(
 and the window is non-empty. The bounds come from Cleo's
 `docs/research/proofs/unlike-kl-step-size-bound.md` (A sketch):
 
-- `η_min(p, w_+)` — below this, the SFT-on-good side pushes `p_bad` UP against
-  the unlike push-down (§4 linearization).
+- `η_min^{emp}(p, w_+)` — operational floor from 1d bisection on the `q_b ≤ p_b`
+  predicate at dispatch. Below this, the SFT-on-good side pushes `p_bad` UP
+  against the unlike push-down.
+- `η_min^{lin}(p, w_+)` — §4 linearization with R(p, b) = p_b(1 - 2p_b + ||p||²)/(1-p_b);
+  conservative sanity metric (up to 17× overshoot vs empirical, **always on the
+  conservative side**). Not the operational floor.
 - `η_max(p, w_+, ε)` — above this, the off-anchor ε-collateral is exceeded (§5).
-- `ε_*(p, w_+) := η_min · w_+ · (||p||² - p_b² - p_g²)` — when the user-configured
-  `ε < ε_*`, the safe window is empty and the run should refuse to step.
+- `ε_*(p, w_+) := η_min^{emp} · w_+ · (||p||² - p_b² - p_g²)` — when the
+  user-configured `ε < ε_*`, the safe window is empty and the run should
+  refuse to step.
 
 Under plain SGD / AdamW the KL anchor does not gradient-pull at step one (reference
 distribution is `p|_S` itself); ε is a **post-step audit**, not an in-step constraint

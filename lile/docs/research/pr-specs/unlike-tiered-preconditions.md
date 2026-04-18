@@ -110,9 +110,11 @@ Land after #15 (kl_anchor target-position scope). Single-file change (`lile/obje
 ## Follow-up (not this PR)
 
 - **Per-objective safe-LR registry.** If a second objective grows a theoretical safe-LR floor (e.g. a future DPO variant), Tier 4's hardcoded `_UNLIKE_LR_HEURISTIC_FLOOR` generalizes to a registry `_OBJECTIVE_SAFE_FLOORS: dict[str, float]` consulted by `TrainEngine.step`. Deferred until N=2 — premature for one objective.
-- **Tier 4 upgrade (A sketch landed 2026-04-18).** Cleo's `unlike-kl-step-size-bound.md` (rev1) closes the closed-form tuple:
-  - `η_min(p, w_+)` — §4 linearization: `(w_+ · (||p||² - p_g - p_b) - R(p,b,g))_+ / [p_b · (1 + w_+)]`; conservative (tighter than the true crossing).
+- **Tier 4 upgrade (A sketch rev2, 2026-04-18).** Cleo's `unlike-kl-step-size-bound.md` closes the closed-form tuple:
+  - `η_min^{lin}(p, w_+)` — §4 linearization with the rev2 R(p, b) = p_b(1 - 2p_b + ||p||²)/(1-p_b): `(w_+(||p||² - p_g - p_b) - R(p, b))_+ / [p_b(1+w_+)]`. Conservative (17× overshoot on adversarial regime, 1657/2000 within 10×, **all on conservative side**). Compile-time sanity only.
+  - `η_min^{emp}(p, w_+)` — 1d bisection on the `q_b ≤ p_b` predicate at dispatch (~20 iters × O(V)). **This is the operational floor.**
   - `η_max(p, w_+, ε)` — §5: `ε / [w_+ · (||p||² - p_b² - p_g²)]`.
-  - `ε_*(p, w_+) := η_min · w_+ · (||p||² - p_b² - p_g²)` — empty-window threshold; refuse-to-step when user ε falls below.
-  - Tier 4 static floor `5e-5` upgrades to per-sample `η_min`; dispatch-time warn carries the `(η_min, η_max, ε_*)` tuple; refuse-to-step on empty window (`η_min > η_max` ⟺ `ε < ε_*`). Anchor remains a **post-step audit** (`unlike-kl-step-size-bound.md` §6.1) — we do not enforce ε in-step under plain SGD / AdamW.
+  - `ε_*(p, w_+) := η_min^{emp} · w_+ · (||p||² - p_b² - p_g²)` — empty-window threshold; refuse-to-step when user ε falls below.
+  - Tier 4 static floor `5e-5` upgrades to per-sample `η_min^{emp}`; dispatch-time warn carries `(η_min^{emp}, η_min^{lin}, η_max, ε_*)`; refuse-to-step on empty window. Anchor remains a **post-step audit** (A §6.1) — we do not enforce ε in-step under plain SGD / AdamW.
   - Trajectory bound (cumulative drift across N steps) is the follow-up theorem; deferred to `unlike-trajectory-bound.md`.
+  - **Bisection cost flag (non-blocking):** at V=128k, per-sample bisection is ~2.5M fp ops, ~sub-ms on GPU. If per-sample dispatch latency becomes a watched knob in online-learning mode, consider caching η_min^{emp} by `(p_b, p_g, ||p||², w_+)` fingerprint or falling back to η_min^{lin} when the 10× conservatism budget absorbs the overshoot. Out of scope for first landing.
