@@ -298,9 +298,9 @@ export function AuthForm({ mode }: AuthFormProps): ReactElement | null {
     <div className="w-full max-w-sm space-y-6">
       <div className="space-y-1.5 text-center">
         <img
-          src="/Sloth emojis/large sloth wave.png"
-          alt="Unsloth waving mascot"
-          className="mx-auto mb-2 h-20 w-20 object-contain"
+          src="/ht/welcome-back.png"
+          alt="HT Unsloth mascot"
+          className="mx-auto mb-2 h-32 w-32 object-contain"
         />
         <h2 className="text-2xl font-semibold text-foreground">{title}</h2>
         <p className="text-muted-foreground">{subtitle}</p>
