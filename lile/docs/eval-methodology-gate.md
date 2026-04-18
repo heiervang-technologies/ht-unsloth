@@ -76,14 +76,24 @@ The canonical cautionary tale is the filter-to-misses result: an interim recover
 
 **Objective-specific mandatory labels.** When the A/B involves a composite-safe
 objective (unlike + SFT-on-good), the regime tuple extends with the safe-window
-triple `(η_min^{emp}, η_max, ε_*)` per `unlike-kl-step-size-bound.md` §4–§5
-(rev2). `η_min^{emp}` is the per-sample bisection floor; `η_min^{lin}` is logged
-alongside as a conservative sanity metric but is not the operational bound. A
-run that executed below `η_min^{emp}` or with `ε < ε_*` is labeled
-`unsafe-window` and its accuracy numbers are quoted only alongside the
-window-violation note. A run inside the window is labeled
-`composite-safe(η_min^{emp}=…, η_max=…, ε_*=…)`. No unlike A/B without the
-window tuple.
+quadruple per `unlike-kl-step-size-bound.md` §4–§5 (rev3) and
+`unlike-trajectory-bound.md` §4–§7:
+
+- `η_min^{emp}` — per-sample bisection floor (operational). `η_min^{lin}` logged
+  alongside as compile-time sanity (up to 17× conservative, false-positive only).
+- `TV_sim^{emp}` — per-step off-S TV from step-simulation at dispatch
+  (operational ceiling). `η_max^{lin}` logged alongside as sanity only —
+  NOT a bound (26% of steps exceed, worst 5×; false-negative side).
+- `Φ_obs := Σ_i TV_sim^{emp}_i` — cumulative session drift.
+- `K_session` — refuse-session threshold (default 0.27, 95th percentile of
+  the random-drift prior; correlated-workload tightening is a telemetry
+  follow-up).
+
+A step with `η < η_min^{emp}` OR `TV_sim^{emp} > ε_target` is `unsafe-step` and
+its accuracy numbers are quoted only alongside the violation note. A session
+with `Φ_obs > K_session` is `budget-exhausted` and the same caveat applies.
+A clean run is labeled `composite-safe(η_min^{emp}=…, TV_sim^{emp}=…, Φ_obs=…,
+K_session=…)`. No unlike A/B without the window quadruple.
 
 ## Length-compression observation (NOT yet a finding)
 

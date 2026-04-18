@@ -110,11 +110,28 @@ Land after #15 (kl_anchor target-position scope). Single-file change (`lile/obje
 ## Follow-up (not this PR)
 
 - **Per-objective safe-LR registry.** If a second objective grows a theoretical safe-LR floor (e.g. a future DPO variant), Tier 4's hardcoded `_UNLIKE_LR_HEURISTIC_FLOOR` generalizes to a registry `_OBJECTIVE_SAFE_FLOORS: dict[str, float]` consulted by `TrainEngine.step`. Deferred until N=2 — premature for one objective.
-- **Tier 4 upgrade (A sketch rev2, 2026-04-18).** Cleo's `unlike-kl-step-size-bound.md` closes the closed-form tuple:
-  - `η_min^{lin}(p, w_+)` — §4 linearization with the rev2 R(p, b) = p_b(1 - 2p_b + ||p||²)/(1-p_b): `(w_+(||p||² - p_g - p_b) - R(p, b))_+ / [p_b(1+w_+)]`. Conservative (17× overshoot on adversarial regime, 1657/2000 within 10×, **all on conservative side**). Compile-time sanity only.
-  - `η_min^{emp}(p, w_+)` — 1d bisection on the `q_b ≤ p_b` predicate at dispatch (~20 iters × O(V)). **This is the operational floor.**
-  - `η_max(p, w_+, ε)` — §5: `ε / [w_+ · (||p||² - p_b² - p_g²)]`.
-  - `ε_*(p, w_+) := η_min^{emp} · w_+ · (||p||² - p_b² - p_g²)` — empty-window threshold; refuse-to-step when user ε falls below.
-  - Tier 4 static floor `5e-5` upgrades to per-sample `η_min^{emp}`; dispatch-time warn carries `(η_min^{emp}, η_min^{lin}, η_max, ε_*)`; refuse-to-step on empty window. Anchor remains a **post-step audit** (A §6.1) — we do not enforce ε in-step under plain SGD / AdamW.
-  - Trajectory bound (cumulative drift across N steps) is the follow-up theorem; deferred to `unlike-trajectory-bound.md`.
-  - **Bisection cost flag (non-blocking):** at V=128k, per-sample bisection is ~2.5M fp ops, ~sub-ms on GPU. If per-sample dispatch latency becomes a watched knob in online-learning mode, consider caching η_min^{emp} by `(p_b, p_g, ||p||², w_+)` fingerprint or falling back to η_min^{lin} when the 10× conservatism budget absorbs the overshoot. Out of scope for first landing.
+- **Tier 4 upgrade (A sketch rev3, 2026-04-18).** Cleo's `unlike-kl-step-size-bound.md` is final with §5 split into linearization-sanity vs empirical-ceiling. Operational surface:
+  - `η_min^{lin}(p, w_+)` — §4 linearization: `(w_+(||p||² - p_g - p_b) - R(p, b))_+ / [p_b(1+w_+)]` with R(p, b) = p_b(1 - 2p_b + ||p||²)/(1-p_b). **Compile-time sanity only** — up to 17× over-estimate on adversarial, but 1657/2000 within 10× and all on conservative (false-positive) side.
+  - `η_min^{emp}(p, w_+)` — 1d bisection on the `q_b ≤ p_b` predicate at dispatch (~20 iters × O(V)). **Operational floor.**
+  - `η_max^{lin}(p, w_+, ε) := ε / [w_+(||p||² - p_b² - p_g²)]` — §5.a. **NOT a bound — calibration-only.** Sweep showed 26% of steps exceed this formula, worst-case 5× (false-negative side — dangerous direction). Logged, never gates.
+  - `TV_sim^{emp}(p, w_+, η)` — §5.b, one-step simulation of the composite Δ, compute off-S TV on the resulting q. **Operational ceiling.** Refuse-to-step if `TV_sim^{emp} > ε_target`.
+  - Tier 4 static floor `5e-5` upgrades to per-sample `(η_min^{emp}, TV_sim^{emp})` gate. Dispatch-time warn carries all four `(η_min^{emp}, η_min^{lin}, TV_sim^{emp}, η_max^{lin})` for observability; gating uses only the two empirical quantities. Anchor remains a **post-step audit** under plain SGD / AdamW (A §6.1).
+  - **Bisection + sim cost (non-blocking):** at V=128k, per-sample bisection ~2.5M fp ops + step-sim ~400k fp ops, sub-ms on GPU. If per-sample dispatch latency becomes a watched knob, consider caching by `(p_b, p_g, ||p||², w_+)` fingerprint. Out of scope for first landing.
+
+### Tier 5 — Refuse-session (cumulative drift budget)
+
+**Source:** Cleo's `unlike-trajectory-bound.md` rev1, K_session* calibrated via §7 sweep (n=2000 N=100-step trajectories).
+
+**Condition:** `Φ_obs := Σ_i TV_sim^{emp}_i` accumulated across the session exceeds `cfg.cumulative_session_budget` (default `K_session* = 0.27`, 95th percentile of the random-drift prior).
+
+**Cadence:**
+- WARN at `Φ_obs > K_warn = K_session / 2 = 0.135`.
+- Refuse-session (block further training, live AND replay) at `Φ_obs > K_session`.
+- Snapshot-restore to last checkpoint with `Φ_obs < K_warn`; trajectory restarts post-resume per trajectory-bound §6.2.
+
+**Rebudget semantics** (architect-locked, trajectory §5.1):
+- Budget is a snapshot-between-snapshots property; snapshot load resets, all weight-updating steps between snapshots accumulate.
+- Session ≠ user-intent boundary; idle → replay-fires → user-returns is one trajectory for Φ_obs. No implicit split.
+- Replay-induced refuse emits a `budget_exhausted` event on `commit_stream` (SSE wire-through — architect-owned, task #22, `budget-exhausted-sse.md`).
+
+**Calibration caveat (worth pinning in shipping config):** K_session* = 0.27 is the 95th percentile on a **random-drift prior** (random `(b, g)`, decorrelated across steps). Lile's production workload (household tutor hammering one misconception) is a **correlated-drift regime** where Φ_obs can outpace the random prior. The Tier 4 per-step `TV_sim^{emp}` ceiling is what keeps individual steps bounded even in the correlated regime; Tier 5's K_session* is a session prior that will tighten once production telemetry accumulates. Suggest shipping with a `cfg.cumulative_session_budget_source = "random-drift-prior"` label so future correlated-workload calibration can relabel without silent semantic drift.

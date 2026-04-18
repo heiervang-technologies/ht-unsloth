@@ -62,30 +62,46 @@ caps). Razin-safe objectives give you a free pass on that concern.
 ## composite-safe
 
 A **composite loss** (e.g. `unlike` with a positive teacher: `-log(1-p_b) + w_+ · -log(p_g)`)
-is **composite-safe** at `(p, w_+, ε, η)` iff `η ∈ [η_min(p, w_+), η_max(p, w_+, ε)]`
-and the window is non-empty. The bounds come from Cleo's
-`docs/research/proofs/unlike-kl-step-size-bound.md` (A sketch):
+is **composite-safe** at `(p, w_+, ε_target, η)` iff both per-step empirical checks pass:
+`η ≥ η_min^{emp}(p, w_+)` AND `TV_sim^{emp}(p, w_+, η) ≤ ε_target`. Cumulatively,
+a session is composite-safe iff `Φ_obs < K_session`. Operational surface from
+`docs/research/proofs/unlike-kl-step-size-bound.md` (A rev3) and
+`unlike-trajectory-bound.md` rev1:
 
-- `η_min^{emp}(p, w_+)` — operational floor from 1d bisection on the `q_b ≤ p_b`
+- `η_min^{emp}(p, w_+)` — **operational floor.** 1d bisection on the `q_b ≤ p_b`
   predicate at dispatch. Below this, the SFT-on-good side pushes `p_bad` UP
   against the unlike push-down.
-- `η_min^{lin}(p, w_+)` — §4 linearization with R(p, b) = p_b(1 - 2p_b + ||p||²)/(1-p_b);
-  conservative sanity metric (up to 17× overshoot vs empirical, **always on the
-  conservative side**). Not the operational floor.
-- `η_max(p, w_+, ε)` — above this, the off-anchor ε-collateral is exceeded (§5).
-- `ε_*(p, w_+) := η_min^{emp} · w_+ · (||p||² - p_b² - p_g²)` — when the
-  user-configured `ε < ε_*`, the safe window is empty and the run should
-  refuse to step.
+- `η_min^{lin}(p, w_+)` — §4 linearization. **Compile-time sanity only.** Up to
+  17× conservative vs empirical, **all on the false-positive side** (refuses
+  more than necessary, never permits unsafe).
+- `TV_sim^{emp}(p, w_+, η)` — **operational ceiling.** §5.b one-step simulation
+  of the composite Δ; compute off-S TV on the resulting q. Refuse-to-step if
+  > ε_target.
+- `η_max^{lin}(p, w_+, ε)` — §5.a closed form. **NOT a bound — calibration-only.**
+  Sweep showed 26% of steps exceed this formula, worst-case 5× (false-negative
+  side — dangerous direction). Logged, never gates.
+- `Φ_obs := Σ_i TV_sim^{emp}_i` — cumulative session drift, accumulated across
+  every weight-updating step (feedback, replay, tutor) between snapshot
+  boundaries. Reset-on-resume matches lile's default `disable_adapter()` anchor
+  reference (trajectory §6.2).
+- `K_session*` — refuse-session threshold. Default **0.27** (95th percentile of
+  `Φ_obs` over the random-drift prior sweep, n=2000, N=100). WARN at
+  `K_warn = K_session / 2 = 0.135`. Correlated-workload calibration is a
+  telemetry follow-up; the per-step `TV_sim^{emp}` ceiling is what bounds
+  individual steps regardless.
 
 Under plain SGD / AdamW the KL anchor does not gradient-pull at step one (reference
 distribution is `p|_S` itself); ε is a **post-step audit**, not an in-step constraint
-(A §6.1 — natural-gradient reading rejected for AdamW). Trajectory bound across N
-steps is the follow-up theorem (`unlike-trajectory-bound.md`, deferred).
+(A §6.1 — natural-gradient reading rejected for AdamW). At step k > 1 the anchor
+does develop a restoring force, but on the **on-S conditional**, not off-S drift
+(trajectory §3 side theorem) — which is why the cumulative budget uses direct
+off-S `TV_sim^{emp}` accumulation rather than an anchor-discounted functional.
 
 Composes with **Razin-safe / B**: the per-token growth predicate `p_j < M_p(η)`
-(B) and the per-target safe-window `[η_min, η_max]` (A) are two readings of the
-same small-η displacement mechanism; both bounds are what `lile/objectives/unlike.py`'s
-tiered preconditions (Tier 4) should carry at dispatch time.
+(B) and the per-target empirical-safety gate `(η_min^{emp}, TV_sim^{emp})` (A)
+are two readings of the same small-η displacement mechanism; both bounds are
+what `lile/objectives/unlike.py`'s tiered preconditions carry at dispatch time
+(Tier 4 per-step, Tier 5 cumulative).
 
 ### Why it matters for lile
 
