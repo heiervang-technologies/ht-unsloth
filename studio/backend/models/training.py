@@ -121,6 +121,30 @@ class TrainingStartRequest(BaseModel):
         False, description = "Whether model is an embedding/sentence-transformer model"
     )
 
+    # HT fork — prompt baking (bakery integration)
+    is_prompt_baking: bool = Field(
+        False, description = "Enable prompt baking training mode"
+    )
+    baking_system_prompt: Optional[str] = Field(
+        None, description = "System prompt to bake into the LoRA weights"
+    )
+    baking_num_trajectories: int = Field(
+        4, description = "Trajectories sampled per input for KL estimation"
+    )
+    baking_trajectory_length: int = Field(
+        128, description = "Max tokens per sampled trajectory"
+    )
+    baking_temperature: float = Field(
+        1.0, description = "Temperature for the prompted (teacher) distribution"
+    )
+    baking_sampling_temperature: float = Field(
+        0.8, description = "Sampling temperature for trajectory generation"
+    )
+    baking_use_prefill: bool = Field(
+        False,
+        description = "Use pre-filled responses from the dataset instead of on-the-fly trajectory sampling",
+    )
+
     # Logging parameters
     enable_wandb: bool = Field(False, description = "Enable Weights & Biases logging")
     wandb_token: Optional[str] = Field(None, description = "W&B token")
