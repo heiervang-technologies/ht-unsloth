@@ -10,6 +10,7 @@ on:
       - 'studio/**'
       - 'unsloth/**'
       - 'unsloth_cli/**'
+      - 'lile/**'
       - 'pyproject.toml'
   workflow_dispatch:
 
