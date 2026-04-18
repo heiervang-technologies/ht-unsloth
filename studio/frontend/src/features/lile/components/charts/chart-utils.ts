@@ -15,31 +15,50 @@ function isTrainStep(e: TrajectoryEvent): e is TrainStepEvent {
   return e.kind === "train_step";
 }
 
+function stepOf(e: TrainStepEvent, fallbackIndex: number): number {
+  return typeof e.commit_token === "number" ? e.commit_token : fallbackIndex;
+}
+
+function numericComponent(
+  e: TrainStepEvent,
+  key: string,
+): number | null {
+  const v = e.components?.[key];
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
+}
+
 export function selectLossSeries(s: StoreState): Point[] {
-  return s.trajectory
-    .filter(isTrainStep)
-    .map((e) => ({ step: e.batch_id, value: e.loss }));
+  const points: Point[] = [];
+  let i = 0;
+  for (const e of s.trajectory) {
+    if (!isTrainStep(e)) continue;
+    points.push({ step: stepOf(e, i), value: e.loss });
+    i += 1;
+  }
+  return points;
 }
 
 export function selectGradNormSeries(s: StoreState): Point[] {
   const points: Point[] = [];
+  let i = 0;
   for (const e of s.trajectory) {
     if (!isTrainStep(e)) continue;
-    if (typeof e.grad_norm_total === "number") {
-      points.push({ step: e.batch_id, value: e.grad_norm_total });
-    }
+    const gn = numericComponent(e, "grad_norm_total");
+    if (gn !== null) points.push({ step: stepOf(e, i), value: gn });
+    i += 1;
   }
   return points;
 }
 
 export function selectKlSeries(s: StoreState): Point[] {
   const points: Point[] = [];
+  let i = 0;
   for (const e of s.trajectory) {
-    if (!isTrainStep(e) || !e.components) continue;
-    const kl = e.components["batch.kl.loss"] ?? e.components["kl"] ?? null;
-    if (typeof kl === "number" && Number.isFinite(kl)) {
-      points.push({ step: e.batch_id, value: kl });
-    }
+    if (!isTrainStep(e)) continue;
+    const kl =
+      numericComponent(e, "batch.kl.loss") ?? numericComponent(e, "kl");
+    if (kl !== null) points.push({ step: stepOf(e, i), value: kl });
+    i += 1;
   }
   return points;
 }
@@ -52,17 +71,43 @@ export function selectQueueDepthSeries(_s: StoreState): Point[] {
   return EMPTY_POINTS;
 }
 
+export function selectAdapterNormSeries(s: StoreState): Point[] {
+  const points: Point[] = [];
+  let i = 0;
+  for (const e of s.trajectory) {
+    if (!isTrainStep(e)) continue;
+    const v = numericComponent(e, "adapter_norm_total");
+    if (v !== null) points.push({ step: stepOf(e, i), value: v });
+    i += 1;
+  }
+  return points;
+}
+
+export function selectResidualNormSeries(s: StoreState): Point[] {
+  const points: Point[] = [];
+  let i = 0;
+  for (const e of s.trajectory) {
+    if (!isTrainStep(e)) continue;
+    const v = numericComponent(e, "residual_norm_total");
+    if (v !== null) points.push({ step: stepOf(e, i), value: v });
+    i += 1;
+  }
+  return points;
+}
+
 export function selectComponentsSeries(
   s: StoreState,
 ): { key: string; points: Point[] }[] {
   const keyMap = new Map<string, Point[]>();
+  let i = 0;
   for (const e of s.trajectory) {
     if (!isTrainStep(e) || !e.components) continue;
     for (const [key, val] of Object.entries(e.components)) {
-      if (typeof val !== "number") continue;
+      if (typeof val !== "number" || !Number.isFinite(val)) continue;
       if (!keyMap.has(key)) keyMap.set(key, []);
-      keyMap.get(key)!.push({ step: e.batch_id, value: val });
+      keyMap.get(key)!.push({ step: stepOf(e, i), value: val });
     }
+    i += 1;
   }
   return Array.from(keyMap.entries()).map(([key, points]) => ({ key, points }));
 }
@@ -97,4 +142,14 @@ export function useQueueDepthSeries(): Point[] {
 export function useComponentsSeries(): { key: string; points: Point[] }[] {
   const trajectory = useTrajectory();
   return useMemo(() => selectComponentsSeries({ trajectory }), [trajectory]);
+}
+
+export function useAdapterNormSeries(): Point[] {
+  const trajectory = useTrajectory();
+  return useMemo(() => selectAdapterNormSeries({ trajectory }), [trajectory]);
+}
+
+export function useResidualNormSeries(): Point[] {
+  const trajectory = useTrajectory();
+  return useMemo(() => selectResidualNormSeries({ trajectory }), [trajectory]);
 }

@@ -109,6 +109,37 @@ def build_chat_inputs(tokenizer: Any, prompt: str, response: str,
     }
 
 
+def extract_target_positions(
+    labels: torch.Tensor,
+) -> tuple[list[list[int]], list[list[int]]]:
+    """Derive (target_positions, target_token_ids) from a label tensor.
+
+    ``labels`` is (B, T) with ``-100`` at positions the loss ignores.
+    Returns two parallel ``list[list[int]]``:
+
+    - ``positions[i]`` are the *logits* indices ``p`` (range ``0 .. T-2``)
+      where the next-token prediction is supervised — i.e. where
+      ``labels[i, p+1] != -100``.
+    - ``token_ids[i]`` are the corresponding target token IDs.
+
+    Keeps the safety_monitor primitive's contract pure-python: the main
+    objective hands off these lists, the sidecar doesn't re-tokenize.
+    """
+    if labels.dim() != 2:
+        raise ValueError(f"expected (B, T) labels, got shape {tuple(labels.shape)}")
+    B = labels.size(0)
+    positions: list[list[int]] = []
+    token_ids: list[list[int]] = []
+    shifted = labels[:, 1:]                                            # (B, T-1)
+    for i in range(B):
+        mask = shifted[i] != -100
+        pos_i = mask.nonzero(as_tuple=True)[0].tolist()
+        tok_i = shifted[i][mask].tolist()
+        positions.append([int(p) for p in pos_i])
+        token_ids.append([int(t) for t in tok_i])
+    return positions, token_ids
+
+
 def pad_and_stack(tokenized: list[dict[str, torch.Tensor]], pad_id: int) -> dict[str, torch.Tensor]:
     max_len = max(t["input_ids"].size(0) for t in tokenized)
     b = len(tokenized)

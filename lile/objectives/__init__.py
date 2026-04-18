@@ -13,6 +13,8 @@ from .kto import kto_loss
 from .coh import coh_loss
 from .hinge import hinge_contrastive_loss
 from .kl import kl_anchor_loss
+from .safety import safety_monitor_loss
+from .unlike import unlike_loss
 
 # Registry: objective_name -> loss_fn(model, batch, **kwargs) -> dict
 #
@@ -27,6 +29,8 @@ OBJECTIVES: dict[str, Callable[..., dict[str, Any]]] = {
     "coh": coh_loss,
     "hinge": hinge_contrastive_loss,
     "kl_anchor": kl_anchor_loss,
+    "safety_monitor": safety_monitor_loss,
+    "unlike": unlike_loss,
 }
 
 # CCPD v2 is registered conditionally in objectives/ccpd.py if import succeeds.

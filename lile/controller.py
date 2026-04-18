@@ -19,6 +19,7 @@ from typing import Any
 # oldest entries. OrderedDict gives O(1) insertion, lookup, and eviction.
 _RESPONSE_INDEX_CAP = 4096
 
+from .commit_stream import CommitBroadcaster
 from .config import ServeConfig
 from .engine.replay import IdleReplayScheduler, ReplayPolicy
 from .engine.train import TrainEngine
@@ -71,6 +72,11 @@ class Controller:
         # ``graceful_shutdown`` only.
         self._shutting_down: bool = False
 
+        # /v1/commits/stream SSE fan-out. Torchless-importable broadcaster —
+        # see ``lile/commit_stream.py`` for the bounded-queue + drop-on-full
+        # semantics. Slow clients never back-pressure training.
+        self.commits = CommitBroadcaster(enabled=cfg.commits_sse_enabled)
+
     # ------------------------------------------------------------------ lifecycle
     async def start(self) -> None:
         self.state = ModelState.load(
@@ -88,6 +94,7 @@ class Controller:
             lr=self.cfg.default_lr,
             per_objective=self.cfg.per_objective_optim,
             per_objective_lr=self.cfg.per_objective_lr,
+            default_watchlist=self.cfg.default_watchlist,
         )
         # Stamp run-level params into the external logger once the state is
         # loaded; NullLogger swallows this, real backends record it as
@@ -151,6 +158,10 @@ class Controller:
         if self._shutting_down:
             return {"already_shut_down": True}
         self._shutting_down = True
+        # Tell SSE subscribers to close cleanly. Do this BEFORE the queue drain
+        # so clients see ``event: shutdown`` even if the drain hangs on an
+        # in-flight GPU step and hits the deadline.
+        self.commits.broadcast_shutdown()
         if self._ttrl is not None:
             await self._ttrl.stop()
             self._ttrl = None
@@ -178,10 +189,23 @@ class Controller:
         kind = task.kind
         payload = task.payload
         if kind == "train":
-            result = self.train_engine.step(payload)
+            objective = payload.get("objective", "") or "unknown"
+            try:
+                result = self.train_engine.step(payload)
+            except BaseException as exc:
+                # Log a visible error event so UIs reading the trajectory tail
+                # can surface the failure; the queue worker still records
+                # ``task.error`` so ``wait_for`` callers see it too.
+                self.trajectory.log_event("train_error", {
+                    "batch_id": task.batch_id,
+                    "objective": objective,
+                    "commit_token": task.token,
+                    "error_type": type(exc).__name__,
+                    "error": str(exc),
+                })
+                raise
             components = result.get("components")
             wall = time.time() - t0
-            objective = payload.get("objective", "") or "unknown"
             # Canonical log entry for every committed step.
             self.trajectory.log_train(
                 batch_id=task.batch_id,
@@ -205,6 +229,19 @@ class Controller:
             scalars = flatten_scalars(components or {})
             if scalars:
                 self.metrics_logger.log_metrics(scalars, step=task.token)
+            # /v1/commits/stream broadcast. Runs synchronously here (the queue
+            # worker runs on the event loop and `_handle_task` is sync), so
+            # `put_nowait` only *schedules* SSE wakeups — the queue's finally
+            # block still advances `_completed_token` before any subscriber
+            # coroutine resumes. That's what preserves the spec's "cursor=N in
+            # the event ⇒ /v1/state/stats reports committed >= N" invariant.
+            self.commits.broadcast_commit(
+                cursor=task.token,
+                objective=objective,
+                loss=float(result.get("loss") or 0.0),
+                components=components or {},
+                batch_size=len(payload.get("samples", [])),
+            )
             return {"loss": result.get("loss"), "components": components,
                     "wall": wall}
         elif kind == "merge":

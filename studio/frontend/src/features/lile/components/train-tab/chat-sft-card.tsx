@@ -43,8 +43,17 @@ export function ChatSftCard(): ReactElement {
     setSubmitting(true);
     setError(null);
     try {
+      const userRow = rows.find((r) => r.role === "user" && r.content.trim().length > 0);
+      const assistantRow = rows.find((r) => r.role === "assistant" && r.content.trim().length > 0);
+      if (!userRow || !assistantRow) {
+        setError("Need one non-empty user turn and one non-empty assistant turn.");
+        return;
+      }
       const objective = weight === 1.0 ? "sft" : "weighted_sft";
-      const sample: { messages: Row[]; weight?: number } = { messages: rows };
+      const sample: { prompt: string; response: string; weight?: number } = {
+        prompt: userRow.content,
+        response: assistantRow.content,
+      };
       if (objective === "weighted_sft") sample.weight = weight;
       await lileClient.postTrain({
         objective,
