@@ -42,6 +42,21 @@ Rationale: the brief says "depth in one dimension beats breadth in all." A produ
 
 Test obligation: a concurrent train+infer invariant test that would fail under reordering.
 
+## Primitives as contract
+
+**Daemon owns primitives; scripts own logic.** This is the load-bearing boundary for everything userland-facing: `/v1/train`, `/v1/chat/completions`, `/v1/state/snapshot/{save,load}`. Primitives are atomic (one grad step / one snapshot / one generation), orthogonal (no duplication between them), expressive (the script-space stays open-ended), and versioned (breaking change = version bump).
+
+The **expressivity test**: can we express SFT + KTO + CoH + hinge + unlikelihood + eval harnesses + scaling-curve A/Bs + RLAIF critique loops without the daemon knowing any of those words? If yes, the primitive set is correctly sized. If a new script needs a feature, that's evidence: either we already have the right primitive, or we're missing one — *never* "extend the primitive to know about this workflow."
+
+Concrete payoff: `unlike` (surgical unlikelihood) landed as a one-file objective plus a one-line registry entry; composition with `kl_anchor` is batch-level and lives in the caller's request body. The daemon does not know what "RLAIF" or "surgical correction" is, and does not need to.
+
+What this rules out:
+- Server-side workflow state (curricula, epoch counters, dataset iterators) — those are a long-running client script's job.
+- Per-objective endpoints (`/v1/train/sft`, `/v1/train/dpo`) — one `/v1/train` with `objective` and `samples` covers the whole space.
+- Implicit safety mutations (daemon silently adding a KL anchor). Safety composition is explicit in the batch spec so the caller can reason about it.
+
+What the daemon *does* own: weights, optimizer state, commit cursor atomicity, mode_lock interleaving of train/infer, snapshot integrity, the Razin-safety invariants that are objective-intrinsic (documented per objective in GLOSSARY.md).
+
 ## What I'm not building
 
 - GGUF export (Phase 6 — doesn't affect the core contract).
@@ -59,6 +74,22 @@ Test obligation: a concurrent train+infer invariant test that would fail under r
 - **Q5 staleness**: enforced by `max_queue_depth` config; bounded buffer prevents arbitrary staleness without needing a guardrail check.
 - **Q6 packaging**: `pip install -e .` from the worktree for now; pyproject is provided.
 - **Q7 `r_c` ranking**: the benchmark answers this — see §11 results in `STATUS.md`.
+
+## Safety regime (post-Cleo B, 2026-04-18)
+
+Razin-safety as a single aggregate bit is too coarse. Cleo's razin-safety-sharpened.md theorem (in `docs/research/proofs/`) gives the exact per-token characterization:
+
+```
+q_j > p_j   ⟺   p_j < M_p(η)         where M_p(η) := −(1/η) log E_p[exp(η · (𝟙[·=t] − p_·))]
+```
+
+All tail tokens with prior mass strictly below `M_p(η)` grow under one SFT-family step. `M_p(η)` is non-increasing in η, so **the unsafe regime is at small η** — a gentle step lets a dominant non-target absorb most of the shrinkage, leaving the tail under-compressed; tail tokens can gain absolute mass. Large η "consumes" the whole vocabulary into the target and collapses every non-target (negative threshold → empty grower set).
+
+**Concrete consequence for unlike.** With a positive teacher (`good_token_id` set), the positive side of the objective is exactly one SFT step at target=good. If `p_bad < M_p(η)` computed at target=good, the positive teacher **pushes `p_bad` UP** — opposing unlike's push-down. At small η the positive-teacher side can outweigh the push-down and the net effect is increased `p_bad`. This is why a naive `lr=1e-5` default is a known-unsafe regime for unlike — not a caution, a named failure mode.
+
+**Instrumentation.** `safety_monitor` (task #20) computes `M_p(η)` and the grower-set intersection with a watchlist per step. Pairs with `/v1/commits/stream` (#18) so alarms are a live signal, not a post-hoc log grep. Observational only; a future `safety_gate` primitive can add blocking if operational experience warrants.
+
+**Documentation pins.** This section is the first of three; the others are the aggregate-safe vs pointwise-safe columns in GLOSSARY.md and the docstring warning in `lile/objectives/unlike.py`. Treat them as a trio — changes to one should be reflected in the other two.
 
 ## Testable invariants
 

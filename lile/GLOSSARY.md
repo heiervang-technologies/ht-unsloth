@@ -34,16 +34,25 @@ directly from an example we actually wrote down.
 
 ### Quick reference per objective
 
-| objective      | Razin-safe? | reason                                               |
-|----------------|:-----------:|------------------------------------------------------|
-| `sft`          | ✓           | likelihood-up on a target                            |
-| `weighted_sft` | ✓           | likelihood-up (scaled per sample)                    |
-| `ntp`          | ✓           | likelihood-up on raw text                            |
-| `coh`          | ✓           | SFT on a hindsight trace (bad+critique+good)         |
-| `kto`          | ✗ (mild)    | signed unary term — undesirable samples *are* pushed down; likelihood displacement bounded by the KL anchor but not excluded |
-| `hinge`        | ✗           | pair margin                                          |
-| `cppo`         | ✗           | multi-candidate preference                           |
-| `ccpd_v2`      | ✗           | paired contrast with margin                          |
+**Sharpened (2026-04-18):** Razin-safety decomposes into *aggregate-safe* (no mass
+leaves the target as a group) and *pointwise-safe* (no individual non-target token
+gains absolute mass). SFT-family objectives are aggregate-safe but NOT pointwise-safe
+— Cleo's razin-safety-sharpened.md (in `docs/research/proofs/`) characterizes
+exactly which tail tokens grow: `p_j < M_p(η)` where `M_p(η) := -(1/η) log Σ_k p_k
+exp(η (𝟙[k=t] − p_k))`. **The unsafe regime is at small η**, not large — this
+inverts the common "smaller LR is safer" intuition. See §Safety regime in DESIGN.md.
+
+| objective      | aggregate-safe | pointwise-safe | reason                                               |
+|----------------|:--------------:|:--------------:|------------------------------------------------------|
+| `sft`          | ✓              | ✗              | tail non-targets with `p_j < M_p(η)` grow; adversarial if a dominant non-target absorbs shrinkage |
+| `weighted_sft` | ✓              | ✗              | same mechanism, weight scales η                      |
+| `ntp`          | ✓              | ✗              | same                                                 |
+| `coh`          | ✓              | ✗              | same, applied per hindsight token                    |
+| `kto`          | ✗ (mild)       | ✗              | signed unary term — undesirable samples *are* pushed down; likelihood displacement bounded by the KL anchor but not excluded |
+| `hinge`        | ✗              | ✗              | pair margin                                          |
+| `cppo`         | ✗              | ✗              | multi-candidate preference                           |
+| `ccpd_v2`      | ✗              | ✗              | paired contrast with margin                          |
+| `unlike`       | depends        | depends        | pure push-down (no `good_token_id`) is ✗ on both axes — a concrete "down" with no "up" target accumulates displacement fast. With a positive teacher (`good_token_id`) it becomes SFT-family dominant (aggregate-safe), but inherits SFT's pointwise unsafety **and** carries a counterintuitive η trap: **at small η, the positive teacher can push `p_bad` UP** (Cleo §2/§5 — the same B theorem mechanism applied at target=good makes bad a grower when `p_bad < M_p(η)`). Do NOT default to `lr=1e-5`; use the eta_min from Cleo's A closed-form bound (when it lands) or the empirical safe-η from the calibration sweep. **Pure-unlike requires a KL anchor with `scope="target_position"` and surgery tokens excluded; the primitive enforces tiered preconditions (error / warn / warn) — pass `allow_unanchored=True` to override for research use.** |
 
 Not-Razin-safe does not mean *broken* — these objectives work and are
 useful — only that they carry the theoretical risk and need safeguards
