@@ -28,34 +28,21 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { useAnimatedThemeToggle } from "@/components/ui/animated-theme-toggler";
 import { cn } from "@/lib/utils";
 import {
+  Book03Icon,
   ChefHatIcon,
+  Chip02Icon,
   ColumnInsertIcon,
   CursorInfo02Icon,
   Delete02Icon,
-  DownloadSquare01Icon,
-  Edit03Icon,
-  Globe02Icon,
-  HelpCircleIcon,
-  Logout05Icon,
+  MessageSearch01Icon,
   Search01Icon,
-  PowerIcon,
+  NewReleasesIcon,
+  PackageIcon,
   PencilEdit02Icon,
-  LayoutAlignLeftIcon,
   Settings02Icon,
-  TestTube01Icon,
   ZapIcon,
 } from "@hugeicons/core-free-icons";
 import {
@@ -64,59 +51,24 @@ import {
 } from "@/components/ui/tooltip";
 import { Tooltip as TooltipPrimitive } from "radix-ui";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { ChevronDown, ChevronsUpDown, MoreHorizontalIcon, Moon, Sun } from "lucide-react";
+import { ChevronDown, ChevronsUpDown, Moon, PanelLeft, Sun } from "lucide-react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import {
-  ChatSearchDialog,
-  deleteChatItem,
-  renameChatItem,
-  useChatRuntimeStore,
-  useChatSearchStore,
-  useChatSidebarItems,
-  type SidebarItem,
-} from "@/features/chat";
+import { motion } from "motion/react";
+import { useTrainingRuntimeStore } from "@/features/training";
 import { useSettingsDialogStore } from "@/features/settings";
-import { useEffectiveProfile, UserAvatar } from "@/features/profile";
 import { usePlatformStore } from "@/config/env";
-import { clearAuthTokens, logout } from "@/features/auth";
 import { TOUR_OPEN_EVENT } from "@/features/tour";
 import {
-  deleteTrainingRun,
-  emitTrainingRunDeleted,
-  emitTrainingRunUpdated,
-  removeTrainingUnloadGuard,
-  renameTrainingRun,
-  useTrainingHistorySidebarItems,
-  useTrainingRuntimeStore,
-} from "@/features/training";
+  useChatSidebarItems,
+  deleteChatItem,
+} from "@/features/chat/hooks/use-chat-sidebar-items";
+import { useChatRuntimeStore } from "@/features/chat/stores/chat-runtime-store";
+import { useChatSearchStore } from "@/features/chat/stores/chat-search-store";
+import { ChatSearchDialog } from "@/features/chat/components/chat-search-dialog";
+import { useTrainingHistorySidebarItems, deleteTrainingRun } from "@/features/training";
 import type { TrainingRunSummary } from "@/features/training";
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { toast } from "@/lib/toast";
-import { ShutdownDialog } from "@/components/shutdown-dialog";
-import { translate, useT, type TranslationKey } from "@/i18n";
-
-const EMPHASIS_MARKER = "__UNSLOTH_I18N_EMPHASIS_MARKER__";
-
-type AppT = ReturnType<typeof useT>;
-
-function renderEmphasizedTranslation(
-  t: AppT,
-  key: TranslationKey,
-  emphasizedValue: string,
-): ReactNode {
-  const translated = t(key, { name: EMPHASIS_MARKER });
-  const parts = translated.split(EMPHASIS_MARKER);
-  if (parts.length === 1) return translated;
-
-  const nodes: ReactNode[] = [];
-  parts.forEach((part, index) => {
-    if (part.length > 0) nodes.push(part);
-    if (index < parts.length - 1) {
-      nodes.push(<em key={`emphasis-${index}`}>{emphasizedValue}</em>);
-    }
-  });
-  return nodes;
-}
+import { useHardwareInfo } from "@/hooks/use-hardware-info";
+import { useState } from "react";
 
 function getTourId(pathname: string): string | null {
   if (pathname.startsWith("/studio")) return "studio";
@@ -125,15 +77,7 @@ function getTourId(pathname: string): string | null {
   return null;
 }
 
-// Hugeicons' TestTube01Icon ships with two interior bubbles (paths #4
-// and #5 of the 5-path definition). Slicing to the first three paths
-// keeps the test-tube outline + horizontal cap + liquid line, dropping
-// the bubbles. The original export stays untouched, and HugeiconsIcon
-// renders this trimmed array exactly the same way.
-const TestTubeOutlineIcon = TestTube01Icon.slice(
-  0,
-  3,
-) as typeof TestTube01Icon;
+const NAV_SPRING = { type: "spring", stiffness: 500, damping: 35, mass: 0.5 } as const;
 
 function runStatusDotClass(status: TrainingRunSummary["status"]): string {
   switch (status) {
@@ -164,13 +108,6 @@ function formatRelativeShort(iso: string): string {
   return `${d}d`;
 }
 
-function createNavigationNonce(): string {
-  if (typeof globalThis.crypto?.randomUUID === "function") {
-    return globalThis.crypto.randomUUID();
-  }
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-}
-
 function NavItem({
   icon,
   label,
@@ -178,6 +115,7 @@ function NavItem({
   disabled,
   onClick,
   children,
+  variant = "nav",
   dataTour,
 }: {
   icon: typeof ZapIcon;
@@ -186,21 +124,34 @@ function NavItem({
   disabled?: boolean;
   onClick: () => void;
   children?: React.ReactNode;
+  variant?: "nav" | "menu";
   dataTour?: string;
 }) {
+  const isNav = variant === "nav";
   return (
     <SidebarMenuItem>
       <div className="relative">
+        {isNav && active && (
+          <motion.div
+            layoutId="sidebar-active-indicator"
+            className="absolute left-0 top-0 bottom-0 w-[3px] rounded-full bg-primary"
+            transition={NAV_SPRING}
+          />
+        )}
         <SidebarMenuButton
           tooltip={label}
           disabled={disabled}
           onClick={onClick}
           isActive={active}
           data-tour={dataTour}
-          className="sidebar-nav-btn h-[35px] rounded-[10px] gap-[8.5px] px-2.5 font-medium group-data-[collapsible=icon]:!w-[32px] group-data-[collapsible=icon]:!rounded-[10px] group-data-[collapsible=icon]:mx-auto"
+          className={
+            isNav
+              ? "rounded-none pr-0 pl-4 text-[#475569] dark:text-[#94a3b8] data-active:text-foreground!"
+              : "rounded-none pr-0 pl-4 text-[#475569] dark:text-[#94a3b8] hover:bg-muted! hover:text-foreground! data-active:bg-[oklch(0.94_0_0)]! data-active:text-foreground! dark:data-active:bg-[oklch(0.3_0_0)]!"
+          }
         >
-          <HugeiconsIcon icon={icon} strokeWidth={1.75} className="size-icon! shrink-0 group-hover/menu-button:animate-icon-pop" />
-          <span className="text-[14.5px] leading-[19px] tracking-nav">{label}</span>
+          <HugeiconsIcon icon={icon} strokeWidth={2} className="size-[18px]" />
+          <span className="text-[13px] font-medium">{label}</span>
         </SidebarMenuButton>
       </div>
       {children}
@@ -209,7 +160,6 @@ function NavItem({
 }
 
 export function AppSidebar() {
-  const t = useT();
   const { isDark, toggleTheme, anchorRef } = useAnimatedThemeToggle();
   const { pathname, search } = useRouterState({
     select: (s) => ({
@@ -227,24 +177,17 @@ export function AppSidebar() {
 
   const isTrainingRunning = useTrainingRuntimeStore((s) => s.isTrainingRunning);
   const chatOnly = usePlatformStore((s) => s.isChatOnly());
-  const [shutdownOpen, setShutdownOpen] = useState(false);
+  const hw = useHardwareInfo();
 
+  // Chat collapsible state — open by default, syncs with route
   const isChatRoute = pathname.startsWith("/chat");
   const isStudioRoute = pathname === "/studio" || pathname.startsWith("/studio/");
-
-  const scrollRef = useRef<HTMLDivElement | null>(null);
-  const [scrolled, setScrolled] = useState(false);
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const handler = () => setScrolled(el.scrollTop > 0);
-    handler();
-    el.addEventListener("scroll", handler, { passive: true });
-    return () => el.removeEventListener("scroll", handler);
-  }, []);
+  const [chatOpen, setChatOpen] = useState(true);
+  const [runsOpen, setRunsOpen] = useState(true);
+  const effectiveChatOpen = isChatRoute || chatOpen;
+  const effectiveRunsOpen = isStudioRoute || runsOpen;
 
   const isRecipesRoute = pathname.startsWith("/data-recipes");
-  const { displayTitle, avatarDataUrl } = useEffectiveProfile();
 
   const { items: chatItems } = useChatSidebarItems();
   const storeThreadId = useChatRuntimeStore((s) => s.activeThreadId);
@@ -257,7 +200,7 @@ export function AppSidebar() {
     : undefined;
 
   // Training runs
-  const { items: runItems } = useTrainingHistorySidebarItems(
+  const { items: runItems, refresh: refreshRuns } = useTrainingHistorySidebarItems(
     !chatOnly && isStudioRoute,
   );
   const activeJobId = useTrainingRuntimeStore((s) => s.jobId);
@@ -275,128 +218,30 @@ export function AppSidebar() {
     });
   }
 
-  type RenameTarget =
-    | { kind: "chat"; item: SidebarItem; current: string }
-    | { kind: "run"; run: TrainingRunSummary; current: string };
-  const [renamingTarget, setRenamingTarget] = useState<RenameTarget | null>(
-    null,
-  );
-  const [renameDraft, setRenameDraft] = useState("");
-  const renameTrimmed = renameDraft.trim();
-  const nextRunDisplayName = renameTrimmed.length > 0 ? renameTrimmed : null;
-  const renameDirty =
-    renamingTarget !== null &&
-    (renamingTarget.kind === "chat"
-      ? renameTrimmed.length > 0 && renameTrimmed !== renamingTarget.current
-      : renameTrimmed.length > 0
-        ? renameTrimmed !== renamingTarget.current
-        : renamingTarget.run.display_name != null);
-
-  function openRenameChat(item: SidebarItem) {
-    setRenameDraft(item.title);
-    setRenamingTarget({ kind: "chat", item, current: item.title });
-  }
-  function openRenameRun(run: TrainingRunSummary) {
-    const current = run.display_name ?? run.model_name;
-    setRenameDraft(current);
-    setRenamingTarget({ kind: "run", run, current });
-  }
-  async function commitRename() {
-    const target = renamingTarget;
-    if (!target || !renameDirty) return;
-    setRenamingTarget(null);
-    if (target.kind === "chat") {
-      try {
-        await renameChatItem(target.item, renameTrimmed);
-      } catch (err) {
-        toast.error(translate("shell.toast.failedToRenameChat"), {
-          description: err instanceof Error ? err.message : undefined,
-        });
-      }
-      return;
-    }
-    try {
-      const updated = await renameTrainingRun(target.run.id, nextRunDisplayName);
-      emitTrainingRunUpdated(updated);
-    } catch (err) {
-      toast.error(translate("shell.toast.failedToRenameRun"), {
-        description: err instanceof Error ? err.message : undefined,
-      });
-    }
-  }
-
-  type DeleteTarget =
-    | { kind: "chat"; item: SidebarItem }
-    | { kind: "run"; run: TrainingRunSummary };
-  const [confirmingDelete, setConfirmingDelete] =
-    useState<DeleteTarget | null>(null);
-
-  async function commitDelete() {
-    const target = confirmingDelete;
-    if (!target) return;
-    setConfirmingDelete(null);
-    if (target.kind === "chat") {
-      try {
-        await handleDeleteThread(target.item);
-      } catch (err) {
-        toast.error(translate("shell.toast.failedToDeleteChat"), {
-          description: err instanceof Error ? err.message : undefined,
-        });
-      }
-      return;
-    }
-    if (target.run.status === "running") {
-      toast.error(t("shell.toast.cannotDeleteRunningRun"));
-      return;
-    }
-    try {
-      await deleteTrainingRun(target.run.id);
-      if (selectedHistoryRunId === target.run.id) {
-        setSelectedHistoryRunId(null);
-      }
-      emitTrainingRunDeleted(target.run.id);
-    } catch (err) {
-      toast.error(translate("shell.toast.failedToDeleteRun"), {
-        description: err instanceof Error ? err.message : undefined,
-      });
-    }
-  }
-
   return (
     <>
-    <Sidebar
-      collapsible="icon"
-      variant="sidebar"
-      className="font-heading group-data-[collapsible=icon]:[&_[data-sidebar=sidebar]]:bg-white dark:group-data-[collapsible=icon]:[&_[data-sidebar=sidebar]]:bg-background"
-    >
-      <SidebarHeader className="pl-[17px] pr-3 pt-[12px] pb-[8px] group-data-[collapsible=icon]:px-0">
+    <Sidebar collapsible="icon" variant="sidebar">
+      <SidebarHeader className="group-data-[collapsible=icon]:px-0">
         {/* Expanded: compact logo + close toggle */}
-        <div className="flex items-center justify-between gap-[8.5px] group-data-[collapsible=icon]:hidden">
+        <div className="flex items-center justify-between gap-2 px-1 py-1 group-data-[collapsible=icon]:hidden">
           <Link
-            to="/chat"
-            onClick={(event) => {
-              event.preventDefault();
-              if (chatDisabled) return;
-              setActiveThreadId(null);
-              closeMobileIfOpen();
-              void navigate({
-                to: "/chat",
-                search: { new: createNavigationNonce() },
-              });
-            }}
-            className="flex items-center gap-[6px] select-none"
-            aria-label={t("shell.aria.home")}
+            to={chatOnly ? "/chat" : "/studio"}
+            onClick={closeMobileIfOpen}
+            className="flex items-center select-none"
+            aria-label="Unsloth home"
           >
             <img
-              src="/circle-logo-small.png"
+              src="/blacklogo-c.png"
               alt="Unsloth"
-              className="h-[34px] w-[34px] rounded-full object-cover"
+              className="h-7 w-auto dark:hidden"
             />
-            <span className="font-heading text-[21px] font-semibold tracking-[-0.01em] dark:tracking-[0.02em] leading-none text-black dark:text-white">
-              unsloth
-            </span>
-            <span className="nav-badge ml-0.5 inline-flex items-center justify-center rounded-full border border-nav-beta-border px-[5px] pt-[3px] pb-[2px] text-[8px] font-medium leading-none tracking-[0.04em] text-nav-fg-muted antialiased subpixel-antialiased shadow-[0_1px_2px_rgba(0,0,0,0.06)] dark:shadow-[0_1px_2px_rgba(0,0,0,0.35)]">
-              {t("shell.beta")}
+            <img
+              src="/whitelogo-c.png"
+              alt="Unsloth"
+              className="hidden h-7 w-auto dark:block"
+            />
+            <span className="ml-1 inline-flex items-center text-[10px] font-extrabold leading-none tracking-[0.12em] text-purple-500">
+              HT
             </span>
           </Link>
           {!isMobile && (
@@ -405,80 +250,72 @@ export function AppSidebar() {
                 <button
                   type="button"
                   onClick={togglePinned}
-                  className="inline-flex h-[35px] w-[32px] items-center justify-center rounded-[10px] text-nav-icon-idle dark:text-nav-fg-muted transition-colors hover:bg-nav-surface-hover hover:text-black dark:hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  aria-label={t("shell.aria.closeSidebar")}
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label="Close sidebar"
                 >
-                  <HugeiconsIcon icon={LayoutAlignLeftIcon} strokeWidth={1.75} className="size-icon" />
+                  <PanelLeft strokeWidth={1.5} className="size-4" />
                 </button>
               </TooltipPrimitive.Trigger>
-              <TooltipContent
-                side="bottom"
-                sideOffset={6}
-                className="tooltip-compact"
-              >
-                {t("shell.aria.closeSidebar")}
+              <TooltipContent side="bottom" sideOffset={6}>
+                Close sidebar
               </TooltipContent>
             </Tooltip>
           )}
         </div>
 
-        {/* Collapsed: panel icon doubles as expand trigger */}
+        {/* Collapsed: sticker with hover-swap to open toggle */}
         {!isMobile && (
-          <div className="hidden group-data-[collapsible=icon]:flex h-[35px] items-center justify-center w-full">
+          <div className="hidden group-data-[collapsible=icon]:flex items-center justify-center h-9 w-full">
             <Tooltip>
               <TooltipPrimitive.Trigger asChild>
                 <button
                   type="button"
                   onClick={togglePinned}
-                  className="inline-flex h-[35px] w-[32px] items-center justify-center rounded-[10px] text-nav-fg transition-colors hover:bg-nav-surface-hover hover:text-black dark:hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  aria-label={t("shell.aria.openSidebar")}
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label="Open sidebar"
                 >
-                  <HugeiconsIcon icon={LayoutAlignLeftIcon} strokeWidth={1.75} className="size-icon" />
+                  <PanelLeft strokeWidth={1.5} className="size-4" />
                 </button>
               </TooltipPrimitive.Trigger>
-              <TooltipContent
-                side="right"
-                sideOffset={8}
-                className="tooltip-compact"
-              >
-                {t("shell.aria.openSidebar")}
+              <TooltipContent side="right" sideOffset={8}>
+                Open sidebar
               </TooltipContent>
             </Tooltip>
           </div>
         )}
       </SidebarHeader>
 
-      <SidebarGroup className="group-data-[collapsible=icon]:px-0 px-2 pt-[9px] pb-[8px] shrink-0">
+      <SidebarGroup className="group-data-[collapsible=icon]:p-0 p-0 pt-1 shrink-0">
         <SidebarGroupContent>
           <SidebarMenu>
             <NavItem
               icon={PencilEdit02Icon}
-              label={t("shell.navigation.newChat")}
+              label="New Chat"
               active={false}
               disabled={chatDisabled}
               onClick={() => {
                 if (chatDisabled) return;
                 setActiveThreadId(null);
-                navigate({ to: "/chat", search: { new: createNavigationNonce() } });
+                navigate({ to: "/chat", search: { new: crypto.randomUUID() } });
                 closeMobileIfOpen();
               }}
             />
             <NavItem
               icon={ColumnInsertIcon}
-              label={t("shell.navigation.compare")}
-              active={!!search.compare && !chatItems.some((i) => i.id === search.compare)}
+              label="Compare"
+              active={!!search.compare}
               disabled={chatDisabled}
               dataTour="chat-compare"
               onClick={() => {
                 if (chatDisabled) return;
                 setActiveThreadId(null);
-                navigate({ to: "/chat", search: { compare: createNavigationNonce() } });
+                navigate({ to: "/chat", search: { compare: crypto.randomUUID() } });
                 closeMobileIfOpen();
               }}
             />
             <NavItem
               icon={Search01Icon}
-              label={t("shell.navigation.search")}
+              label="Search"
               active={false}
               disabled={chatDisabled}
               onClick={() => {
@@ -489,73 +326,82 @@ export function AppSidebar() {
             />
           </SidebarMenu>
         </SidebarGroupContent>
+        <div className="my-2" />
       </SidebarGroup>
 
-      <SidebarGroup data-tour="navbar" className="group-data-[collapsible=icon]:px-0 px-2 pt-[9px] pb-[20px] shrink-0">
-        <SidebarGroupContent>
-          <SidebarMenu>
-            <NavItem
-              icon={TestTubeOutlineIcon}
-              label={t("shell.navigation.train")}
-              active={pathname === "/studio" || pathname.startsWith("/studio/")}
-              disabled={chatOnly}
-              onClick={() => {
-                if (chatOnly) return;
-                navigate({ to: "/studio" });
-                closeMobileIfOpen();
-              }}
-            />
+      <SidebarContent className="gap-0 overflow-y-auto overscroll-contain min-h-0">
+        {/* Navigate (no header) */}
+        <SidebarGroup data-tour="navbar" className="group-data-[collapsible=icon]:p-0 p-0">
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <NavItem
+                icon={ZapIcon}
+                label="Train"
+                active={pathname === "/studio" || pathname.startsWith("/studio/")}
+                disabled={chatOnly}
+                onClick={() => {
+                  if (chatOnly) return;
+                  navigate({ to: "/studio" });
+                  closeMobileIfOpen();
+                }}
+              />
 
-            <NavItem
-              icon={ChefHatIcon}
-              label={t("shell.navigation.recipes")}
-              active={isRecipesRoute}
-              onClick={() => {
-                navigate({ to: "/data-recipes" });
-                closeMobileIfOpen();
-              }}
-            />
+              <NavItem
+                icon={Chip02Icon}
+                label="Lile"
+                active={pathname === "/lile" || pathname.startsWith("/lile/")}
+                disabled={chatOnly}
+                onClick={() => {
+                  if (chatOnly) return;
+                  navigate({ to: "/lile" });
+                  closeMobileIfOpen();
+                }}
+              />
 
-            <NavItem
-              icon={DownloadSquare01Icon}
-              label={t("shell.navigation.export")}
-              active={pathname === "/export" || pathname.startsWith("/export/")}
-              disabled={chatOnly}
-              onClick={() => {
-                if (chatOnly) return;
-                navigate({ to: "/export" });
-                closeMobileIfOpen();
-              }}
-            />
-          </SidebarMenu>
-        </SidebarGroupContent>
-      </SidebarGroup>
+              <NavItem
+                icon={ChefHatIcon}
+                label="Recipes"
+                active={isRecipesRoute}
+                onClick={() => {
+                  navigate({ to: "/data-recipes" });
+                  closeMobileIfOpen();
+                }}
+              />
 
-      <SidebarContent ref={scrollRef} className="gap-0 overflow-y-auto overscroll-contain min-h-0">
-        {!isStudioRoute && chatItems.length > 0 && (
-          <Collapsible
-            key={isChatRoute ? "chat-route" : "non-chat-route"}
-            defaultOpen
-            asChild
-          >
-          <SidebarGroup className="group-data-[collapsible=icon]:hidden px-0 py-0">
-            <SidebarGroupLabel className={cn("sidebar-sticky-label", scrolled && "is-scrolled")} asChild>
+              <NavItem
+                icon={PackageIcon}
+                label="Export"
+                active={pathname === "/export" || pathname.startsWith("/export/")}
+                disabled={chatOnly}
+                onClick={() => {
+                  if (chatOnly) return;
+                  navigate({ to: "/export" });
+                  closeMobileIfOpen();
+                }}
+              />
+            </SidebarMenu>
+          </SidebarGroupContent>
+          <div className="my-2" />
+        </SidebarGroup>
+
+        {/* Recent Chats */}
+        {chatItems.length > 0 && (
+          <Collapsible open={effectiveChatOpen} onOpenChange={setChatOpen} asChild>
+          <SidebarGroup className="group-data-[collapsible=icon]:hidden overflow-hidden p-0">
+            <SidebarGroupLabel asChild>
               <CollapsibleTrigger className="cursor-pointer flex w-full items-center justify-between">
-                {t("shell.navigation.recents")}
+                Recent Chats
                 <ChevronDown className="size-3.5 transition-transform duration-200 data-[state=open]:rotate-0 [[data-state=closed]_&]:rotate-[-90deg]" />
               </CollapsibleTrigger>
             </SidebarGroupLabel>
             <CollapsibleContent>
-            <SidebarGroupContent className="px-2">
+            <SidebarGroupContent>
               <SidebarMenu>
                 {chatItems.map((item) => (
                   <SidebarMenuItem key={item.id} className="group/recent-item relative">
                     <SidebarMenuButton
-                      data-testid="recent-thread"
-                      data-thread-type={item.type}
-                      data-thread-id={item.id}
                       isActive={activeThreadId === item.id}
-                      className="sidebar-nav-btn h-[32px] rounded-[10px] pl-2.5 pr-2.5 group-hover/recent-item:pr-10 group-has-[.sidebar-row-action[data-state=open]]/recent-item:pr-10 text-[14.5px] leading-[19px] tracking-nav font-medium"
+                      className="rounded-none pl-4 pr-7 text-[13px] font-medium text-[#475569] dark:text-[#94a3b8] hover:bg-muted! hover:text-foreground! data-active:bg-[oklch(0.94_0_0)]! data-active:text-foreground! dark:data-active:bg-[oklch(0.3_0_0)]!"
                       onClick={() => {
                         navigate({
                           to: "/chat",
@@ -569,38 +415,17 @@ export function AppSidebar() {
                     >
                       <span className="truncate">{item.title}</span>
                     </SidebarMenuButton>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button
-                          type="button"
-                          onClick={(e) => e.stopPropagation()}
-                          aria-label={t("shell.aria.chatOptions")}
-                          className="sidebar-row-action group-hover/recent-item:opacity-100 group-hover/recent-item:pointer-events-auto focus-visible:opacity-100 focus-visible:pointer-events-auto"
-                        >
-                          <span className="sidebar-row-action-glyph">
-                            <MoreHorizontalIcon strokeWidth={1.75} className="size-icon" />
-                          </span>
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent
-                        side="bottom"
-                        align="end"
-                        sideOffset={4}
-                        className="app-user-menu menu-soft-surface menu-flat-destructive ring-0 w-44 py-2 font-heading rounded-[14px] border-0"
-                      >
-                        <DropdownMenuItem onSelect={() => openRenameChat(item)}>
-                          <HugeiconsIcon icon={Edit03Icon} strokeWidth={1.75} className="size-icon" />
-                          <span>{t("common.rename")}</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          variant="destructive"
-                          onSelect={() => setConfirmingDelete({ kind: "chat", item })}
-                        >
-                          <HugeiconsIcon icon={Delete02Icon} strokeWidth={1.75} className="size-icon" />
-                          <span>{t("common.delete")}</span>
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteThread(item);
+                      }}
+                      title="Delete"
+                      className="absolute right-1 top-1/2 -translate-y-1/2 flex size-5 scale-90 items-center justify-center rounded-md text-sidebar-foreground/55 opacity-0 transition-all duration-150 hover:bg-destructive/12 hover:text-destructive group-hover/recent-item:scale-100 group-hover/recent-item:opacity-100"
+                    >
+                      <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} className="size-3.5" />
+                    </button>
                   </SidebarMenuItem>
                 ))}
               </SidebarMenu>
@@ -610,17 +435,18 @@ export function AppSidebar() {
           </Collapsible>
         )}
 
+        {/* Recent Runs */}
         {isStudioRoute && runItems.length > 0 && !chatOnly && (
-          <Collapsible key="studio-runs-route" defaultOpen asChild>
-          <SidebarGroup className="group-data-[collapsible=icon]:hidden px-0 py-0">
-            <SidebarGroupLabel className={cn("sidebar-sticky-label", scrolled && "is-scrolled")} asChild>
+          <Collapsible open={effectiveRunsOpen} onOpenChange={setRunsOpen} asChild>
+          <SidebarGroup className="group-data-[collapsible=icon]:hidden overflow-hidden p-0">
+            <SidebarGroupLabel asChild>
               <CollapsibleTrigger className="cursor-pointer flex w-full items-center justify-between">
-                {t("shell.navigation.recents")}
+                Recent Runs
                 <ChevronDown className="size-3.5 transition-transform duration-200 data-[state=open]:rotate-0 [[data-state=closed]_&]:rotate-[-90deg]" />
               </CollapsibleTrigger>
             </SidebarGroupLabel>
             <CollapsibleContent>
-              <SidebarGroupContent className="px-2">
+              <SidebarGroupContent>
                 <SidebarMenu>
                   {runItems.map((run) => {
                     const isActiveRun =
@@ -632,13 +458,13 @@ export function AppSidebar() {
                       >
                         <SidebarMenuButton
                           isActive={isActiveRun}
-                          className="sidebar-nav-btn h-auto flex-col items-start gap-0.5 py-[5px] rounded-[10px] pl-2.5 pr-7 text-[14.5px] tracking-nav font-medium"
+                          className="h-auto flex-col items-start gap-0.5 py-2 rounded-none pl-4 pr-7 text-[13px] font-medium text-[#475569] dark:text-[#94a3b8] hover:bg-muted! hover:text-foreground! data-active:bg-[oklch(0.94_0_0)]! data-active:text-foreground! dark:data-active:bg-[oklch(0.3_0_0)]!"
                           onClick={() => {
                             setSelectedHistoryRunId(run.id);
                             closeMobileIfOpen();
                           }}
                         >
-                          <div className="flex w-full items-center gap-[8.5px]">
+                          <div className="flex w-full items-center gap-2">
                             <span
                               className={cn(
                                 "size-1.5 shrink-0 rounded-full",
@@ -646,8 +472,8 @@ export function AppSidebar() {
                               )}
                               aria-hidden
                             />
-                            <span className="truncate">
-                              {run.display_name ?? run.model_name}
+                            <span className="truncate text-sm font-medium">
+                              {run.model_name}
                             </span>
                             <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">
                               {formatRelativeShort(run.started_at)}
@@ -657,41 +483,25 @@ export function AppSidebar() {
                             {run.dataset_name}
                           </span>
                         </SidebarMenuButton>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button
-                              type="button"
-                              onClick={(e) => e.stopPropagation()}
-                              aria-label={t("shell.aria.runOptions")}
-                              className="sidebar-row-action group-hover/run-item:opacity-100 group-hover/run-item:pointer-events-auto focus-visible:opacity-100 focus-visible:pointer-events-auto"
-                            >
-                              <span className="sidebar-row-action-glyph">
-                                <MoreHorizontalIcon strokeWidth={1.75} className="size-icon" />
-                              </span>
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent
-                            side="bottom"
-                            align="end"
-                            sideOffset={4}
-                            className="app-user-menu menu-soft-surface menu-flat-destructive ring-0 w-44 py-2 font-heading rounded-[14px] border-0"
-                          >
-                            <DropdownMenuItem onSelect={() => openRenameRun(run)}>
-                              <HugeiconsIcon icon={Edit03Icon} strokeWidth={1.75} className="size-icon" />
-                              <span>{t("common.rename")}</span>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              variant="destructive"
-                              disabled={run.status === "running"}
-                              onSelect={() =>
-                                setConfirmingDelete({ kind: "run", run })
+                        <button
+                          type="button"
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            try {
+                              await deleteTrainingRun(run.id);
+                              if (selectedHistoryRunId === run.id) {
+                                setSelectedHistoryRunId(null);
                               }
-                            >
-                              <HugeiconsIcon icon={Delete02Icon} strokeWidth={1.75} className="size-icon" />
-                              <span>{t("common.delete")}</span>
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                              await refreshRuns();
+                            } catch {
+                              // ignore — next refresh will reconcile
+                            }
+                          }}
+                          title="Delete"
+                          className="absolute right-1 top-1/2 -translate-y-1/2 flex size-5 scale-90 items-center justify-center rounded-md text-sidebar-foreground/55 opacity-0 transition-all duration-150 hover:bg-destructive/12 hover:text-destructive group-hover/run-item:scale-100 group-hover/run-item:opacity-100"
+                        >
+                          <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} className="size-3.5" />
+                        </button>
                       </SidebarMenuItem>
                     );
                   })}
@@ -703,27 +513,39 @@ export function AppSidebar() {
         )}
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-sidebar-border group-data-[collapsible=icon]:border-transparent group-data-[collapsible=icon]:px-0">
+      <SidebarFooter className="border-t border-sidebar-border">
+        {hw.gpuName && (
+          <div className="flex items-center gap-1.5 px-2 py-1 text-[11px] font-medium text-muted-foreground/70 group-data-[collapsible=icon]:hidden">
+            <HugeiconsIcon icon={Chip02Icon} className="size-3.5" />
+            <span className="max-w-[140px] truncate" title={hw.gpuName}>
+              {hw.gpuName.replace("NVIDIA ", "").replace("GeForce ", "")}
+            </span>
+            {hw.gpuCount > 1 && (
+              <span className="text-purple-500 font-semibold">x{hw.gpuCount}</span>
+            )}
+            {hw.vramTotalGb != null && (
+              <span className="text-muted-foreground/50">
+                {Math.round(hw.gpuCount > 1 ? hw.vramTotalGb * hw.gpuCount : hw.vramTotalGb)}G
+              </span>
+            )}
+          </div>
+        )}
         <SidebarMenu>
           <SidebarMenuItem>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <SidebarMenuButton
                   size="lg"
-                  aria-label={t("shell.accountMenu", { name: displayTitle })}
-                  className="sidebar-nav-btn !h-[50px] gap-[8px] px-2 py-[9px] rounded-[10px]"
+                  className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                 >
-                  <div className="shrink-0">
-                    <UserAvatar
-                      name={displayTitle}
-                      imageUrl={avatarDataUrl}
-                      size="sm"
-                      className="!size-8"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-0.5 leading-tight group-data-[collapsible=icon]:hidden">
-                    <span className="truncate font-heading text-[13.5px] tracking-[0.025em] dark:tracking-[0.04em] font-semibold text-nav-fg">{displayTitle}</span>
-                    <span className="truncate text-[11.5px] tracking-nav text-muted-foreground">Unsloth</span>
+                  <img
+                    src="/Sloth emojis/sloth rounded.png"
+                    alt="Unsloth"
+                    className="size-8 rounded-lg shrink-0"
+                  />
+                  <div className="flex flex-col gap-0.5 leading-none group-data-[collapsible=icon]:hidden">
+                    <span className="truncate text-sm font-semibold">Unsloth</span>
+                    <span className="truncate text-[11px] text-muted-foreground">Train</span>
                   </div>
                   <ChevronsUpDown strokeWidth={1.25} className="ml-auto size-4 text-muted-foreground group-data-[collapsible=icon]:hidden" />
                 </SidebarMenuButton>
@@ -731,35 +553,25 @@ export function AppSidebar() {
               <DropdownMenuContent
                 side="top"
                 align="start"
-                className="app-user-menu menu-soft-surface-up ring-0 w-[15rem] py-2.5 font-heading rounded-[14px] border-0"
+                className="w-56"
               >
                 <DropdownMenuGroup>
                   <DropdownMenuItem
                     onSelect={() => useSettingsDialogStore.getState().openDialog()}
                   >
-                    <HugeiconsIcon icon={Settings02Icon} strokeWidth={1.75} className="size-icon" />
-                    <span>{t("shell.navigation.settings")}</span>
+                    <HugeiconsIcon icon={Settings02Icon} className="size-4" />
+                    <span>Settings</span>
                     <DropdownMenuShortcut>⌘,</DropdownMenuShortcut>
                   </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onSelect={() => useSettingsDialogStore.getState().openDialog("api-keys")}
-                  >
-                    <HugeiconsIcon icon={Globe02Icon} strokeWidth={1.75} className="size-[18px]" />
-                    <span>{t("shell.navigation.api")}</span>
-                    <span className="ml-auto rounded-[6px] border border-emerald-500/25 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] leading-none font-semibold text-emerald-700 dark:text-emerald-300">
-                      {t("common.new")}
-                    </span>
-                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuGroup>
                   <DropdownMenuItem
                     ref={anchorRef as React.Ref<HTMLDivElement>}
                     onSelect={(e) => { e.preventDefault(); toggleTheme(); }}
                   >
-                    {isDark ? <Sun strokeWidth={1.75} className="size-icon" /> : <Moon strokeWidth={1.75} className="size-icon" />}
-                    <span>
-                      {isDark
-                        ? t("shell.navigation.lightMode")
-                        : t("shell.navigation.darkMode")}
-                    </span>
+                    {isDark ? <Sun className="size-4" /> : <Moon className="size-4" />}
+                    <span>{isDark ? "Light Mode" : "Dark Mode"}</span>
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     disabled={!getTourId(pathname)}
@@ -773,35 +585,49 @@ export function AppSidebar() {
                       );
                     }}
                   >
-                    <HugeiconsIcon icon={CursorInfo02Icon} strokeWidth={1.75} className="size-icon" />
-                    <span>{t("shell.navigation.guidedTour")}</span>
+                    <HugeiconsIcon icon={CursorInfo02Icon} className="size-4" />
+                    <span>Guided Tour</span>
                   </DropdownMenuItem>
                 </DropdownMenuGroup>
-                <DropdownMenuSeparator className="mx-2.5! my-2.5! h-0! border-t border-border/70 bg-transparent!" />
-                <DropdownMenuItem
-                  onSelect={() => useSettingsDialogStore.getState().openDialog("about")}
-                >
-                  <HugeiconsIcon icon={HelpCircleIcon} strokeWidth={1.75} className="size-icon" />
-                  <span>{t("common.help")}</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onSelect={async () => {
-                    // Best-effort server-side revocation; ignore network errors
-                    // so the local clear path still runs and the user lands on /login.
-                    try {
-                      await logout();
-                    } catch {
-                      clearAuthTokens();
-                    }
-                    void navigate({ to: "/login" });
-                  }}
-                >
-                  <HugeiconsIcon icon={Logout05Icon} strokeWidth={1.75} className="size-icon" />
-                  <span>{t("shell.navigation.logOut")}</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => setShutdownOpen(true)}>
-                  <HugeiconsIcon icon={PowerIcon} strokeWidth={1.75} className="size-icon" />
-                  <span>{t("common.shutdown")}</span>
+                <DropdownMenuSeparator />
+                <DropdownMenuGroup>
+                  <DropdownMenuItem asChild>
+                    <a
+                      href="https://unsloth.ai/docs"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <HugeiconsIcon icon={Book03Icon} className="size-4" />
+                      <span>Learn More</span>
+                    </a>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <a
+                      href="https://unsloth.ai/docs/new/changelog"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <HugeiconsIcon
+                        icon={NewReleasesIcon}
+                        className="size-4"
+                      />
+                      <span>What's New</span>
+                    </a>
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <a
+                    href="https://github.com/unslothai/unsloth/issues"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <HugeiconsIcon
+                      icon={MessageSearch01Icon}
+                      className="size-4"
+                    />
+                    <span>Feedback</span>
+                  </a>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -810,114 +636,6 @@ export function AppSidebar() {
       </SidebarFooter>
     </Sidebar>
     <ChatSearchDialog />
-    <ShutdownDialog
-      open={shutdownOpen}
-      onOpenChange={setShutdownOpen}
-      onAfterShutdown={removeTrainingUnloadGuard}
-    />
-    <Dialog
-      open={confirmingDelete !== null}
-      onOpenChange={(open) => {
-        if (!open) setConfirmingDelete(null);
-      }}
-    >
-      <DialogContent className="menu-flat-destructive corner-squircle border border-border/60 bg-background/98 shadow-none sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>
-            {confirmingDelete?.kind === "run"
-              ? t("shell.dialog.deleteRun.title")
-              : t("shell.dialog.deleteChat.title")}
-          </DialogTitle>
-          <DialogDescription>
-            {confirmingDelete?.kind === "run" ? (
-              renderEmphasizedTranslation(
-                t,
-                "shell.dialog.deleteRun.description",
-                confirmingDelete.run.display_name ??
-                  confirmingDelete.run.model_name,
-              )
-            ) : confirmingDelete?.kind === "chat" ? (
-              renderEmphasizedTranslation(
-                t,
-                "shell.dialog.deleteChat.description",
-                confirmingDelete.item.title,
-              )
-            ) : null}
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter className="flex-wrap gap-2 sm:justify-end">
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => setConfirmingDelete(null)}
-          >
-            {t("common.cancel")}
-          </Button>
-          <Button
-            type="button"
-            variant="destructive"
-            onClick={() => void commitDelete()}
-          >
-            {t("common.delete")}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-    <Dialog
-      open={renamingTarget !== null}
-      onOpenChange={(open) => {
-        if (!open) setRenamingTarget(null);
-      }}
-    >
-      <DialogContent className="corner-squircle border border-border/60 bg-background/98 shadow-none sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>
-            {renamingTarget?.kind === "run"
-              ? t("shell.dialog.renameRun.title")
-              : t("shell.dialog.renameChat.title")}
-          </DialogTitle>
-        </DialogHeader>
-        <Input
-          value={renameDraft}
-          onChange={(event) => setRenameDraft(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.preventDefault();
-              void commitRename();
-            }
-          }}
-          autoFocus
-          maxLength={120}
-          placeholder={
-            renamingTarget?.kind === "run"
-              ? t("shell.dialog.renameRun.placeholder")
-              : t("shell.dialog.renameChat.placeholder")
-          }
-          aria-label={
-            renamingTarget?.kind === "run"
-              ? t("shell.dialog.renameRun.placeholder")
-              : t("shell.dialog.renameChat.placeholder")
-          }
-          className="focus-visible:border-input focus-visible:ring-0"
-        />
-        <DialogFooter className="flex-wrap gap-2 sm:justify-end">
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => setRenamingTarget(null)}
-          >
-            {t("common.cancel")}
-          </Button>
-          <Button
-            type="button"
-            onClick={() => void commitRename()}
-            disabled={!renameDirty}
-          >
-            {t("common.save")}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
     </>
   );
 }

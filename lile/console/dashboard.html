@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>lile — daemon dashboard</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --border: #30363d;
+    --ink: #c9d1d9; --dim: #8b949e; --accent: #58a6ff;
+    --ok: #3fb950; --warn: #f0883e; --err: #f85149;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink);
+    font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Inter", Helvetica, sans-serif; }
+  code, pre, .mono { font-family: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace; }
+  main { max-width: 960px; margin: 0 auto; padding: 20px; }
+  h1 { color: var(--accent); font-size: 18px; margin: 0 0 4px; }
+  h2 { color: var(--accent); font-size: 13px; margin: 22px 0 8px;
+       border-bottom: 1px solid var(--border); padding-bottom: 4px;
+       text-transform: uppercase; letter-spacing: .5px; }
+  .small { font-size: 12px; color: var(--dim); }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .card { background: var(--panel); border: 1px solid var(--border);
+          border-radius: 6px; padding: 12px; }
+  .k { color: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: .4px; }
+  .v { font-size: 22px; color: var(--accent); font-variant-numeric: tabular-nums;
+       margin-top: 2px; }
+  pre { background: var(--panel); border: 1px solid var(--border);
+        border-radius: 6px; padding: 10px; overflow: auto; font-size: 12px; margin: 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 12px; }
+  td, th { padding: 5px 8px; border-bottom: 1px solid var(--border); text-align: left;
+           vertical-align: top; }
+  .ok { color: var(--ok); }
+  .warn { color: var(--warn); }
+  .err { color: var(--err); }
+  .controls { display: flex; gap: 10px; align-items: center; margin: 10px 0 18px; }
+  .controls input { background: var(--panel); color: var(--ink);
+    border: 1px solid var(--border); border-radius: 4px; padding: 4px 8px; width: 240px; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+         background: var(--dim); margin-right: 6px; vertical-align: middle; }
+  .dot.live { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
+  .dot.dead { background: var(--err); }
+  footer { color: #6e7681; font-size: 11px; margin-top: 26px; }
+  .event { font-size: 11px; padding: 4px 8px; border-left: 2px solid var(--border); margin-bottom: 4px; }
+  .event.commit { border-color: var(--accent); }
+  .event.budget_exhausted { border-color: var(--warn); }
+  .event.safety_alarm { border-color: var(--err); }
+  .event.shutdown { border-color: var(--dim); }
+</style>
+</head>
+<body>
+<main>
+  <h1>lile — daemon dashboard</h1>
+  <div class=small>Live view over <code>/health</code>, <code>/v1/state/snapshots</code>, <code>/v1/state/trajectory/tail</code>, <code>/v1/commits/stream</code>.</div>
+
+  <div class=controls>
+    <span class=dot id=dot></span>
+    <span id=status class=small>connecting…</span>
+    <input id=base value="/api" spellcheck=false>
+    <button id=reconnect>reconnect</button>
+  </div>
+
+  <h2>state</h2>
+  <div class=grid>
+    <div class=card><div class=k>commit cursor</div><div class=v id=cursor>—</div><div class=small id=cursor_sub>new commits since daemon start / snapshot load</div></div>
+    <div class=card><div class=k>queue depth</div><div class=v id=queue>—</div><div class=small>pending train tasks</div></div>
+    <div class=card><div class=k>merges</div><div class=v id=merges>—</div><div class=small>LoRA merges applied</div></div>
+    <div class=card><div class=k>model</div><div class=v style="font-size:13px" id=model>—</div><div class=small id=model_sub>serving weights</div></div>
+  </div>
+
+  <h2>snapshots</h2>
+  <pre id=snapshots>—</pre>
+  <div class=small>A snapshot bakes N commits into the LoRA state. After <code>/v1/state/snapshot/load</code>, <code>commit_cursor</code> counts only <b>new</b> activity — the prior commits live in the snapshot artifact, not the running session.</div>
+
+  <h2>trajectory (last 20 events)</h2>
+  <div id=trajectory><div class=small>—</div></div>
+
+  <h2>commit stream (live)</h2>
+  <div id=stream><div class=small>—</div></div>
+
+  <footer>
+    Snapshot → replay-addressable tag. Commit → atomic, addressable LoRA-state advance.
+    Phi_obs / K_session*: cumulative-drift budget (Tier 5, Mei+Cleo). Budget_exhausted SSE: spec lile/docs/research/pr-specs/budget-exhausted-sse.md.
+  </footer>
+</main>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  let es = null;
+  let pollT = null;
+
+  const baseUrl = () => $('base').value.replace(/\/+$/, '');
+
+  const setStatus = (live, msg) => {
+    $('dot').className = 'dot ' + (live ? 'live' : 'dead');
+    $('status').textContent = msg;
+  };
+
+  async function poll() {
+    const b = baseUrl();
+    try {
+      const h = await fetch(b + '/health').then(r => r.json());
+      $('cursor').textContent = h.commit_cursor ?? '—';
+      $('queue').textContent  = h.queue_depth  ?? '—';
+      $('merges').textContent = h.merges       ?? '—';
+      $('model').textContent  = h.model        ?? '—';
+      $('model_sub').textContent = 'serving · ' + (h.ok ? 'ok' : 'unhealthy');
+    } catch (e) {
+      setStatus(false, 'daemon unreachable at ' + b);
+      return;
+    }
+
+    try {
+      const s = await fetch(b + '/v1/state/snapshots').then(r => r.json());
+      $('snapshots').textContent = (s.snapshots || []).map(n => ' ' + n).join('\n') || '(none)';
+    } catch {}
+
+    try {
+      const t = await fetch(b + '/v1/state/trajectory/tail?n=20').then(r => r.json());
+      const events = t.events || [];
+      if (!events.length) {
+        $('trajectory').innerHTML = '<div class=small>no events yet — daemon idle or freshly loaded snapshot</div>';
+      } else {
+        $('trajectory').innerHTML = events.slice().reverse().map(ev => {
+          const ts = new Date((ev.ts || 0) * 1000).toISOString().slice(11, 19);
+          const kind = ev.kind || 'event';
+          const rest = Object.entries(ev).filter(([k]) => !['ts','kind'].includes(k))
+            .map(([k,v]) => `${k}=${typeof v === 'string' ? v.slice(0,60) : JSON.stringify(v)}`)
+            .join('  ');
+          return `<div class=event><code>${ts}</code> · <b>${kind}</b> · <span class=small>${escapeHtml(rest)}</span></div>`;
+        }).join('');
+      }
+    } catch {}
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'})[c]);
+  }
+
+  function connectStream() {
+    if (es) { try { es.close(); } catch {} }
+    const b = baseUrl();
+    try {
+      es = new EventSource(b + '/v1/commits/stream');
+    } catch (e) {
+      setStatus(false, 'stream failed: ' + e.message);
+      return;
+    }
+    es.onopen = () => setStatus(true, 'stream connected · ' + b);
+    es.onerror = () => setStatus(false, 'stream closed/error · polling only');
+
+    const append = (type, data) => {
+      const el = document.createElement('div');
+      el.className = 'event ' + type;
+      const ts = new Date().toISOString().slice(11, 19);
+      el.innerHTML = `<code>${ts}</code> · <b>${type}</b> · <span class=small>${escapeHtml(JSON.stringify(data))}</span>`;
+      const host = $('stream');
+      if (host.firstChild && host.firstChild.className === 'small') host.innerHTML = '';
+      host.insertBefore(el, host.firstChild);
+      while (host.children.length > 50) host.removeChild(host.lastChild);
+    };
+
+    ['commit', 'budget_exhausted', 'safety_alarm', 'shutdown'].forEach(name => {
+      es.addEventListener(name, ev => {
+        try { append(name, JSON.parse(ev.data)); } catch { append(name, ev.data); }
+        poll();
+      });
+    });
+  }
+
+  function start() {
+    if (pollT) clearInterval(pollT);
+    poll();
+    pollT = setInterval(poll, 3000);
+    connectStream();
+  }
+
+  $('reconnect').addEventListener('click', start);
+  start();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>lile — prometheus live</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --border: #30363d;
+    --ink: #c9d1d9; --dim: #8b949e; --accent: #58a6ff;
+    --ok: #3fb950; --warn: #f0883e; --err: #f85149;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink);
+    font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Inter", Helvetica, sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px; }
+  h1 { color: var(--accent); font-size: 18px; margin: 0 0 4px; }
+  h2 { color: var(--accent); font-size: 12px; margin: 22px 0 6px;
+       text-transform: uppercase; letter-spacing: .5px;
+       border-bottom: 1px solid var(--border); padding-bottom: 4px; }
+  .small { font-size: 12px; color: var(--dim); }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .card { background: var(--panel); border: 1px solid var(--border);
+          border-radius: 6px; padding: 12px; }
+  .k { color: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: .4px; }
+  .v { font-size: 22px; color: var(--accent); font-variant-numeric: tabular-nums;
+       margin-top: 2px; }
+  .counters { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; }
+  canvas { width: 100% !important; height: 220px !important; }
+  .status { display: flex; gap: 10px; align-items: center; margin: 8px 0 14px; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+         background: var(--dim); margin-right: 4px; vertical-align: middle; }
+  .dot.live { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
+  .dot.dead { background: var(--err); }
+</style>
+</head>
+<body>
+<main>
+  <h1>lile — prometheus live</h1>
+  <div class=small>Scrapes <code>/api/metrics</code> every 2 s; in-memory rolling window (120 pts).</div>
+  <div class=status><span class=dot id=dot></span><span id=status class=small>connecting…</span></div>
+
+  <div class=counters>
+    <div class=card><div class=k>train steps</div><div class=v id=c_train>—</div><div class=small>sft + unlike + coh + …</div></div>
+    <div class=card><div class=k>chat completions</div><div class=v id=c_chat>—</div><div class=small>/v1/chat/completions</div></div>
+    <div class=card><div class=k>feedback events</div><div class=v id=c_feedback>—</div><div class=small>/v1/feedback</div></div>
+    <div class=card><div class=k>queue depth</div><div class=v id=c_queue>—</div><div class=small>pending tasks</div></div>
+  </div>
+
+  <h2>train steps / sec (per objective)</h2>
+  <div class=card><canvas id=ch_train></canvas></div>
+
+  <h2>chat completions / sec</h2>
+  <div class=card><canvas id=ch_chat></canvas></div>
+
+  <h2>queue depth</h2>
+  <div class=card><canvas id=ch_queue></canvas></div>
+
+  <h2>loss (last observed p50 per objective)</h2>
+  <div class=card><canvas id=ch_loss></canvas></div>
+</main>
+
+<script>
+(() => {
+  const MAX_PTS = 120;
+  const POLL_MS = 2000;
+  const palette = ["#58a6ff", "#3fb950", "#f0883e", "#f85149", "#a371f7", "#ffd166"];
+
+  // ---- tiny prometheus text parser -------------------------------------
+  // Returns: metrics[name] = [{labels:{...}, value:Number}, ...]
+  function parsePromText(txt) {
+    const out = {};
+    for (const raw of txt.split("\n")) {
+      const line = raw.trim();
+      if (!line || line.startsWith("#")) continue;
+      // e.g. foo_total{a="x",b="y"} 12.3
+      const m = line.match(/^([a-zA-Z_:][a-zA-Z0-9_:]*)(\{[^}]*\})?\s+([-+eE0-9.naifNAIF]+)$/);
+      if (!m) continue;
+      const name = m[1];
+      const labels = {};
+      if (m[2]) {
+        const inside = m[2].slice(1, -1);
+        const re = /([a-zA-Z_][a-zA-Z0-9_]*)="((?:[^"\\]|\\.)*)"/g;
+        let lm; while ((lm = re.exec(inside))) labels[lm[1]] = lm[2];
+      }
+      const v = Number(m[3]);
+      (out[name] ||= []).push({ labels, value: v });
+    }
+    return out;
+  }
+
+  // ---- rolling series -------------------------------------------------
+  function mkSeries() { return { t: [], y: [] }; }
+  function push(series, t, y) {
+    series.t.push(t); series.y.push(y);
+    if (series.t.length > MAX_PTS) { series.t.shift(); series.y.shift(); }
+  }
+
+  const state = {
+    last: null,            // previous scrape for rate calc
+    trainByObj: {},        // objective -> rolling rate series
+    chat: mkSeries(),
+    queue: mkSeries(),
+    lossByObj: {},
+  };
+
+  function upsertSeries(bag, key) {
+    if (!bag[key]) bag[key] = mkSeries();
+    return bag[key];
+  }
+
+  // ---- charts ----------------------------------------------------------
+  const commonOpts = () => ({
+    animation: false, responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { labels: { color: "#c9d1d9", font: { size: 11 } } } },
+    scales: {
+      x: { ticks: { color: "#8b949e", font: { size: 10 } },
+           grid: { color: "rgba(48,54,61,0.5)" } },
+      y: { ticks: { color: "#8b949e", font: { size: 10 } },
+           grid: { color: "rgba(48,54,61,0.5)" } },
+    },
+  });
+
+  const chTrain = new Chart(document.getElementById("ch_train"), {
+    type: "line", data: { labels: [], datasets: [] }, options: commonOpts(),
+  });
+  const chChat = new Chart(document.getElementById("ch_chat"), {
+    type: "line",
+    data: { labels: [], datasets: [{ label: "chat/s", data: [], borderColor: palette[0], borderWidth: 1.5, pointRadius: 0 }] },
+    options: commonOpts(),
+  });
+  const chQueue = new Chart(document.getElementById("ch_queue"), {
+    type: "line",
+    data: { labels: [], datasets: [{ label: "queue_depth", data: [], borderColor: palette[2], borderWidth: 1.5, pointRadius: 0 }] },
+    options: commonOpts(),
+  });
+  const chLoss = new Chart(document.getElementById("ch_loss"), {
+    type: "line", data: { labels: [], datasets: [] }, options: commonOpts(),
+  });
+
+  function rebuildMultiDataset(chart, bag) {
+    const keys = Object.keys(bag).sort();
+    const anchor = keys.length ? bag[keys[0]].t.map(t => new Date(t).toLocaleTimeString().slice(3)) : [];
+    chart.data.labels = anchor;
+    chart.data.datasets = keys.map((k, i) => ({
+      label: k, data: bag[k].y, borderColor: palette[i % palette.length],
+      borderWidth: 1.5, pointRadius: 0, tension: 0.15,
+    }));
+    chart.update();
+  }
+
+  function updateSingle(chart, series) {
+    chart.data.labels = series.t.map(t => new Date(t).toLocaleTimeString().slice(3));
+    chart.data.datasets[0].data = series.y;
+    chart.update();
+  }
+
+  // ---- scrape loop ----------------------------------------------------
+  async function scrape() {
+    try {
+      const txt = await fetch("/api/metrics").then(r => r.text());
+      const m = parsePromText(txt);
+      const now = Date.now();
+
+      // Counters
+      const trainTotal = (m["lile_train_steps_total"] || [])
+        .reduce((a, r) => a + r.value, 0);
+      const chatTotal = (m["lile_requests_total"] || [])
+        .filter(r => r.labels.route === "/v1/chat/completions" && r.labels.status === "200")
+        .reduce((a, r) => a + r.value, 0);
+      const feedbackTotal = (m["lile_feedback_events_total"] || [])
+        .reduce((a, r) => a + r.value, 0);
+      const queueDepth = (m["lile_queue_depth"] || [{ value: 0 }])[0].value;
+
+      document.getElementById("c_train").textContent = trainTotal.toFixed(0);
+      document.getElementById("c_chat").textContent = chatTotal.toFixed(0);
+      document.getElementById("c_feedback").textContent = feedbackTotal.toFixed(0);
+      document.getElementById("c_queue").textContent = queueDepth.toFixed(0);
+
+      // Rates vs previous scrape
+      if (state.last) {
+        const dt = (now - state.last.t) / 1000;
+        // per-objective train rate
+        const byObjNow = {};
+        for (const r of (m["lile_train_steps_total"] || [])) {
+          byObjNow[r.labels.objective || "unknown"] = r.value;
+        }
+        for (const [obj, v] of Object.entries(byObjNow)) {
+          const prev = state.last.trainByObj[obj] || 0;
+          const rate = Math.max(0, (v - prev) / dt);
+          push(upsertSeries(state.trainByObj, obj), now, rate);
+        }
+        // chat/s
+        const dChat = chatTotal - (state.last.chat || 0);
+        push(state.chat, now, Math.max(0, dChat / dt));
+      }
+
+      push(state.queue, now, queueDepth);
+
+      // loss: take the sum/count from the histogram — best-effort
+      for (const r of (m["lile_objective_loss_sum"] || [])) {
+        const obj = r.labels.objective || "unknown";
+        const cRow = (m["lile_objective_loss_count"] || [])
+          .find(x => x.labels.objective === obj);
+        if (!cRow || !cRow.value) continue;
+        const mean = r.value / cRow.value;
+        if (Number.isFinite(mean)) push(upsertSeries(state.lossByObj, obj), now, mean);
+      }
+
+      rebuildMultiDataset(chTrain, state.trainByObj);
+      updateSingle(chChat, state.chat);
+      updateSingle(chQueue, state.queue);
+      rebuildMultiDataset(chLoss, state.lossByObj);
+
+      // Remember for next rate calc
+      state.last = {
+        t: now, chat: chatTotal,
+        trainByObj: (m["lile_train_steps_total"] || []).reduce((a, r) => {
+          a[r.labels.objective || "unknown"] = r.value; return a;
+        }, {}),
+      };
+
+      document.getElementById("dot").className = "dot live";
+      document.getElementById("status").textContent = "scraping /api/metrics every " + (POLL_MS/1000) + "s";
+    } catch (e) {
+      document.getElementById("dot").className = "dot dead";
+      document.getElementById("status").textContent = "scrape failed: " + e.message;
+    } finally {
+      setTimeout(scrape, POLL_MS);
+    }
+  }
+
+  scrape();
+})();
+</script>
+</body>
+</html>

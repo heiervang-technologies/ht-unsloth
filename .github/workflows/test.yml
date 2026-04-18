@@ -1,0 +1,58 @@
+name: lile test
+
+on:
+  pull_request:
+    paths:
+      - 'lile/**'
+      - 'pyproject.toml'
+      - '.github/workflows/test.yml'
+  push:
+    branches:
+      - ht
+      - main
+    paths:
+      - 'lile/**'
+      - 'pyproject.toml'
+      - '.github/workflows/test.yml'
+  workflow_dispatch:
+
+# Scope for this first pass: only the `cpu_only` and `eval` slices that can
+# run without torch on a stock GitHub runner. The GPU-dependent slice
+# (engine / state / controller / objectives e2e) stays on the dev-machine
+# smoke path until we wire a GPU runner. Extending CI is a separate PR.
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        bucket: [cpu_only, eval]
+    name: ${{ matrix.bucket }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      # Torchless deps — enough for the whitelisted stdlib-only cpu_only
+      # tests (queue, reasoning, trajectory, errors) and the eval stub
+      # tests. The conftest.py at lile/tests/ skips collection of files
+      # that need torch or unsloth. We bypass `uv run` (which would sync
+      # the whole project, pulling torch/unsloth) and install a minimal
+      # pinned set into a fresh venv.
+      - name: Install base test deps
+        run: |
+          uv venv
+          uv pip install pytest pytest-asyncio httpx fastapi
+
+      - name: Install eval extras
+        if: matrix.bucket == 'eval'
+        run: uv pip install "lm-eval>=0.4.0" "evalplus>=0.3.0"
+
+      - name: Run pytest
+        run: .venv/bin/pytest lile/tests -m ${{ matrix.bucket }} -v --tb=short

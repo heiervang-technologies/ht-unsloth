@@ -1,0 +1,65 @@
+{
+  "run_id": "eval-stub0000",
+  "timestamp": "2026-04-17T00:00:00Z",
+  "endpoint": "http://127.0.0.1:8768/v1",
+  "model": "unsloth/Qwen3-9B",
+  "commit_cursor_before": null,
+  "commit_cursor_after": null,
+  "tasks": [
+    {
+      "task": "hellaswag",
+      "metric": "acc_norm",
+      "value": null,
+      "n": 0,
+      "wall_clock_s": 0.0,
+      "stub": true,
+      "raw": {
+        "note": "lm-eval not installed; run `uv sync --extra eval`"
+      }
+    },
+    {
+      "task": "arc_easy",
+      "metric": "acc_norm",
+      "value": null,
+      "n": 0,
+      "wall_clock_s": 0.0,
+      "stub": true,
+      "raw": {
+        "note": "lm-eval not installed; run `uv sync --extra eval`"
+      }
+    },
+    {
+      "task": "arc_challenge",
+      "metric": "acc_norm",
+      "value": null,
+      "n": 0,
+      "wall_clock_s": 0.0,
+      "stub": true,
+      "raw": {
+        "note": "lm-eval not installed; run `uv sync --extra eval`"
+      }
+    },
+    {
+      "task": "gsm8k",
+      "metric": "exact_match",
+      "value": null,
+      "n": 0,
+      "wall_clock_s": 0.0,
+      "stub": true,
+      "raw": {
+        "note": "lm-eval not installed; run `uv sync --extra eval`"
+      }
+    },
+    {
+      "task": "humaneval_plus",
+      "metric": "pass@1",
+      "value": null,
+      "n": 0,
+      "wall_clock_s": 0.0,
+      "stub": true,
+      "raw": {
+        "note": "evalplus not installed; run `uv sync --extra eval`"
+      }
+    }
+  ]
+}

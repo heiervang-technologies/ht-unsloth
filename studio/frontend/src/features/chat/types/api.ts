@@ -287,39 +287,26 @@ export interface OpenAIChatCompletionsRequest {
   external_model?: string;
   encrypted_api_key?: string;
   provider_base_url?: string | null;
-  /**
-   * Boolean toggle for OpenAI/Anthropic ephemeral cache_control. For
-   * Gemini the backend also accepts the cached-content resource name
-   * (`cachedContents/...`) as a string, which is forwarded as
-   * `generationConfig.cachedContent` on the native streamGenerateContent
-   * request.
-   */
   enable_prompt_caching?: boolean | string | null;
-  /**
-   * OpenAI shell-tool container id captured from the prior response in
-   * this chat thread. When set and the Code pill is on, the backend
-   * routes the next /v1/responses call with
-   * `environment.type="container_reference"` so filesystem state
-   * persists across turns. Unset → backend uses
-   * `environment.type="container_auto"` and OpenAI creates a fresh
-   * container. Only meaningful for OpenAI cloud + gpt-5.5 family.
-   */
   openai_code_exec_container_id?: string | null;
-  /**
-   * Anthropic code_execution container id captured from the prior
-   * response in this chat thread. When set and the Code pill is on,
-   * the backend forwards a top-level `container` field on
-   * /v1/messages so filesystem state persists across turns. Unset →
-   * Anthropic auto-creates a fresh container. Only meaningful for
-   * the Anthropic provider with `code_execution` in `enabled_tools`.
-   */
   anthropic_code_exec_container_id?: string | null;
-  /**
-   * Anthropic fast-mode toggle. Opus 4.6 / 4.7 only; backend drops
-   * silently on every other model + provider. See
-   * https://platform.claude.com/docs/en/build-with-claude/fast-mode
-   */
   fast_mode?: boolean | null;
+  /**
+   * Lile gating — when `lileBlockOnLastCommit` is on and a previous
+   * commit cursor is known, the adapter threads it through so the
+   * capsule replies only after it has integrated that commit.
+   */
+  after_commit_token?: number | null;
+}
+
+/**
+ * Server-emitted `lile` metadata block. Attached to the non-streaming
+ * response or to the final SSE chunk when `lileMode` is active.
+ */
+export interface LileResponseMeta {
+  response_id: string;
+  commit_cursor: number;
+  latency_s?: number;
 }
 
 export interface OpenAIChatDelta {
@@ -353,4 +340,9 @@ export interface OpenAIChatChunk {
     total_tokens: number;
   };
   timings?: Record<string, number>;
+  /**
+   * Optional `lile` metadata block carried on the final SSE chunk when
+   * streaming through `/api/lile/v1/chat/completions`.
+   */
+  lile?: LileResponseMeta;
 }

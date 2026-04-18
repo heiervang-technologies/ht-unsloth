@@ -237,6 +237,7 @@ from routes import (
     export_router,
     inference_router,
     inference_studio_router,
+    lile_router,
     mcp_servers_router,
     models_router,
     providers_router,
@@ -693,6 +694,7 @@ app.include_router(export_router, prefix = "/api/export", tags = ["export"])
 app.include_router(
     training_history_router, prefix = "/api/train", tags = ["training-history"]
 )
+app.include_router(lile_router)
 
 
 # ============ Health and System Endpoints ============

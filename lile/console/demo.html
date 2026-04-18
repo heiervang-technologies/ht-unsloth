@@ -1,0 +1,1004 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>lile — trial console</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #171a21; --panel2: #1c2029;
+    --ink: #e6ebf2; --dim: #8a93a1; --accent: #7aa2f7; --ok: #9ece6a;
+    --warn: #e0af68; --err: #f7768e; --user: #2b3246; --bot: #1a3a2e;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Inter", Helvetica, sans-serif;
+    font-size: 14px; height: 100%; }
+  code, pre, .mono { font-family: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace; }
+  header {
+    display: flex; gap: 20px; align-items: center; padding: 10px 16px;
+    background: var(--panel); border-bottom: 1px solid #242a33;
+    position: sticky; top: 0; z-index: 10;
+  }
+  header h1 { font-size: 16px; margin: 0; letter-spacing: .5px; }
+  header h1 span { color: var(--accent); }
+  header .stat { color: var(--dim); font-size: 12px; }
+  header .stat b { color: var(--ink); font-family: "JetBrains Mono", monospace; }
+  header button { margin-left: auto; }
+
+  main { display: grid; grid-template-columns: 1.3fr 1fr; gap: 12px; padding: 12px;
+    height: calc(100vh - 52px); min-height: 0; }
+  section { background: var(--panel); border: 1px solid #242a33; border-radius: 8px;
+    display: flex; flex-direction: column; min-height: 0; }
+  section > h2 { font-size: 12px; letter-spacing: 1px; text-transform: uppercase;
+    color: var(--dim); margin: 0; padding: 10px 14px; border-bottom: 1px solid #242a33; }
+  section > .body { padding: 12px 14px; overflow: auto; flex: 1 1 auto; min-height: 0; }
+
+  /* chat */
+  #chat-msgs { display: flex; flex-direction: column; gap: 8px; }
+  .msg { padding: 8px 12px; border-radius: 8px; max-width: 100%; line-height: 1.45;
+    white-space: pre-wrap; word-wrap: break-word; }
+  .msg.user { background: var(--user); align-self: flex-end; max-width: 80%; }
+  .msg.assistant { background: var(--bot); align-self: flex-start; max-width: 90%; }
+  .msg.system { background: #2b2230; color: var(--dim); font-style: italic;
+    align-self: center; max-width: 90%; font-size: 12px; }
+  .msg .meta { font-size: 11px; color: var(--dim); margin-top: 6px;
+    display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .msg .meta button { font-size: 11px; padding: 2px 8px; }
+  .msg .meta .rid { font-family: "JetBrains Mono", monospace; }
+  #chat-input-wrap { display: flex; gap: 8px; padding: 10px 14px;
+    border-top: 1px solid #242a33; align-items: flex-end; }
+  #chat-input { flex: 1; resize: vertical; min-height: 40px; max-height: 150px; }
+  .gen-opts { display: flex; gap: 8px; padding: 6px 14px;
+    border-top: 1px solid #242a33; color: var(--dim); font-size: 12px;
+    align-items: center; }
+  .gen-opts input[type=number] { width: 70px; }
+
+  /* right column: tabs */
+  #right { display: flex; flex-direction: column; gap: 0; min-height: 0; }
+  .tabs { display: flex; border-bottom: 1px solid #242a33; background: var(--panel); }
+  .tabs button { background: transparent; border: none; color: var(--dim);
+    padding: 10px 14px; cursor: pointer; border-bottom: 2px solid transparent;
+    font-size: 12px; letter-spacing: .5px; text-transform: uppercase; }
+  .tabs button.active { color: var(--ink); border-bottom-color: var(--accent); }
+  .tab { display: none; padding: 12px 14px; overflow: auto; flex: 1 1 auto; min-height: 0; }
+  .tab.active { display: block; }
+
+  /* inputs */
+  input, textarea, select, button {
+    font: inherit; color: var(--ink); background: var(--panel2);
+    border: 1px solid #2d333e; border-radius: 6px; padding: 7px 10px;
+  }
+  textarea { font-family: "JetBrains Mono", monospace; font-size: 13px; }
+  button { cursor: pointer; background: var(--panel2); }
+  button:hover { background: #242a36; }
+  button.primary { background: var(--accent); color: #0f1115; border-color: var(--accent); font-weight: 600; }
+  button.primary:hover { filter: brightness(1.1); }
+  button.ok { background: var(--ok); color: #0f1115; border-color: var(--ok); }
+  button.warn { background: var(--warn); color: #0f1115; border-color: var(--warn); }
+  button.err { background: var(--err); color: #0f1115; border-color: var(--err); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  label { display: block; color: var(--dim); font-size: 12px; margin: 8px 0 4px; }
+  .row { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
+  .row > * { flex: 0 0 auto; }
+  .row > input[type=text], .row > textarea, .row > select { flex: 1 1 auto; }
+  pre.json { background: var(--panel2); padding: 10px; border-radius: 6px;
+    font-size: 12px; overflow: auto; max-height: 300px; }
+  .pill { display: inline-block; padding: 1px 7px; border-radius: 10px;
+    font-size: 11px; background: var(--panel2); color: var(--dim); margin-right: 4px; }
+  .pill.kto { background: #2a3a50; color: #7aa2f7; }
+  .pill.coh { background: #3a2a50; color: #bb9af7; }
+  .pill.sft { background: #2a503a; color: #9ece6a; }
+  .pill.merge, .pill.snapshot { background: #503a2a; color: #e0af68; }
+  .pill.ntp { background: #2a4a50; color: #7dcfff; }
+
+  .card { background: var(--panel2); border: 1px solid #2d333e; border-radius: 8px;
+    padding: 12px 14px; margin-bottom: 12px; }
+  details.card > summary { cursor: pointer; list-style: none; color: var(--dim);
+    user-select: none; }
+  details.card > summary::-webkit-details-marker { display: none; }
+  details.card[open] > summary { margin-bottom: 10px; }
+  .card-head { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
+  .card-sub { color: var(--dim); font-size: 12px; }
+
+  .turns { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+  .turn { display: flex; gap: 6px; align-items: flex-start; }
+  .turn .role-badge { flex: 0 0 80px; padding: 4px 8px; border-radius: 6px;
+    text-align: center; font-size: 11px; letter-spacing: .5px; text-transform: uppercase;
+    cursor: pointer; user-select: none; margin-top: 2px; }
+  .turn.user .role-badge { background: var(--user); color: var(--ink); }
+  .turn.assistant .role-badge { background: var(--bot); color: var(--ink); }
+  .turn.system .role-badge { background: #2b2230; color: var(--dim); }
+  .turn textarea { flex: 1; font-family: inherit; font-size: 13px;
+    min-height: 40px; resize: vertical; }
+  .turn .del { flex: 0 0 28px; height: 28px; padding: 0; margin-top: 2px;
+    color: var(--dim); }
+  .turn.target { outline: 1px solid var(--accent); outline-offset: 2px; }
+  .turn .target-tag { font-size: 10px; color: var(--accent); margin-top: 4px; }
+  button.mini { font-size: 12px; padding: 4px 8px; }
+  .row.right { justify-content: flex-end; }
+  .status-line { color: var(--dim); font-size: 12px; margin-top: 6px; }
+  .status-line.ok { color: var(--ok); }
+  .status-line.err { color: var(--err); }
+
+  ul.snap-list { list-style: none; padding: 0; margin: 10px 0 0; }
+  ul.snap-list li { padding: 6px 10px; background: var(--panel2);
+    border-radius: 6px; margin-bottom: 4px; display: flex; gap: 8px; align-items: center; }
+  ul.snap-list li .name { flex: 1; font-family: "JetBrains Mono", monospace; font-size: 12px; }
+
+  #traj-list { font-family: "JetBrains Mono", monospace; font-size: 12px; }
+  #traj-list .row-ev { padding: 4px 0; border-bottom: 1px solid #242a33;
+    display: grid; grid-template-columns: 80px 80px 1fr; gap: 8px; align-items: start; }
+  #traj-list .row-ev:hover { background: #1d2129; }
+  #traj-list .ts { color: var(--dim); }
+  #traj-list .ev-body { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  #traj-list .ev-detail { margin-top: 6px; background: #0e1118; }
+
+  /* reasoning_content panel — collapsible, dim, inline with the assistant msg */
+  .msg-reasoning { margin: 0 0 6px 0; border-left: 2px solid #3d2d5a;
+    padding: 4px 0 4px 10px; font-size: 12px; color: var(--dim);
+    white-space: pre-wrap; font-family: "JetBrains Mono", monospace; }
+  .msg-reasoning summary { cursor: pointer; color: #a083d9; user-select: none;
+    font-size: 11px; letter-spacing: .5px; text-transform: uppercase;
+    margin-bottom: 4px; }
+  .msg-reasoning[open] summary { margin-bottom: 6px; }
+  .msg-reasoning .msg-reasoning-body { white-space: pre-wrap; }
+
+  /* modal */
+  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.6);
+    display: none; align-items: center; justify-content: center; z-index: 50; }
+  .modal-bg.open { display: flex; }
+  .modal { background: var(--panel); border: 1px solid #2d333e;
+    border-radius: 10px; padding: 18px; width: min(560px, 94vw); }
+  .modal h3 { margin: 0 0 8px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>lile <span>trial console</span></h1>
+  <div class="stat">model&nbsp;<b id="st-model">—</b></div>
+  <div class="stat">queue&nbsp;<b id="st-queue">0</b></div>
+  <div class="stat">commit&nbsp;<b id="st-commit">0</b></div>
+  <div class="stat">merges&nbsp;<b id="st-merges">0</b></div>
+  <div class="stat" id="st-ping" style="color: var(--err)">offline</div>
+  <button id="btn-merge" title="Fold active LoRA into residual">merge now</button>
+</header>
+<main>
+  <section>
+    <h2>chat · /v1/chat/completions</h2>
+    <div class="body" id="chat-msgs"></div>
+    <div class="gen-opts">
+      <label style="margin:0">temp <input type="number" id="opt-temp" value="0.7" step="0.1" min="0" max="2"></label>
+      <label style="margin:0">top_p <input type="number" id="opt-topp" value="0.95" step="0.05" min="0" max="1"></label>
+      <label style="margin:0">max_tokens <input type="number" id="opt-maxtok" value="256" step="16" min="16" max="2048"></label>
+      <label style="margin:0"><input type="checkbox" id="opt-stream" checked> stream</label>
+      <label style="margin:0"><input type="checkbox" id="opt-think"> think</label>
+      <label style="margin:0 0 0 auto"><input type="checkbox" id="opt-wait"> block on last commit</label>
+      <button id="btn-clear" style="margin-left:auto">clear</button>
+    </div>
+    <div id="chat-input-wrap">
+      <textarea id="chat-input" placeholder="message… (shift+enter = newline, enter = send)"></textarea>
+      <button id="btn-send" class="primary">Send</button>
+    </div>
+  </section>
+
+  <section id="right">
+    <div class="tabs">
+      <button class="active" data-tab="train">Train</button>
+      <button data-tab="snap">Snapshots</button>
+      <button data-tab="traj">Trajectory</button>
+      <button data-tab="docs">How it works</button>
+    </div>
+
+    <div class="tab active" data-tab="train">
+      <p style="color:var(--dim);margin-top:0">Submit training samples directly. Feedback buttons in chat also route through here.</p>
+
+      <!-- ========== Chat SFT card ========== -->
+      <div class="card">
+        <div class="card-head">
+          <span class="pill sft">chat sft</span>
+          <span class="card-sub">user → assistant pair, chat template applied. Razin-safe.</span>
+        </div>
+        <div class="turns" id="chat-sft-turns"></div>
+        <div class="row" style="gap:6px">
+          <button id="btn-add-user" class="mini">+ user turn</button>
+          <button id="btn-add-asst" class="mini">+ assistant turn</button>
+          <span style="flex:1"></span>
+          <label style="margin:0">weight <input type="number" id="chat-sft-weight" value="1.0" step="0.5" min="0.1" max="10" style="width:60px"></label>
+          <button id="btn-chat-sft" class="primary">Teach</button>
+        </div>
+        <div id="chat-sft-status" class="status-line"></div>
+      </div>
+
+      <!-- ========== NTP SFT card ========== -->
+      <div class="card">
+        <div class="card-head">
+          <span class="pill ntp">ntp</span>
+          <span class="card-sub">raw next-token prediction on a passage. No chat template. Razin-safe.</span>
+        </div>
+        <label>text</label>
+        <textarea id="ntp-text" rows="5" placeholder="paste any text the model should imprint…"></textarea>
+        <div class="row right" style="gap:6px">
+          <button id="btn-ntp" class="primary">Imprint</button>
+        </div>
+        <div id="ntp-status" class="status-line"></div>
+      </div>
+
+      <!-- ========== Reinforce card ========== -->
+      <div class="card">
+        <div class="card-head">
+          <span class="pill kto">reinforce</span>
+          <span class="card-sub">replay a prior feedback event — same routing, fresh gradient step.</span>
+        </div>
+        <div class="row">
+          <button id="btn-reinforce-last">Replay last feedback</button>
+          <button id="btn-reinforce-list">Pick from history…</button>
+        </div>
+        <ul class="snap-list" id="reinforce-list"></ul>
+        <div id="reinforce-status" class="status-line"></div>
+      </div>
+
+      <!-- ========== Advanced (raw JSON) ========== -->
+      <details class="card">
+        <summary><span class="pill">advanced</span> raw JSON — all objectives</summary>
+        <label>objective</label>
+        <select id="tr-obj">
+          <option value="sft">sft — supervised fine-tune</option>
+          <option value="weighted_sft">weighted_sft — per-sample weights</option>
+          <option value="ntp">ntp — raw next-token</option>
+          <option value="kto">kto — binary preference</option>
+          <option value="coh">coh — chain-of-hindsight</option>
+          <option value="hinge">hinge — pair preference</option>
+          <option value="ccpd_v2">ccpd_v2 — contrastive</option>
+        </select>
+        <label>samples (JSON list)</label>
+        <textarea id="tr-samples" rows="7">[
+  {"prompt": "What is 2+2?", "response": "2+2 = 4."}
+]</textarea>
+        <div class="row right">
+          <label style="margin:0">chunk_size <input type="number" id="tr-chunk" value="2" style="width:70px"></label>
+          <button id="btn-train" class="primary">Submit</button>
+        </div>
+        <div id="tr-status" class="status-line"></div>
+        <pre class="json" id="tr-result" style="display:none"></pre>
+      </details>
+    </div>
+
+    <div class="tab" data-tab="snap">
+      <p style="color:var(--dim);margin-top:0">Snapshot saves the current adapter + residual + trajectory tail. Load restores.</p>
+      <div class="row">
+        <input type="text" id="snap-name" placeholder="snapshot name (e.g. v1-after-kto)">
+        <button id="btn-snap-save" class="ok">Save</button>
+      </div>
+      <button id="btn-snap-list">Refresh list</button>
+      <ul class="snap-list" id="snap-list"></ul>
+      <div id="snap-status" class="status-line"></div>
+    </div>
+
+    <div class="tab" data-tab="traj">
+      <p style="color:var(--dim);margin-top:0">Live tail of the trajectory log — every commit, merge, feedback, snapshot.</p>
+      <div class="row">
+        <label style="margin:0">n <input type="number" id="traj-n" value="30" min="5" max="200" style="width:70px"></label>
+        <label style="margin:0"><input type="checkbox" id="traj-auto" checked> auto-refresh</label>
+        <button id="btn-traj-refresh">Refresh</button>
+      </div>
+      <div id="traj-list"></div>
+    </div>
+
+    <div class="tab" data-tab="docs">
+      <h3 style="margin-top:0">What the endpoints do</h3>
+      <p><b>chat</b> — POST <code>/v1/chat/completions</code>. OpenAI-shaped. Extra <code>lile.*</code> block carries response_id and commit_cursor. Set <code>after_commit_token</code> to block generation until a specific training commit has landed.</p>
+      <p><b>feedback</b> — POST <code>/v1/feedback</code>. <span class="pill kto">binary</span> thumbs up/down → KTO. <span class="pill coh">nl_critique</span> → CoH with only a critique. <span class="pill coh">nl_critique_with_rewrite</span> → CoH with critique + better_response.</p>
+      <p><b>objectives at a glance</b>:
+        <span class="pill sft">sft</span> / <span class="pill ntp">ntp</span> / <span class="pill coh">coh</span> are <b>Razin-safe</b> (pure likelihood-up — see <code>lile/GLOSSARY.md</code>).
+        <span class="pill kto">kto</span> / <span class="pill">hinge</span> / <span class="pill">ccpd_v2</span> are preference-style and can exhibit likelihood displacement under adversarial pairs.
+      </p>
+      <p><b>Chat SFT vs NTP</b> — Chat SFT wraps (prior turns, target) through the tokenizer's chat template and gradients only the assistant target. NTP tokenizes the raw text with no template and gradients every token. Use NTP for imprinting a passage/style; use Chat SFT for teaching a response to a message.</p>
+      <p><b>train</b> — POST <code>/v1/train</code>. Submits a batch of samples for one objective. Returns <code>commit_token</code> you can wait for.</p>
+      <p><b>merge</b> — POST <code>/v1/state/merge</code>. Folds the active LoRA adapter into the residual Δ and resets the adapter. Frees the adapter for new gradients without losing prior updates.</p>
+      <p><b>snapshot</b> — POST <code>/v1/state/snapshot/save|load</code>, GET <code>/v1/state/snapshots</code>. Persists or restores the residual + adapter + trajectory.</p>
+      <p><b>trajectory</b> — GET <code>/v1/state/trajectory/tail?n=...</code>. Canonical append-only log of every committed train step, merge, and feedback event.</p>
+      <p><b>wait</b> — POST <code>/v1/wait?token=...&timeout=...</code>. Block until a training commit token has landed. Useful for "train then generate with the new weights."</p>
+    </div>
+  </section>
+</main>
+
+<!-- feedback modal -->
+<div class="modal-bg" id="fb-modal">
+  <div class="modal">
+    <h3 id="fb-title">Critique</h3>
+    <div class="status-line" id="fb-target"></div>
+    <label>what was wrong (critique)</label>
+    <textarea id="fb-critique" rows="3" placeholder="e.g. 'hallucinated a fact about the moon landing'"></textarea>
+    <label id="fb-better-label">better response (optional — include for coh-with-rewrite)</label>
+    <textarea id="fb-better" rows="3"></textarea>
+    <div class="row right" style="margin-top:10px">
+      <button id="fb-cancel">Cancel</button>
+      <button id="fb-submit" class="primary">Submit feedback</button>
+    </div>
+    <div id="fb-status" class="status-line"></div>
+  </div>
+</div>
+
+<script>
+const API = "/api";
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => document.querySelectorAll(s);
+let lastCommitToken = null;
+
+async function api(path, opts = {}) {
+  const r = await fetch(API + path, {
+    method: opts.method || "GET",
+    headers: { "content-type": "application/json" },
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  });
+  const txt = await r.text();
+  let j; try { j = JSON.parse(txt); } catch { j = { raw: txt }; }
+  if (!r.ok) throw new Error(j.detail || j.error || r.statusText);
+  return j;
+}
+
+// ---- health poll
+async function pollHealth() {
+  try {
+    const h = await api("/health");
+    $("#st-model").textContent = h.model;
+    $("#st-queue").textContent = h.queue_depth;
+    $("#st-commit").textContent = h.commit_cursor;
+    $("#st-merges").textContent = h.merges;
+    $("#st-ping").textContent = "online"; $("#st-ping").style.color = "var(--ok)";
+  } catch (e) {
+    $("#st-ping").textContent = "offline"; $("#st-ping").style.color = "var(--err)";
+  }
+}
+setInterval(pollHealth, 1500); pollHealth();
+
+// ---- chat
+const chatMsgs = $("#chat-msgs");
+const history = []; // {role, content}
+
+function attachAssistantMeta(el, { rid, latency, commit, content, historyIdx }) {
+  // clear any previous meta on this element (streaming updates replace)
+  el.querySelectorAll(".meta").forEach(n => n.remove());
+  const meta = document.createElement("div");
+  meta.className = "meta";
+  const rcSpan = document.createElement("span"); rcSpan.className = "rid";
+  rcSpan.textContent = `id:${rid.slice(0, 8)}`; meta.appendChild(rcSpan);
+  if (latency != null) {
+    const l = document.createElement("span"); l.textContent = `latency ${latency.toFixed(2)}s`; meta.appendChild(l);
+  }
+  if (commit != null) {
+    const c = document.createElement("span"); c.textContent = `commit ${commit}`; meta.appendChild(c);
+  }
+  const b = (txt, cls, handler) => {
+    const btn = document.createElement("button");
+    btn.textContent = txt; if (cls) btn.className = cls;
+    btn.onclick = handler; return btn;
+  };
+  meta.appendChild(b("↻ retry", null, () => retryFrom(historyIdx)));
+  meta.appendChild(b("👍 good", "ok", () => sendBinary(rid, "up", meta)));
+  meta.appendChild(b("👎 bad", "err", () => sendBinary(rid, "down", meta)));
+  meta.appendChild(b("💬 critique", "warn", () => openCritique(rid, el.dataset.content || content, false)));
+  meta.appendChild(b("✎ rewrite", "warn", () => openCritique(rid, el.dataset.content || content, true)));
+  el.appendChild(meta);
+}
+
+function addMsg(role, content, { rid = null, latency = null, commit = null, historyIdx = null } = {}) {
+  const el = document.createElement("div");
+  el.className = "msg " + role;
+  const body = document.createElement("div");
+  body.className = "msg-body";
+  body.textContent = content;
+  el.appendChild(body);
+  el.dataset.content = content;
+  if (role === "assistant" && rid) {
+    attachAssistantMeta(el, { rid, latency, commit, content, historyIdx });
+  }
+  chatMsgs.appendChild(el);
+  chatMsgs.scrollTop = chatMsgs.scrollHeight;
+  return el;
+}
+
+function updateMsgBody(el, text) {
+  const body = el.querySelector(".msg-body");
+  if (body) body.textContent = text;
+  el.dataset.content = text;
+  chatMsgs.scrollTop = chatMsgs.scrollHeight;
+}
+
+function ensureReasoningPanel(el) {
+  // Lazily create a <details> panel above the .msg-body so reasoning_content
+  // renders distinctly from the final answer. Kept open by default so users
+  // see streaming reasoning tokens live; they can collapse per-message.
+  let r = el.querySelector(".msg-reasoning");
+  if (r) return r;
+  r = document.createElement("details");
+  r.className = "msg-reasoning";
+  r.open = true;
+  const sum = document.createElement("summary");
+  sum.textContent = "reasoning";
+  const body = document.createElement("div");
+  body.className = "msg-reasoning-body";
+  r.appendChild(sum); r.appendChild(body);
+  // Insert BEFORE .msg-body so reasoning flows top-to-bottom.
+  el.insertBefore(r, el.firstChild);
+  return r;
+}
+
+function updateMsgReasoning(el, text) {
+  const panel = ensureReasoningPanel(el);
+  const body = panel.querySelector(".msg-reasoning-body");
+  if (body) body.textContent = text;
+  chatMsgs.scrollTop = chatMsgs.scrollHeight;
+}
+
+async function runGeneration(userTurnIdx) {
+  // userTurnIdx = history index of the user turn that triggered generation.
+  const thinking = addMsg("system", "thinking…");
+  const body = {
+    messages: history,
+    temperature: parseFloat($("#opt-temp").value),
+    top_p: parseFloat($("#opt-topp").value),
+    max_tokens: parseInt($("#opt-maxtok").value, 10),
+  };
+  if ($("#opt-wait").checked && lastCommitToken != null) {
+    body.after_commit_token = lastCommitToken;
+  }
+  if ($("#opt-think").checked) {
+    body.enable_thinking = true;
+  }
+  const streaming = $("#opt-stream").checked;
+
+  if (!streaming) {
+    try {
+      const j = await api("/v1/chat/completions", { method: "POST", body });
+      thinking.remove();
+      const msg = j.choices[0].message;
+      const resp = msg.content || "";
+      const reasoning = msg.reasoning_content || "";
+      history.push({ role: "assistant", content: resp,
+                     ...(reasoning ? { reasoning_content: reasoning } : {}) });
+      const el = addMsg("assistant", resp, {
+        rid: j.lile.response_id,
+        latency: j.lile.latency_s,
+        commit: j.lile.commit_cursor,
+        historyIdx: userTurnIdx,
+      });
+      if (reasoning) updateMsgReasoning(el, reasoning);
+    } catch (e) {
+      thinking.remove();
+      addMsg("system", "error: " + e.message);
+    }
+    return;
+  }
+
+  // streaming path — SSE via fetch + reader
+  body.stream = true;
+  const t0 = performance.now();
+  let r;
+  try {
+    r = await fetch(API + "/v1/chat/completions", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch (e) {
+    thinking.remove();
+    addMsg("system", "error: " + e.message);
+    return;
+  }
+  if (!r.ok) {
+    thinking.remove();
+    const txt = await r.text();
+    addMsg("system", "error: " + txt);
+    return;
+  }
+
+  thinking.remove();
+  const asstEl = addMsg("assistant", "");
+  let full = "";
+  let reasoningFull = "";
+  let rid = null, commit = null, errMsg = null;
+
+  const reader = r.body.getReader();
+  const dec = new TextDecoder();
+  let buf = "";
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      // parse SSE frames — separated by \n\n
+      let idx;
+      while ((idx = buf.indexOf("\n\n")) !== -1) {
+        const frame = buf.slice(0, idx); buf = buf.slice(idx + 2);
+        const line = frame.split("\n").find(l => l.startsWith("data:"));
+        if (!line) continue;
+        const data = line.slice(5).trim();
+        if (data === "[DONE]") { buf = ""; break; }
+        let ev; try { ev = JSON.parse(data); } catch { continue; }
+        const lile = ev.lile || {};
+        if (lile.error) {
+          // Post-#19 lile.error is an object {code,message,retryable,request_id}.
+          // Fall back to the raw value for older servers that still emit a string.
+          errMsg = lile.error.message || lile.error;
+          continue;
+        }
+        if (lile.response_id) rid = lile.response_id;
+        if (lile.commit_cursor != null) commit = lile.commit_cursor;
+        const d = ev.choices?.[0]?.delta || {};
+        if (d.reasoning_content) {
+          reasoningFull += d.reasoning_content;
+          updateMsgReasoning(asstEl, reasoningFull);
+        }
+        if (d.content) { full += d.content; updateMsgBody(asstEl, full); }
+      }
+    }
+  } catch (e) {
+    errMsg = errMsg || e.message;
+  }
+
+  if (errMsg) {
+    updateMsgBody(asstEl, full || `[stream error: ${errMsg}]`);
+  }
+  history.push({ role: "assistant", content: full,
+                 ...(reasoningFull ? { reasoning_content: reasoningFull } : {}) });
+  const latency = (performance.now() - t0) / 1000;
+  attachAssistantMeta(asstEl, {
+    rid: rid || "stream",
+    latency,
+    commit,
+    content: full,
+    historyIdx: userTurnIdx,
+  });
+}
+
+async function sendChat() {
+  const input = $("#chat-input"); const text = input.value.trim();
+  if (!text) return;
+  input.value = "";
+  history.push({ role: "user", content: text });
+  const userTurnIdx = history.length - 1;
+  addMsg("user", text);
+  await runGeneration(userTurnIdx);
+}
+
+function retryFrom(userTurnIdx) {
+  // Drop everything after and including the assistant response
+  // for this user turn; re-run generation with history truncated to
+  // [..., user_turn @ userTurnIdx].
+  if (userTurnIdx == null || userTurnIdx < 0) return;
+  history.length = userTurnIdx + 1;
+  // Remove DOM messages after the user turn at position userTurnIdx.
+  // The DOM has one .msg per history entry (plus transient "thinking"/error system msgs).
+  // Simplest robust approach: clear + re-render from history.
+  chatMsgs.innerHTML = "";
+  history.forEach((m, i) => {
+    if (m.role === "assistant") {
+      const el = addMsg("assistant", m.content);
+      if (m.reasoning_content) updateMsgReasoning(el, m.reasoning_content);
+    } else if (m.role === "user") {
+      addMsg("user", m.content);
+    } else {
+      addMsg("system", m.content);
+    }
+  });
+  runGeneration(userTurnIdx);
+}
+
+$("#btn-send").onclick = sendChat;
+$("#chat-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat(); }
+});
+$("#btn-clear").onclick = () => { history.length = 0; chatMsgs.innerHTML = ""; };
+
+// ---- feedback: binary
+async function sendBinary(rid, value, metaEl) {
+  try {
+    const j = await api("/v1/feedback", { method: "POST",
+      body: { response_id: rid, kind: "binary", value, weight: 3.0 } });
+    lastCommitToken = j.commit_token;
+    const tag = document.createElement("span");
+    tag.className = "pill kto";
+    tag.textContent = `→ kto ${value} · commit ${j.commit_token}`;
+    metaEl.appendChild(tag);
+    refreshTraj();
+  } catch (e) { alert("feedback failed: " + e.message); }
+}
+
+// ---- feedback: critique / rewrite modal
+let critiqueTarget = null;
+function openCritique(rid, response, withRewrite) {
+  critiqueTarget = { rid, response, withRewrite };
+  $("#fb-title").textContent = withRewrite ? "Critique + rewrite → CoH" : "Critique only → CoH";
+  $("#fb-target").textContent = "target response: " + response.slice(0, 120) + (response.length > 120 ? "…" : "");
+  $("#fb-critique").value = "";
+  $("#fb-better").value = "";
+  $("#fb-better-label").style.display = withRewrite ? "" : "none";
+  $("#fb-better").style.display = withRewrite ? "" : "none";
+  $("#fb-status").textContent = "";
+  $("#fb-modal").classList.add("open");
+  setTimeout(() => $("#fb-critique").focus(), 50);
+}
+$("#fb-cancel").onclick = () => $("#fb-modal").classList.remove("open");
+$("#fb-submit").onclick = async () => {
+  const critique = $("#fb-critique").value.trim();
+  if (!critique) { $("#fb-status").textContent = "critique is required"; return; }
+  const body = {
+    response_id: critiqueTarget.rid,
+    kind: critiqueTarget.withRewrite ? "nl_critique_with_rewrite" : "nl_critique",
+    critique,
+  };
+  if (critiqueTarget.withRewrite) {
+    const better = $("#fb-better").value.trim();
+    if (!better) { $("#fb-status").textContent = "better_response required for rewrite mode"; return; }
+    body.better_response = better;
+  }
+  try {
+    const j = await api("/v1/feedback", { method: "POST", body });
+    lastCommitToken = j.commit_token;
+    $("#fb-status").textContent = "submitted · commit_token " + j.commit_token;
+    $("#fb-status").className = "status-line ok";
+    setTimeout(() => $("#fb-modal").classList.remove("open"), 700);
+    refreshTraj();
+  } catch (e) {
+    $("#fb-status").textContent = "error: " + e.message;
+    $("#fb-status").className = "status-line err";
+  }
+};
+
+// ---- tabs
+$$(".tabs button").forEach(b => b.onclick = () => {
+  $$(".tabs button").forEach(x => x.classList.remove("active"));
+  $$(".tab").forEach(x => x.classList.remove("active"));
+  b.classList.add("active");
+  $(`.tab[data-tab="${b.dataset.tab}"]`).classList.add("active");
+  if (b.dataset.tab === "snap") listSnapshots();
+  if (b.dataset.tab === "traj") refreshTraj();
+});
+
+// ---- Chat SFT turn editor -----------------------------------------------
+const chatSftTurns = $("#chat-sft-turns");
+// state: list of {role, content}
+let cstState = [
+  { role: "user", content: "" },
+  { role: "assistant", content: "" },
+];
+function renderChatSft() {
+  chatSftTurns.innerHTML = "";
+  // target = last assistant turn (whichever index)
+  let lastAsstIdx = -1;
+  for (let i = cstState.length - 1; i >= 0; i--) {
+    if (cstState[i].role === "assistant") { lastAsstIdx = i; break; }
+  }
+  cstState.forEach((t, i) => {
+    const row = document.createElement("div");
+    row.className = "turn " + t.role + (i === lastAsstIdx ? " target" : "");
+    const badge = document.createElement("div");
+    badge.className = "role-badge";
+    badge.textContent = t.role;
+    badge.title = "click to toggle user/assistant/system";
+    badge.onclick = () => {
+      t.role = ({ user: "assistant", assistant: "system", system: "user" })[t.role];
+      renderChatSft();
+    };
+    const ta = document.createElement("textarea");
+    ta.value = t.content;
+    ta.placeholder = t.role === "user" ? "user message…"
+      : t.role === "assistant" ? (i === lastAsstIdx ? "target assistant response…" : "prior assistant turn…")
+      : "system message…";
+    ta.oninput = () => { t.content = ta.value; };
+    const del = document.createElement("button");
+    del.className = "del"; del.textContent = "×"; del.title = "delete turn";
+    del.onclick = () => { cstState.splice(i, 1); renderChatSft(); };
+    row.appendChild(badge);
+    const wrap = document.createElement("div"); wrap.style.flex = "1";
+    wrap.appendChild(ta);
+    if (i === lastAsstIdx) {
+      const tag = document.createElement("div"); tag.className = "target-tag";
+      tag.textContent = "↑ target for gradient";
+      wrap.appendChild(tag);
+    }
+    row.appendChild(wrap); row.appendChild(del);
+    chatSftTurns.appendChild(row);
+  });
+}
+renderChatSft();
+$("#btn-add-user").onclick = () => {
+  cstState.push({ role: "user", content: "" }); renderChatSft();
+};
+$("#btn-add-asst").onclick = () => {
+  cstState.push({ role: "assistant", content: "" }); renderChatSft();
+};
+
+$("#btn-chat-sft").onclick = async () => {
+  // Find last assistant turn = target. Prior turns go into prompt.
+  let lastAsstIdx = -1;
+  for (let i = cstState.length - 1; i >= 0; i--) {
+    if (cstState[i].role === "assistant") { lastAsstIdx = i; break; }
+  }
+  if (lastAsstIdx === -1) {
+    return setStatus("#chat-sft-status", "need at least one assistant turn (the target)", "err");
+  }
+  const tgt = cstState[lastAsstIdx].content.trim();
+  if (!tgt) return setStatus("#chat-sft-status", "target assistant turn is empty", "err");
+
+  const prior = cstState.slice(0, lastAsstIdx).filter(t => t.content.trim());
+  if (!prior.length) return setStatus("#chat-sft-status", "need at least one user/system turn before the target", "err");
+
+  // Prior turns: join with speaker prefixes. The chat template will wrap the
+  // whole thing as a single user turn. For true multi-turn SFT the backend
+  // would need a messages-based sample shape — not yet wired.
+  let promptText;
+  if (prior.length === 1 && prior[0].role === "user") {
+    promptText = prior[0].content;
+  } else {
+    promptText = prior.map(t => `${t.role}: ${t.content}`).join("\n\n");
+  }
+
+  const weight = parseFloat($("#chat-sft-weight").value) || 1.0;
+  const objective = weight === 1.0 ? "sft" : "weighted_sft";
+  const sample = { prompt: promptText, response: tgt };
+  if (objective === "weighted_sft") sample.weight = weight;
+
+  setStatus("#chat-sft-status", "submitting…");
+  try {
+    const j = await api("/v1/train", { method: "POST",
+      body: { objective, samples: [sample] } });
+    lastCommitToken = j.commit_token;
+    setStatus("#chat-sft-status",
+      `queued · ${objective} · commit_token ${j.commit_token}`, "ok");
+    refreshTraj();
+  } catch (e) { setStatus("#chat-sft-status", "error: " + e.message, "err"); }
+};
+
+// ---- NTP ---------------------------------------------------------------
+$("#btn-ntp").onclick = async () => {
+  const text = $("#ntp-text").value.trim();
+  if (!text) return setStatus("#ntp-status", "text is empty", "err");
+  setStatus("#ntp-status", "submitting…");
+  try {
+    const j = await api("/v1/train", { method: "POST",
+      body: { objective: "ntp", samples: [{ text }] } });
+    lastCommitToken = j.commit_token;
+    setStatus("#ntp-status",
+      `queued · ntp · commit_token ${j.commit_token}`, "ok");
+    refreshTraj();
+  } catch (e) {
+    const msg = /unknown objective/i.test(e.message)
+      ? "ntp objective not registered — server needs restart after recent backend update"
+      : "error: " + e.message;
+    setStatus("#ntp-status", msg, "err");
+  }
+};
+
+// ---- Reinforce ---------------------------------------------------------
+function fbPayloadFromTraj(ev) {
+  // trajectory feedback events carry feedback_kind + the original payload fields
+  const kind = ev.feedback_kind || ev.kind;
+  if (!kind || kind === "feedback" || kind === "unknown") return null;
+  const p = { kind, response_id: ev.response_id };
+  // bypass in-memory index lookup (prior response_id may be stale after restart)
+  if (ev.prompt) p.prompt = ev.prompt;
+  if (ev.response) p.response = ev.response;
+  for (const k of ["value", "weight", "critique", "better_response"]) {
+    if (ev[k] != null) p[k] = ev[k];
+  }
+  return p;
+}
+
+async function replayPayload(p, statusSel) {
+  try {
+    const j = await api("/v1/feedback", { method: "POST", body: p });
+    lastCommitToken = j.commit_token;
+    setStatus(statusSel, `reinforced ${p.kind} · commit ${j.commit_token}`, "ok");
+    refreshTraj();
+  } catch (e) {
+    setStatus(statusSel, "error: " + e.message, "err");
+  }
+}
+
+$("#btn-reinforce-last").onclick = async () => {
+  try {
+    const j = await api("/v1/state/trajectory/tail?n=100");
+    const events = (j.events || []).slice().reverse();
+    const fb = events.find(ev => ev.kind === "feedback");
+    if (!fb) return setStatus("#reinforce-status", "no feedback events yet", "err");
+    const p = fbPayloadFromTraj(fb);
+    if (!p) return setStatus("#reinforce-status", "latest feedback is not replayable", "err");
+    await replayPayload(p, "#reinforce-status");
+  } catch (e) { setStatus("#reinforce-status", "error: " + e.message, "err"); }
+};
+
+$("#btn-reinforce-list").onclick = async () => {
+  try {
+    const j = await api("/v1/state/trajectory/tail?n=100");
+    const events = (j.events || []).slice().reverse();
+    const fbs = events.filter(ev => ev.kind === "feedback").slice(0, 20);
+    const ul = $("#reinforce-list"); ul.innerHTML = "";
+    if (!fbs.length) {
+      setStatus("#reinforce-status", "no feedback events in recent history", "err"); return;
+    }
+    fbs.forEach(ev => {
+      const li = document.createElement("li");
+      const kind = ev.feedback_kind || "?";
+      const summary =
+        ev.value ? `[${ev.value}]` :
+        ev.critique ? `"${ev.critique.slice(0, 60)}"` :
+        ev.better_response ? `→ "${ev.better_response.slice(0, 60)}"` : "";
+      const ts = ev.ts ? new Date(ev.ts * 1000).toISOString().slice(11, 19) : "";
+      const name = document.createElement("span");
+      name.className = "name";
+      name.innerHTML = `<span class="pill kto">${kind}</span>
+        <span style="color:var(--dim)">${ts}</span>
+        ${summary}`;
+      const btn = document.createElement("button");
+      btn.textContent = "Replay"; btn.className = "ok";
+      btn.onclick = () => replayPayload(fbPayloadFromTraj(ev), "#reinforce-status");
+      li.appendChild(name); li.appendChild(btn);
+      ul.appendChild(li);
+    });
+  } catch (e) { setStatus("#reinforce-status", "error: " + e.message, "err"); }
+};
+
+function setStatus(sel, text, cls) {
+  const el = $(sel); if (!el) return;
+  el.textContent = text; el.className = "status-line" + (cls ? " " + cls : "");
+}
+
+// ---- manual train (raw JSON advanced)
+$("#btn-train").onclick = async () => {
+  let samples;
+  try { samples = JSON.parse($("#tr-samples").value); }
+  catch (e) { $("#tr-status").textContent = "JSON parse error: " + e.message;
+    $("#tr-status").className = "status-line err"; return; }
+  const body = { objective: $("#tr-obj").value, samples,
+    chunk_size: parseInt($("#tr-chunk").value, 10) };
+  $("#tr-status").textContent = "submitting…"; $("#tr-status").className = "status-line";
+  try {
+    const j = await api("/v1/train", { method: "POST", body });
+    lastCommitToken = j.commit_token;
+    $("#tr-status").textContent = `queued ${j.n_chunks} chunk(s) · commit_token ${j.commit_token}`;
+    $("#tr-status").className = "status-line ok";
+    $("#tr-result").textContent = JSON.stringify(j, null, 2);
+    $("#tr-result").style.display = "";
+    refreshTraj();
+  } catch (e) { $("#tr-status").textContent = "error: " + e.message;
+    $("#tr-status").className = "status-line err"; }
+};
+
+// ---- merge
+$("#btn-merge").onclick = async () => {
+  $("#btn-merge").disabled = true; $("#btn-merge").textContent = "merging…";
+  try {
+    const j = await api("/v1/state/merge", { method: "POST" });
+    $("#btn-merge").textContent = `merge #${j.result?.merges_applied || "?"} ✓`;
+    setTimeout(() => { $("#btn-merge").textContent = "merge now"; }, 1500);
+    refreshTraj();
+  } catch (e) { alert("merge failed: " + e.message);
+    $("#btn-merge").textContent = "merge now"; }
+  finally { $("#btn-merge").disabled = false; }
+};
+
+// ---- snapshots
+async function listSnapshots() {
+  try {
+    const j = await api("/v1/state/snapshots");
+    const ul = $("#snap-list"); ul.innerHTML = "";
+    if (!j.snapshots?.length) {
+      ul.innerHTML = "<li style='color:var(--dim)'>no snapshots yet</li>"; return;
+    }
+    for (const name of j.snapshots) {
+      const li = document.createElement("li");
+      li.innerHTML = `<span class="name">${name}</span>`;
+      const load = document.createElement("button"); load.textContent = "Load"; load.className = "warn";
+      load.onclick = async () => {
+        try { const r = await api("/v1/state/snapshot/load", { method: "POST", body: { name } });
+          $("#snap-status").textContent = `loaded ${name} · commit ${r.commit_token}`;
+          $("#snap-status").className = "status-line ok"; refreshTraj();
+        } catch (e) { $("#snap-status").textContent = "load failed: " + e.message;
+          $("#snap-status").className = "status-line err"; }
+      };
+      li.appendChild(load); ul.appendChild(li);
+    }
+  } catch (e) { $("#snap-status").textContent = "list failed: " + e.message; }
+}
+$("#btn-snap-list").onclick = listSnapshots;
+$("#btn-snap-save").onclick = async () => {
+  const name = $("#snap-name").value.trim(); if (!name) return;
+  try {
+    const j = await api("/v1/state/snapshot/save", { method: "POST", body: { name } });
+    $("#snap-status").textContent = `saved ${name} · commit ${j.commit_token}`;
+    $("#snap-status").className = "status-line ok";
+    listSnapshots(); refreshTraj();
+  } catch (e) {
+    $("#snap-status").textContent = "save failed: " + e.message;
+    $("#snap-status").className = "status-line err";
+  }
+};
+
+// ---- trajectory
+async function refreshTraj() {
+  try {
+    const n = parseInt($("#traj-n").value, 10) || 30;
+    const j = await api(`/v1/state/trajectory/tail?n=${n}`);
+    const list = $("#traj-list"); list.innerHTML = "";
+    for (const ev of (j.events || []).slice().reverse()) {
+      const row = document.createElement("div"); row.className = "row-ev";
+      const k = ev.kind || "?";
+      const pillCls = ["kto","coh","sft","ntp","merge","snapshot"].includes(k) ? k
+        : (ev.objective && ["kto","coh","sft","ntp","hinge","cppo"].includes(ev.objective) ? ev.objective : "");
+      const ts = ev.ts ? new Date(ev.ts * 1000).toISOString().slice(11, 19) : "—";
+      const summary = [
+        ev.objective && `obj=${ev.objective}`,
+        ev.feedback_kind && `fb=${ev.feedback_kind}`,
+        ev.value && `val=${ev.value}`,
+        ev.loss != null && `loss=${Number(ev.loss).toFixed(4)}`,
+        ev.name && `name=${ev.name}`,
+        ev.merges_applied != null && `merges=${ev.merges_applied}`,
+      ].filter(Boolean).join(" ");
+
+      const tsCell = document.createElement("span"); tsCell.className = "ts"; tsCell.textContent = ts;
+      const pillCell = document.createElement("span");
+      pillCell.innerHTML = `<span class="pill ${pillCls}">${k}</span>`;
+      const bodyCell = document.createElement("span");
+      bodyCell.className = "ev-body";
+      bodyCell.textContent = summary;
+
+      // Inline replay button for feedback events — rebuild payload & POST to /v1/feedback
+      if (k === "feedback") {
+        const payload = fbPayloadFromTraj(ev);
+        if (payload) {
+          const btn = document.createElement("button");
+          btn.className = "mini ok"; btn.textContent = "↻ replay";
+          btn.title = `re-submit this ${ev.feedback_kind || "feedback"} event`;
+          btn.style.marginLeft = "8px";
+          btn.onclick = async (e) => {
+            e.stopPropagation();
+            btn.disabled = true; btn.textContent = "replaying…";
+            try {
+              const resp = await api("/v1/feedback", { method: "POST", body: payload });
+              lastCommitToken = resp.commit_token;
+              btn.textContent = `↻ commit ${resp.commit_token}`;
+              btn.className = "mini";
+              setTimeout(refreshTraj, 300);
+            } catch (err) {
+              btn.textContent = "failed"; btn.className = "mini err";
+              btn.title = err.message;
+              setTimeout(() => { btn.disabled = false; btn.textContent = "↻ replay"; btn.className = "mini ok"; }, 1500);
+            }
+          };
+          bodyCell.appendChild(btn);
+        }
+      }
+
+      // Show preview on click — stash the full event in a details popover
+      if (k === "feedback" || k === "train") {
+        row.style.cursor = "pointer";
+        row.onclick = () => {
+          let popover = row.querySelector(".ev-detail");
+          if (popover) { popover.remove(); return; }
+          popover = document.createElement("pre");
+          popover.className = "ev-detail json";
+          popover.textContent = JSON.stringify(ev, null, 2);
+          popover.style.gridColumn = "1 / -1";
+          popover.onclick = (e) => e.stopPropagation();
+          row.appendChild(popover);
+        };
+      }
+
+      row.appendChild(tsCell);
+      row.appendChild(pillCell);
+      row.appendChild(bodyCell);
+      list.appendChild(row);
+    }
+    if (!j.events?.length) list.innerHTML = "<div style='color:var(--dim)'>no events yet</div>";
+  } catch (e) { /* silent */ }
+}
+$("#btn-traj-refresh").onclick = refreshTraj;
+setInterval(() => {
+  if (document.querySelector('.tab[data-tab="traj"]').classList.contains("active")
+      && $("#traj-auto").checked) refreshTraj();
+}, 2500);
+</script>
+</body>
+</html>

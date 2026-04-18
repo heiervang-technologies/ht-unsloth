@@ -1,0 +1,212 @@
+{
+  "summary": {
+    "model": "unsloth/qwen3-0.6b-unsloth-bnb-4bit",
+    "k": 6,
+    "beta": 0.1,
+    "n_items": 3,
+    "repeats": 2,
+    "n_results": 6,
+    "spearman_mean": 0.3333333333333334,
+    "spearman_median": 0.48571428571428577,
+    "spearman_positive_fraction": 0.8333333333333334,
+    "decision_threshold_high": 0.5,
+    "decision_threshold_mid": 0.2,
+    "decision": "ship_T2_1_k8_with_hinge_primary",
+    "wall_seconds": 14.172863245010376,
+    "peak_vram_gb": 1.082563584
+  },
+  "per_item": [
+    {
+      "item_idx": 0,
+      "prompt": "Explain what a black hole is.",
+      "critique": "Be more concise. One short sentence maximum.",
+      "rep": 0,
+      "spearman": 0.942857142857143,
+      "n_candidates": 6,
+      "rc_scores": [
+        0.11869339942932129,
+        0.10514920353889466,
+        0.011095607280731203,
+        0.0887506365776062,
+        0.04069167375564575,
+        0.07255605459213257
+      ],
+      "truth_scores": [
+        -28,
+        -92,
+        -391,
+        -374,
+        -375,
+        -382
+      ],
+      "candidates": [
+        "A region of extreme gravity.",
+        "A black hole is a region of space where gravity is so strong that not even light can escape.",
+        "Black holes are fascinating astronomical objects that form when massive stars collapse at the end of their lives, creating regions of spacetime where the gravitational pull becomes so intense that nothing, not even photons, can escape past the event horizon. They were predicted by Einstein's theory of general relativity and have since been observed through various astrophysical phenomena.",
+        "<think>\nOkay, the user wants a concise explanation of black holes. They provided a feedback that says \"be more concise. One short sentence maximum.\" So, I need to make sure the answer is one sentence and as short as possible.\n\nI remember that a black hole is a region in space where gravity is so strong that nothing can escape, not even light. But how to phrase that in one",
+        "<think>\nOkay, the user wants me to explain a black hole in one sentence, as concise as possible. Let me start by recalling what I know. A black hole is a region in space where gravity is so strong that nothing can escape once it approaches it, even light. I need to make sure I include key points without adding unnecessary details. Maybe start with \"A black hole is a region",
+        "<think>\nOkay, the user wants a concise explanation of what a black hole is. The original feedback was to be more concise, one sentence maximum. The answer needs to be clear and to the point. Let me think. A black hole is a region in space where gravity is so intense that it stretches everything in its path, causing time to slow down, creating an event horizon, and trapping matter"
+      ]
+    },
+    {
+      "item_idx": 0,
+      "prompt": "Explain what a black hole is.",
+      "critique": "Be more concise. One short sentence maximum.",
+      "rep": 1,
+      "spearman": -0.6,
+      "n_candidates": 6,
+      "rc_scores": [
+        0.040093195438385014,
+        0.03797341585159302,
+        0.04102501869201661,
+        0.040969014167785645,
+        0.04031221866607666,
+        0.03720394372940063
+      ],
+      "truth_scores": [
+        -350,
+        -372,
+        -376,
+        -361,
+        -366,
+        -349
+      ],
+      "candidates": [
+        "<think>\nOkay, the user wants me to explain a black hole in a concise one-sentence format. Let me start by recalling what a black hole is. A black hole is a region in space where gravity is so strong that nothing can escape it, not even light. So I need to make sure that's the core point. Let me check if I'm including all necessary details. No extra",
+        "<think>\nOkay, the user wants a concise explanation for what a black hole is, in one short sentence. Let me start by recalling the basics. A black hole is a region in space where gravity is so strong that nothing can escape it, not even light. I need to make sure it's clear and captures all key points. Let me check if I'm including all important elements: massive gravity",
+        "<think>\nOkay, the user wants a concise explanation of what a black hole is. Let me start by recalling the basic definition. A black hole is a region in space where gravity is so intense that it causes light and matter to wrap around it, creating a region of extreme density. I need to make sure it's as short as possible. Let me check the previous response to see if there are",
+        "<think>\nOkay, the user wants me to explain what a black hole is in one short sentence. Let me start by recalling what a black hole is. A black hole is a region in space where gravity is so strong that nothing, not even light, can escape once it's within the event horizon. I need to make sure it's concise. I should check if I'm including all necessary elements",
+        "<think>\nOkay, the user wants me to explain what a black hole is in one sentence, maximum one short sentence. Let me start by recalling the basic definition. A black hole is a region in space where gravity is so strong that it prevents any matter or energy from escape, causing them to not emit light. I need to make sure it's concise, no more than that. Let me check",
+        "<think>\nOkay, the user wants me to explain black holes in a short, one-sentence way. Let me start by recalling what a black hole is. A black hole is a region in space where gravity is so intense that nothing can escape, not even light. I need to make sure it's concise. Maybe start with \"A black hole is a region in space where gravity is so intense"
+      ]
+    },
+    {
+      "item_idx": 1,
+      "prompt": "What happened in 1969?",
+      "critique": "Be more concise. Just the key fact.",
+      "rep": 0,
+      "spearman": 0.48571428571428577,
+      "n_candidates": 6,
+      "rc_scores": [
+        0.11010708808898927,
+        0.06346340179443359,
+        0.007935905456542968,
+        0.021603071689605714,
+        0.05074248313903809,
+        0.029535269737243654
+      ],
+      "truth_scores": [
+        -13,
+        -29,
+        -211,
+        -350,
+        -359,
+        -275
+      ],
+      "candidates": [
+        "Moon landing.",
+        "Apollo 11 landed on the Moon.",
+        "Many events happened in 1969, including the Apollo 11 Moon landing, Woodstock, the first Boeing 747 flight, and the Stonewall riots in New York City, along with numerous other historical events across the world.",
+        "<think>\nOkay, the user is asking about what happened in 1969, and they want a concise response with the key fact. Let me start by recalling the main events of that year. The Cold War was the main period, so I should mention that. Then, the events like the moon landing, the civil rights movement, and the atomic bomb testing are important. But I need",
+        "<think>\nOkay, the user wants a concise answer about what happened in 1969. They provided feedback that they want the key facts to be more concise. So I need to make sure the response is as brief as possible but still includes the necessary information.\n\nFirst, I remember that 1969 was a significant year in several key events. The Cold War was the main focus",
+        "<think>\nOkay, the user is asking \"What happened in 1969?\" and wants a concise, key fact response. Let me start by recalling the major events in that year. The Cold War is the main topic, right? The end of the Cold War in 1991, but that's a long time ago. Wait, 1969 was a key"
+      ]
+    },
+    {
+      "item_idx": 1,
+      "prompt": "What happened in 1969?",
+      "critique": "Be more concise. Just the key fact.",
+      "rep": 1,
+      "spearman": 0.2571428571428572,
+      "n_candidates": 6,
+      "rc_scores": [
+        0.016987895965576174,
+        0.06409823894500732,
+        0.0630847692489624,
+        0.03131855726242066,
+        0.06218054294586182,
+        0.04741281270980835
+      ],
+      "truth_scores": [
+        -344,
+        -350,
+        -309,
+        -367,
+        -335,
+        -330
+      ],
+      "candidates": [
+        "<think>\nOkay, the user is asking about what happened in 1969 and wants a concise answer. The key points to include should be the main events. Let me recall the major events of that year. The Cold War was the main focus, leading to the end of the Cold War and the start of the Cold War period. Also, the fall of the Berlin Wall was a significant",
+        "<think>\nOkay, the user wants me to revise the question to be more concise. The original answer was \"What happened in 1969?\" which is already concise. The feedback says to be more concise and just the key fact. So, I need to make sure the response is as brief as possible. The user probably wants a single, clear sentence or a simple statement. Let me",
+        "<think>\nOkay, the user wants me to answer \"What happened in 1969?\" but they need it to be more concise. The key fact is needed. So, I need to pick the main events of that year. The user might be looking for a short summary without too much detail. Let me check the facts. 1969 was a significant year, the Cold",
+        "<think>\nOkay, the user wants a concise answer about what happened in 1969. The initial response was a bit longer, so I need to make sure to keep it brief. The key facts should be included without any unnecessary details. Let me check the original answer again to ensure I'm not missing anything. The user probably wants a clear summary of major events in that year. I",
+        "<think>\nOkay, the user wants a concise summary of what happened in 1969. They provided feedback that says to make it more concise and just the key point. I need to make sure I include the main event without any extra details.\n\nFirst, I remember the key events. The Cold War started. Then there was the end of World War II. But wait, 19",
+        "<think>\nOkay, the user is asking about what happened in 1969, and they want it to be concise and just the key fact. Let me check the original answer.\n\nThe initial response was \"1969 was the year the United States joined the World Trade Organization (WTO).\" That's the key point. The user wants it more concise. I need to make sure"
+      ]
+    },
+    {
+      "item_idx": 2,
+      "prompt": "Describe a cat.",
+      "critique": "Keep it under ten words.",
+      "rep": 0,
+      "spearman": 0.6571428571428573,
+      "n_candidates": 6,
+      "rc_scores": [
+        0.23337359428405763,
+        0.10521197319030762,
+        0.006072998046875,
+        0.042279064655303955,
+        0.031465673446655275,
+        0.05498143434524536
+      ],
+      "truth_scores": [
+        -0.18,
+        -0.54,
+        -122.14,
+        -273.67,
+        -298.45,
+        -238.3
+      ],
+      "candidates": [
+        "A small furry pet.",
+        "Cats are small carnivorous mammals often kept as pets.",
+        "Cats are small domesticated carnivorous mammals that are valued by humans for companionship and for their ability to hunt rodents and other small vermin, and have been associated with humans for thousands of years.",
+        "<think>\nOkay, the user wants a cat description that's under ten words. Let me start by recalling the initial response. They need to be concise and maybe touch on some key attributes.\n\nFirst, the main characteristics: cute, friendly, domestic. Then, maybe mention something about being a companion or a pet. Need to check the word count. Let me count: \"A cat is a cute",
+        "<think>\nOkay, the user wants me to describe a cat in under ten words. Let me start by recalling the original response. The initial answer was \"A cat is a creature that lives in a home and enjoys the world around it.\" I need to check if that's under ten words. Let's count: \"A cat is a creature that lives in a home and enjoys the world around it",
+        "<think>\nOkay, the user wants a description of a cat that's under ten words. Let me start by recalling common characteristics. Cats are domestic animals, so the first word is \"Cat\". Next, they're animals, so \"domestic\". Then their main feature is the tail and fur. \"Domestic cat with tail and fur\". That's only 10 words. Wait, does"
+      ]
+    },
+    {
+      "item_idx": 2,
+      "prompt": "Describe a cat.",
+      "critique": "Keep it under ten words.",
+      "rep": 1,
+      "spearman": 0.2571428571428572,
+      "n_candidates": 6,
+      "rc_scores": [
+        0.06265541315078736,
+        0.030737435817718508,
+        0.052665567398071295,
+        0.03543522357940674,
+        0.045994496345520025,
+        0.03234065771102906
+      ],
+      "truth_scores": [
+        -288.53,
+        -267.89,
+        -253.49,
+        -258.41,
+        -263.4,
+        -298.61
+      ],
+      "candidates": [
+        "<think>\nOkay, the user wants me to describe a cat in ten words or less. Let me start by recalling the original request. The user mentioned \"keep under ten words\" and then the feedback that's for the revised version. So I need to make sure the revised version is concise.\n\nFirst, I should think of key features of a cat. They have fur, live in homes, are",
+        "<think>\nOkay, the user wants me to describe a cat in ten words or less. Let me start by recalling what a cat is. A cat is a small, furry animal, right? It has paws, a tail, and a body. I need to make sure I keep it concise.\n\nHmm, \"A cat is a small, furry animal with paws and a tail.\" That",
+        "<think>\nOkay, the user wants a cat description under ten words. The original response was 10 words. Let me check again. \"A cat is a creature, it walks with grace, and lives with joy.\" That's exactly ten words. It captures the essence: nature, movement, and positivity. I should ensure it's concise and meets the word count. No extra details. Perfect",
+        "<think>\nOkay, the user wants me to describe a cat in a ten-word limit. The original response was a bit long. Let me start by recalling the key points: a cat's appearance, behavior, and characteristics. Need to make sure it's concise. Maybe \"A cat is a small, curious creature with fur, eyes, and a playful nature.\" That's eight words. Let me",
+        "<think>\nOkay, the user wants a short description of a cat, under ten words. Let me start by brainstorming. What are common characteristics of a cat? They have fur, can't fly, live in homes, like cats. Need to make sure it's concise. Let me check the original request again. They want it under ten words. So maybe something like: \"A cat with",
+        "<think>\nOkay, the user wants me to describe a cat in ten words or fewer. Let me start by understanding the original request. They probably want a concise description of a cat, maybe for a quiz or something short.\n\nI need to make sure I stick to the word limit. Let's think of a simple definition. A cat is a domestic animal, so the response could be \"A domestic"
+      ]
+    }
+  ]
+}
