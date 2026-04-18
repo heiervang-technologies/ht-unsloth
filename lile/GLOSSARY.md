@@ -41,6 +41,8 @@ gains absolute mass). SFT-family objectives are aggregate-safe but NOT pointwise
 exactly which tail tokens grow: `p_j < M_p(η)` where `M_p(η) := -(1/η) log Σ_k p_k
 exp(η (𝟙[k=t] − p_k))`. **The unsafe regime is at small η**, not large — this
 inverts the common "smaller LR is safer" intuition. See §Safety regime in DESIGN.md.
+Machine-checked as `RazinSafety.SftMassFlow.sft_mass_flow_iff` (Lean 4 / Mathlib
+v4.30.0-rc1, no axioms).
 
 | objective      | aggregate-safe | pointwise-safe | reason                                               |
 |----------------|:--------------:|:--------------:|------------------------------------------------------|
