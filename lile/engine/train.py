@@ -181,4 +181,19 @@ class TrainEngine:
             if grad_norm_total is not None:
                 components["grad_norm_total"] = grad_norm_total
                 components["grad_clipped"] = bool(grad_norm_total > self.grad_clip)
+
+            # Post-step adapter + residual norm. Counterpart to grad_norm:
+            # grad_norm is the *impulse* this step applied; these are the
+            # *cumulative* size of the LoRA delta (live + merged residual).
+            # Complement each other on the dashboard.
+            adapter_sq = 0.0
+            for p in self.state.model.parameters():
+                if p.requires_grad:
+                    adapter_sq += float(p.detach().pow(2).sum())
+            components["adapter_norm_total"] = adapter_sq ** 0.5
+            residual_sq = 0.0
+            for d in self.state.merged_deltas.values():
+                residual_sq += float(d.detach().pow(2).sum())
+            components["residual_norm_total"] = residual_sq ** 0.5
+
             return {"loss": components["loss"], "components": components, "skipped": False}

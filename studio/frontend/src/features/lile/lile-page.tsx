@@ -8,6 +8,7 @@ import { CapsuleStatusStrip } from "@/features/lile/components/capsule-status-st
 import { CapsuleLoadForm } from "@/features/lile/components/capsule-load-form";
 import { LossChartCard } from "@/features/lile/components/charts/loss-chart-card";
 import { GradNormChartCard } from "@/features/lile/components/charts/grad-norm-chart-card";
+import { AdapterNormChartCard } from "@/features/lile/components/charts/adapter-norm-chart-card";
 import { KlDivergenceChartCard } from "@/features/lile/components/charts/kl-divergence-chart-card";
 import { QueueDepthChartCard } from "@/features/lile/components/charts/queue-depth-chart-card";
 import { ComponentsChartCard } from "@/features/lile/components/charts/components-chart-card";
@@ -30,9 +31,10 @@ export function LilePage(): ReactElement {
     <div className="flex flex-col gap-4 p-4">
       <CapsuleStatusStrip />
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
         <LossChartCard />
         <GradNormChartCard />
+        <AdapterNormChartCard />
         <KlDivergenceChartCard />
         <QueueDepthChartCard />
       </div>
