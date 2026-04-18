@@ -22,7 +22,10 @@ from pathlib import Path
 import httpx
 import pytest
 
-pytestmark = pytest.mark.cpu_only
+# NOTE: spawns a subprocess that runs a real uvicorn server; uvicorn is
+# not installed in the torchless cpu_only CI bucket. Leave unmarked so
+# the conftest filter excludes this file from that bucket rather than
+# collecting it and timing out on daemon startup.
 
 
 def _free_port() -> int:
