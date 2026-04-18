@@ -17,7 +17,10 @@ from __future__ import annotations
 
 import pytest
 
-pytestmark = pytest.mark.cpu_only
+# NOTE: these tests lazy-import ``lile.metrics`` inside their bodies, which
+# pulls prometheus_client — not available in the torchless cpu_only CI
+# bucket. Leave unmarked so the conftest filter excludes the whole file
+# rather than collecting and failing at test-run time.
 
 
 # ---------------------------------------------------------------- fixtures
