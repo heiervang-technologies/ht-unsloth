@@ -119,6 +119,15 @@ class ServeConfig:
     # filter expressions (would drift toward per-workflow state).
     commits_sse_enabled: bool = True
 
+    # --- safety_monitor daemon-global watchlist ---------------------------
+    # Three-tier union at step time: this daemon-global floor
+    # (absolute-never tokens — PII / safety-critical), ∪ batch-level
+    # ``batch_objectives[].watchlist``, ∪ per-sample ``sample["watchlist"]``.
+    # Consumed only when a ``safety_monitor`` batch objective is present
+    # in the spec; zero cost otherwise. See
+    # ``lile/docs/research/pr-specs/safety-monitor-primitive.md``.
+    default_watchlist: list[int] = field(default_factory=list)
+
 
 @dataclass
 class KLAnchorSpec:

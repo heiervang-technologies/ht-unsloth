@@ -17,7 +17,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from ._utils import build_chat_inputs, pad_and_stack, sequence_logprob
+from ._utils import (
+    build_chat_inputs,
+    extract_target_positions,
+    pad_and_stack,
+    sequence_logprob,
+)
 
 
 _COH_TEMPLATE_WITH_GOOD = (
@@ -60,4 +65,12 @@ def coh_loss(model: Any, tokenizer: Any, samples: list[dict[str, Any]],
     shifted_labels = batch["labels"][:, 1:]
     n_tokens = (shifted_labels != -100).sum(dim=-1).clamp_min(1).float().to(summed.device)
     nll = -(summed / n_tokens).mean()
-    return {"loss": nll, "components": {"coh_nll": float(nll.detach().cpu())}}
+    positions, target_ids = extract_target_positions(batch["labels"])
+    return {
+        "loss": nll,
+        "components": {"coh_nll": float(nll.detach().cpu())},
+        "target_positions": positions,
+        "target_token_ids": target_ids,
+        "input_ids": batch["input_ids"],
+        "attention_mask": batch["attention_mask"],
+    }

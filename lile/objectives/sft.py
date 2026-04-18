@@ -13,7 +13,12 @@ from typing import Any
 
 import torch
 
-from ._utils import build_chat_inputs, pad_and_stack, sequence_logprob
+from ._utils import (
+    build_chat_inputs,
+    extract_target_positions,
+    pad_and_stack,
+    sequence_logprob,
+)
 
 
 def sft_loss(model: Any, tokenizer: Any, samples: list[dict[str, Any]],
@@ -44,7 +49,15 @@ def sft_loss(model: Any, tokenizer: Any, samples: list[dict[str, Any]],
     shifted_labels = batch["labels"][:, 1:]
     n_tokens = (shifted_labels != -100).sum(dim=-1).clamp_min(1).float().to(summed.device)
     nll = -(summed / n_tokens).mean()
-    return {"loss": nll, "components": {"sft_nll": float(nll.detach().cpu())}}
+    positions, target_ids = extract_target_positions(batch["labels"])
+    return {
+        "loss": nll,
+        "components": {"sft_nll": float(nll.detach().cpu())},
+        "target_positions": positions,
+        "target_token_ids": target_ids,
+        "input_ids": batch["input_ids"],
+        "attention_mask": batch["attention_mask"],
+    }
 
 
 def weighted_sft_loss(model: Any, tokenizer: Any, samples: list[dict[str, Any]],
@@ -72,10 +85,15 @@ def weighted_sft_loss(model: Any, tokenizer: Any, samples: list[dict[str, Any]],
         device=per_sample_nll.device, dtype=per_sample_nll.dtype,
     )
     loss = (per_sample_nll * weights).sum() / weights.sum().clamp_min(1e-6)
+    positions, target_ids = extract_target_positions(batch["labels"])
     return {
         "loss": loss,
         "components": {
             "weighted_sft_nll": float(loss.detach().cpu()),
             "sum_weights": float(weights.sum().detach().cpu()),
         },
+        "target_positions": positions,
+        "target_token_ids": target_ids,
+        "input_ids": batch["input_ids"],
+        "attention_mask": batch["attention_mask"],
     }
