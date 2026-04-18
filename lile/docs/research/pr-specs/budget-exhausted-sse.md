@@ -12,7 +12,9 @@
 
 ## Problem
 
-Cleo's trajectory bound (A rev2 + trajectory-sketch) defines a per-session cumulative-drift functional `Φ_anc` and a refuse threshold `K_session`. Mei's Tier 5 (forthcoming in `unlike-tiered-preconditions.md`) gates unlike dispatch on `Φ_anc ≥ K_session`, refusing further steps until snapshot-restore.
+Cleo's trajectory bound (A rev3 + trajectory rev1) defines a per-session cumulative-drift functional `Φ_obs := Σ TV_sim^{emp}_i` (sum of per-step simulated off-S TV) and a refuse threshold `K_session`. Mei's Tier 5 (forthcoming in `unlike-tiered-preconditions.md`) gates unlike dispatch on `Φ_obs ≥ K_session`, refusing further steps until snapshot-restore.
+
+> **Framing note (2026-04-18, Mei/Cleo §7).** Earlier drafts referenced `Φ_obs` with an `exp(-α E_k)` anchor-energy discount. Calibration showed E_k is uncorrelated with off-S drift (α sweep moved the functional only 1.42 → 1.35), so the discount was inert. `Φ_obs` is the simpler non-discounted sum of empirically-simulated per-step TV. Architect rebudget semantics hold verbatim — they're trajectory-of-weights properties, agnostic to the inner functional shape.
 
 A silent refuse is the wrong UX:
 
@@ -33,10 +35,10 @@ event: budget_exhausted
 data: {
   "cursor": <int>,                // commit cursor at the moment the budget tipped
   "ts": "2026-04-18T12:34:56.789Z",
-  "phi_anc": <float>,             // observed cumulative drift functional
+  "phi_obs": <float>,             // observed cumulative drift functional
   "k_session": <float>,           // active threshold
   "k_warn": <float>,              // K_session / 2 per Cleo §5
-  "last_safe_cursor": <int|null>, // cursor of the last snapshot with phi_anc < k_warn
+  "last_safe_cursor": <int|null>, // cursor of the last snapshot with phi_obs < k_warn
   "reason": "tier_5_refuse"
 }
 ```
@@ -47,7 +49,7 @@ data: {
 
 Fires **once per crossing**. If a subsequent step would also exceed `K_session` while the budget is still exhausted, no repeat event — emit only on the cursor that crosses the threshold, not on every subsequent refused step.
 
-Re-arm on snapshot-restore: when `/v1/state/snapshot/load` runs successfully and the new state's `phi_anc < K_warn`, the broadcaster clears the exhausted flag. The next crossing fires a fresh event.
+Re-arm on snapshot-restore: when `/v1/state/snapshot/load` runs successfully and the new state's `phi_obs < K_warn`, the broadcaster clears the exhausted flag. The next crossing fires a fresh event.
 
 ### Refuse semantics
 
@@ -72,7 +74,7 @@ class CommitBroadcaster:
         self._exhausted: bool = False
 
     def broadcast_budget_exhausted(
-        self, *, cursor: int, phi_anc: float, k_session: float,
+        self, *, cursor: int, phi_obs: float, k_session: float,
         k_warn: float, last_safe_cursor: int | None,
     ) -> None:
         if self._exhausted:
@@ -81,7 +83,7 @@ class CommitBroadcaster:
         event = {
             "cursor": cursor,
             "ts": _iso_now_ms(),
-            "phi_anc": phi_anc,
+            "phi_obs": phi_obs,
             "k_session": k_session,
             "k_warn": k_warn,
             "last_safe_cursor": last_safe_cursor,
@@ -113,17 +115,17 @@ if event.get("_budget_exhausted"):
 
 ### `controller.py` wire-through
 
-- `Controller` holds the `Φ_anc` accumulator (feeds from unlike-trajectory-bound per Cleo §3).
+- `Controller` holds the `Φ_obs` accumulator (feeds from unlike-trajectory-bound per Cleo §3).
 - On every unlike commit, after `broadcast_commit`, check threshold and fire `broadcast_budget_exhausted` if crossed.
-- On successful `snapshot_load` with post-load `Φ_anc < K_warn`, call `clear_budget_exhausted`.
+- On successful `snapshot_load` with post-load `Φ_obs < K_warn`, call `clear_budget_exhausted`.
 
-Tracking `Φ_anc` itself is Tier 5's scope, not this spec. This spec is **only** the plumbing.
+Tracking `Φ_obs` itself is Tier 5's scope, not this spec. This spec is **only** the plumbing.
 
 ## Tests
 
-1. **Single crossing fires one event.** Push `Φ_anc` over `K_session` across two consecutive steps; subscriber sees exactly one `event: budget_exhausted` on the first crossing, nothing on the second.
+1. **Single crossing fires one event.** Push `Φ_obs` over `K_session` across two consecutive steps; subscriber sees exactly one `event: budget_exhausted` on the first crossing, nothing on the second.
 2. **Re-arm after clear.** Exhausted → `clear_budget_exhausted` → push over again → second event fires.
-3. **Event payload shape pinned.** All required fields (`cursor`, `ts`, `phi_anc`, `k_session`, `k_warn`, `last_safe_cursor`, `reason`) present; `last_safe_cursor` nullable.
+3. **Event payload shape pinned.** All required fields (`cursor`, `ts`, `phi_obs`, `k_session`, `k_warn`, `last_safe_cursor`, `reason`) present; `last_safe_cursor` nullable.
 4. **Drop-on-full preserved.** Slow consumer with a full queue increments `drops`; fast consumer still sees the event. Same semantics as `commit` events.
 5. **Shutdown beats budget_exhausted.** If `broadcast_shutdown` fires while exhausted flag is set, the shutdown event still emits (consumer branch order: shutdown → budget_exhausted → commit).
 6. **Subscriber-count observability.** `/health` already exposes `commit_sse_subscribers` + `commit_sse_drops`; no new field needed for this event — drops aggregate across event types.
@@ -134,7 +136,7 @@ All tests cpu_only; exercise the broadcaster primitive directly + a FastAPI inli
 
 Single PR on top of Tier 5. Keep the commits split:
 1. `commit_stream.py` + tests (plumbing only, no Tier 5 semantics).
-2. `controller.py` wire-through + integration test (requires Tier 5's `Φ_anc` accumulator).
+2. `controller.py` wire-through + integration test (requires Tier 5's `Φ_obs` accumulator).
 
 Allows (1) to ship the moment K_session lands and the accumulator follows in (2).
 
