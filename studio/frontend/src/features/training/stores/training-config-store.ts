@@ -88,6 +88,13 @@ const initialState: TrainingConfigState = {
   isDatasetImage: null,
   isDatasetAudio: false,
   maxPositionEmbeddings: null,
+  // HT fork — prompt baking defaults
+  bakingSystemPrompt: "",
+  bakingNumTrajectories: 4,
+  bakingTrajectoryLength: 128,
+  bakingTemperature: 1.0,
+  bakingSamplingTemperature: 0.8,
+  bakingUsePrefill: false,
   ...DEFAULT_HYPERPARAMS,
 };
 
@@ -756,6 +763,12 @@ export const useTrainingConfigStore = create<TrainingConfigStore>()(
         setFinetuneMLPModules: (finetuneMLPModules) =>
           set({ finetuneMLPModules }),
         setTargetModules: (targetModules) => set({ targetModules }),
+        setBakingSystemPrompt: (bakingSystemPrompt) => set({ bakingSystemPrompt }),
+        setBakingNumTrajectories: (bakingNumTrajectories) => set({ bakingNumTrajectories }),
+        setBakingTrajectoryLength: (bakingTrajectoryLength) => set({ bakingTrajectoryLength }),
+        setBakingTemperature: (bakingTemperature) => set({ bakingTemperature }),
+        setBakingSamplingTemperature: (bakingSamplingTemperature) => set({ bakingSamplingTemperature }),
+        setBakingUsePrefill: (bakingUsePrefill) => set({ bakingUsePrefill }),
         canProceed: () => canProceedForStep(get()),
         reset: () => {
           _trainOnCompletionsManuallySet = false;
@@ -822,16 +835,25 @@ export const useTrainingConfigStore = create<TrainingConfigStore>()(
             s.weightDecay = DEFAULT_HYPERPARAMS.weightDecay;
           }
         }
-        if (version < 10 && s.trainingMethod === "cpt") {
-          // Backfill CPT defaults for state persisted before they existed.
-          s.loraRank = 128;
-          s.loraAlpha = 32;
-          s.loraVariant = "rslora";
-          s.targetModules = CPT_TARGET_MODULES;
-          s.datasetFormat = "raw";
-          if (s.learningRate == null || s.learningRate === LR_DEFAULT_LORA) {
-            s.learningRate = LR_DEFAULT_CPT;
+        if (version < 10) {
+          if (s.trainingMethod === "cpt") {
+            // Backfill CPT defaults for state persisted before they existed.
+            s.loraRank = 128;
+            s.loraAlpha = 32;
+            s.loraVariant = "rslora";
+            s.targetModules = CPT_TARGET_MODULES;
+            s.datasetFormat = "raw";
+            if (s.learningRate == null || s.learningRate === LR_DEFAULT_LORA) {
+              s.learningRate = LR_DEFAULT_CPT;
+            }
           }
+          // HT fork — prompt baking fields added.
+          s.bakingSystemPrompt ??= "";
+          s.bakingNumTrajectories ??= 4;
+          s.bakingTrajectoryLength ??= 128;
+          s.bakingTemperature ??= 1.0;
+          s.bakingSamplingTemperature ??= 0.8;
+          s.bakingUsePrefill ??= false;
         }
         return s as unknown as TrainingConfigStore;
       },

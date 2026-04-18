@@ -43,6 +43,7 @@ import { useMaxStepsEpochsToggle, useTrainingConfigStore } from "@/features/trai
 import { isRawTextDatasetFormat } from "@/features/training/lib/training-methods";
 import { isAdapterMethod } from "@/types/training";
 import type { GradientCheckpointing } from "@/types/training";
+import { PromptBakingSection } from "./prompt-baking-section";
 import {
   ArrowDown01Icon,
   InformationCircleIcon,
@@ -173,6 +174,7 @@ export function ParamsSection(): ReactElement {
   const platformDeviceType = usePlatformStore((s) => s.deviceType);
   const isLora = isAdapterMethod(store.trainingMethod);
   const isCpt = store.trainingMethod === "cpt";
+  const isPromptBaking = store.trainingMethod === "prompt-baking";
   const isRawText = isRawTextDatasetFormat(store.datasetFormat);
   const showVisionLora = store.isVisionModel && store.isDatasetImage === true;
   // DeepSeek OCR uses a coupled preset; backend ignores user image size.
@@ -229,6 +231,7 @@ export function ParamsSection(): ReactElement {
           : "h-studio-config-column"} duration-150`}
       >
         <div className="flex flex-col gap-4">
+          {isPromptBaking && <PromptBakingSection />}
           {/* Max Steps / Epochs */}
           <div className="flex flex-col gap-2">
             <div

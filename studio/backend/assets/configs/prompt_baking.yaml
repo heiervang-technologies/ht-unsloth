@@ -1,0 +1,48 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# HT fork — prompt baking template (uses marksverdhei/bakery).
+# Distils a system prompt into LoRA weights via KL divergence so the model
+# exhibits the prompted behavior at zero inference-time cost.
+model: unsloth/Qwen2.5-0.5B
+
+data:
+  dataset: tatsu-lab/alpaca
+  format_type: auto
+
+training:
+  training_type: prompt-baking
+  max_seq_length: 2048
+  load_in_4bit: true
+  output_dir: outputs
+  num_epochs: 3
+  learning_rate: 0.0001
+  batch_size: 4
+  gradient_accumulation_steps: 4
+  warmup_steps: 5
+  max_steps: 0
+  save_steps: 0
+  weight_decay: 0.001
+  random_seed: 3407
+  packing: false
+  gradient_checkpointing: "unsloth"
+
+lora:
+  lora_r: 64
+  lora_alpha: 128
+  lora_dropout: 0.0
+  target_modules: "q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj"
+  use_rslora: false
+  use_loftq: false
+
+prompt_baking:
+  system_prompt: ""
+  num_trajectories: 4
+  trajectory_length: 128
+  temperature: 1.0
+  sampling_temperature: 0.8
+  use_prefill: false
+
+logging:
+  enable_wandb: false
+  wandb_project: unsloth-training
+  enable_tensorboard: false
+  tensorboard_dir: runs
