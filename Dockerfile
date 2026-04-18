@@ -55,6 +55,26 @@ RUN mkdir -p /opt/unsloth/.venv_t5 \
     && /opt/unsloth/.venv/bin/python -m pip install --target /opt/unsloth/.venv_t5 --no-deps \
        "transformers==5.3.0" "huggingface_hub==1.3.0"
 
+# Install the lile LiveLearn daemon's one extra runtime dep. The Studio
+# venv already ships fastapi / uvicorn / starlette / pydantic / safetensors,
+# but prometheus_client is lile-only. With this line, the image can run
+# either surface:
+#
+#   # Default: Studio on :8000
+#   docker run --gpus all -p 8000:8000 marksverdhei/ht-unsloth-studio
+#
+#   # Override to run the lile LiveLearn daemon on :8765. ServeConfig has no
+#   # argparse yet (pending prod/server-argparse), so we bind host/port via
+#   # a one-liner until that lands.
+#   docker run --gpus all -p 8765:8765 marksverdhei/ht-unsloth-studio \
+#     /opt/unsloth/.venv/bin/python -c \
+#     "from lile.config import ServeConfig; from lile.server import serve; \
+#      serve(ServeConfig(host='0.0.0.0', port=8765))"
+#
+# lile's source is already present from the COPY above — it's importable
+# as a top-level package from /opt/unsloth.
+RUN /opt/unsloth/.venv/bin/python -m pip install "prometheus_client>=0.20"
+
 # Build frontend
 RUN cd studio/frontend && npm install && npm run build
 RUN cd studio/backend/core/data_recipe/oxc-validator && npm install
