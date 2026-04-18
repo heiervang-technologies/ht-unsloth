@@ -332,6 +332,23 @@ def unlike_loss(model: Any, tokenizer: Any, samples: list[dict[str, Any]],
         p_bad_mean = float(p_bad.mean().detach().cpu())
         rank_bad_mean = float(rank_bad.float().mean().detach().cpu())
 
+    # safety_monitor target_positions: single-position at last_idx for each
+    # sample with a positive teacher. Pure-unlike samples carry no SFT
+    # target, so they contribute no position (the sidecar applies the
+    # Razin-safety theorem only where a ``likelihood-up on a concrete
+    # target`` step actually happens). See safety-monitor-primitive.md
+    # "Geometry per objective".
+    target_positions: list[list[int]] = []
+    target_token_ids: list[list[int]] = []
+    last_idx_cpu = last_idx.detach().cpu().tolist()
+    for i, s in enumerate(samples):
+        if s.get("good_token_id") is not None:
+            target_positions.append([int(last_idx_cpu[i])])
+            target_token_ids.append([int(s["good_token_id"])])
+        else:
+            target_positions.append([])
+            target_token_ids.append([])
+
     return {
         "loss": loss,
         "components": {
@@ -344,4 +361,8 @@ def unlike_loss(model: Any, tokenizer: Any, samples: list[dict[str, Any]],
             "unlike_rank_bad_mean": rank_bad_mean,
             "positive_weight": positive_weight,
         },
+        "target_positions": target_positions,
+        "target_token_ids": target_token_ids,
+        "input_ids": input_ids,
+        "attention_mask": attn,
     }

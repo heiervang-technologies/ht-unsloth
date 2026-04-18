@@ -27,12 +27,18 @@ _SHARED_KEY = ""
 class TrainEngine:
     def __init__(self, state: ModelState, lr: float = 1e-5,
                  grad_clip: float = 1.0, per_objective: bool = False,
-                 per_objective_lr: dict[str, float] | None = None) -> None:
+                 per_objective_lr: dict[str, float] | None = None,
+                 default_watchlist: list[int] | None = None) -> None:
         self.state = state
         self.lr = lr
         self.grad_clip = grad_clip
         self.per_objective = per_objective
         self.per_objective_lr = dict(per_objective_lr or {})
+        # Daemon-global safety_monitor watchlist floor. Three-tier union
+        # (daemon ∪ batch ∪ per-sample) is resolved in safety_monitor_loss;
+        # here we just forward the daemon-global slice. See
+        # safety-monitor-primitive.md.
+        self.default_watchlist: list[int] = list(default_watchlist or [])
         # Map objective_name -> optimizer. When per_objective=False, the only
         # key is _SHARED_KEY and every step reuses it. When True, each
         # objective gets its own torch.optim.AdamW so Adam m/v stay isolated
@@ -131,6 +137,22 @@ class TrainEngine:
                 bo_kwargs = {k: v for k, v in bo.items() if k != "name"}
                 if self.state.frozen_ref is not None and "pi_ref" not in bo_kwargs:
                     bo_kwargs["pi_ref"] = self.state.frozen_ref
+                if bo_name == "safety_monitor":
+                    # Plumb main-objective target positions + batch tensors so
+                    # the sidecar piggybacks rather than re-tokenizing.
+                    # Missing keys ⇒ safety_monitor raises RuntimeError on
+                    # the caller — that's the contract (test 9).
+                    for k in ("target_positions", "target_token_ids",
+                              "input_ids", "attention_mask"):
+                        if k in result and k not in bo_kwargs:
+                            bo_kwargs[k] = result[k]
+                    bo_kwargs.setdefault(
+                        "default_watchlist", self.default_watchlist,
+                    )
+                    bo_kwargs.setdefault(
+                        "effective_lr",
+                        self.per_objective_lr.get(name, self.lr),
+                    )
                 bo_result = bo_fn(self.state.model, self.state.tokenizer,
                                   samples, **bo_kwargs)
                 bo_loss = bo_result.get("loss")
