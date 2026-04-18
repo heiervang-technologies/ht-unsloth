@@ -1,0 +1,50 @@
+{"domain":"math","split":"train","prompt":"Find all real solutions to x^4 - 5x^2 + 6 = 0."}
+{"domain":"math","split":"train","prompt":"A bag contains 5 red balls and 3 blue balls. Two balls are drawn without replacement. What is the probability both are red?"}
+{"domain":"math","split":"train","prompt":"Compute the integral of (x^2 + 1) / (x + 1) dx."}
+{"domain":"math","split":"train","prompt":"Prove that the sum of the first n odd positive integers is n^2."}
+{"domain":"math","split":"train","prompt":"Find the eigenvalues of the matrix [[2,1],[1,2]]."}
+{"domain":"math","split":"train","prompt":"A rectangle has perimeter 40 and area 91. Find its dimensions."}
+{"domain":"math","split":"train","prompt":"How many ways can you arrange the letters of the word STATISTICS?"}
+{"domain":"math","split":"train","prompt":"Find the limit as x approaches 0 of (1 - cos(x)) / x^2."}
+{"domain":"math","split":"eval","prompt":"Solve the system: 2x + 3y = 7 and 5x - y = 11."}
+{"domain":"math","split":"eval","prompt":"What is the sum of the infinite series 1 + 1/3 + 1/9 + 1/27 + ...?"}
+{"domain":"coding","split":"train","prompt":"Write a Python function `is_prime(n)` that returns True iff n is a prime number. Handle n < 2 correctly."}
+{"domain":"coding","split":"train","prompt":"Write a Python function `fibonacci(n)` that returns the n-th Fibonacci number (F(0)=0, F(1)=1) in O(n) time and O(1) space."}
+{"domain":"coding","split":"train","prompt":"Given a list of integers, write a Python one-liner using `collections.Counter` to return the integer that appears most frequently."}
+{"domain":"coding","split":"train","prompt":"Write a Python function `reverse_words(s)` that reverses the order of words in a string, preserving single spaces."}
+{"domain":"coding","split":"train","prompt":"Implement binary search in Python on a sorted list. Return the index of the target, or -1 if not found."}
+{"domain":"coding","split":"train","prompt":"Write a Python generator `chunks(seq, n)` that yields successive n-sized chunks from `seq`."}
+{"domain":"coding","split":"train","prompt":"Given a linked list, write a Python function to detect whether it has a cycle using Floyd's tortoise and hare."}
+{"domain":"coding","split":"train","prompt":"Write a Python decorator `@memoize` that caches a function's return value per argument tuple."}
+{"domain":"coding","split":"eval","prompt":"Write a Python function `two_sum(nums, target)` that returns indices of two numbers in `nums` summing to `target`. Assume exactly one solution exists."}
+{"domain":"coding","split":"eval","prompt":"Write a Python function `is_balanced(s)` that returns True iff the string `s` has balanced brackets among `()`, `[]`, `{}`."}
+{"domain":"physics","split":"train","prompt":"A ball is thrown vertically upward with initial speed 20 m/s. Ignoring air resistance, how high does it rise? (g = 9.8 m/s^2)"}
+{"domain":"physics","split":"train","prompt":"Explain why a car's headlights appear dimmer when the starter motor cranks the engine."}
+{"domain":"physics","split":"train","prompt":"Derive the formula for the period of a simple pendulum in the small-angle approximation."}
+{"domain":"physics","split":"train","prompt":"A 2 kg block slides on a frictionless incline at 30 degrees. What is its acceleration down the slope?"}
+{"domain":"physics","split":"train","prompt":"State and explain the second law of thermodynamics in terms of entropy."}
+{"domain":"physics","split":"train","prompt":"A capacitor of 10 uF is charged to 12 V and then discharged through a 1 kΩ resistor. What is the time constant, and what is the voltage after one time constant?"}
+{"domain":"physics","split":"train","prompt":"Why does ice float on water?"}
+{"domain":"physics","split":"train","prompt":"Calculate the de Broglie wavelength of an electron accelerated through a potential difference of 100 V."}
+{"domain":"physics","split":"eval","prompt":"A photon has wavelength 500 nm. What is its energy in electron-volts?"}
+{"domain":"physics","split":"eval","prompt":"Two resistors of 4 Ω and 6 Ω are connected in parallel. What is the equivalent resistance?"}
+{"domain":"chemistry","split":"train","prompt":"Balance the chemical equation: C3H8 + O2 → CO2 + H2O."}
+{"domain":"chemistry","split":"train","prompt":"Why is water a polar molecule but carbon dioxide is non-polar?"}
+{"domain":"chemistry","split":"train","prompt":"Calculate the pH of a 0.01 M HCl solution."}
+{"domain":"chemistry","split":"train","prompt":"How many moles are in 22 g of CO2? (C = 12 g/mol, O = 16 g/mol)"}
+{"domain":"chemistry","split":"train","prompt":"Describe the difference between sigma and pi bonds."}
+{"domain":"chemistry","split":"train","prompt":"Write the electron configuration of iron (Fe, Z=26) in ground state."}
+{"domain":"chemistry","split":"train","prompt":"Explain Le Chatelier's principle with an example involving N2 + 3 H2 ⇌ 2 NH3."}
+{"domain":"chemistry","split":"train","prompt":"What volume does 0.5 mol of an ideal gas occupy at STP (273.15 K, 1 atm)?"}
+{"domain":"chemistry","split":"eval","prompt":"What is the hybridization of the central atom in methane (CH4)?"}
+{"domain":"chemistry","split":"eval","prompt":"Balance this redox half-reaction in acidic solution: MnO4- → Mn2+."}
+{"domain":"ai_research","split":"train","prompt":"Explain, at a graduate level, what distinguishes DPO (Direct Preference Optimization) from standard RLHF with PPO."}
+{"domain":"ai_research","split":"train","prompt":"What is a Mixture of Experts (MoE) layer, and why does it reduce active parameters per token?"}
+{"domain":"ai_research","split":"train","prompt":"Summarize the key idea behind LoRA (Low-Rank Adaptation) and why it enables parameter-efficient fine-tuning."}
+{"domain":"ai_research","split":"train","prompt":"What is grokking in the context of neural network training, and what do we currently think causes it?"}
+{"domain":"ai_research","split":"train","prompt":"Explain the intuition behind Rotary Position Embeddings (RoPE) and why they extrapolate better than learned absolute positional embeddings."}
+{"domain":"ai_research","split":"train","prompt":"What does 'chain-of-thought faithfulness' mean in recent LLM interpretability research, and why is it hard to measure?"}
+{"domain":"ai_research","split":"train","prompt":"Describe speculative decoding and why it speeds up autoregressive generation without changing the output distribution."}
+{"domain":"ai_research","split":"train","prompt":"What is KL divergence, and why is it used as a regularizer against a reference policy in RLHF?"}
+{"domain":"ai_research","split":"eval","prompt":"Explain the difference between GRPO and PPO in the context of RLHF training for LLMs."}
+{"domain":"ai_research","split":"eval","prompt":"What are scaling laws (Chinchilla), and how did they update the compute-optimal training recipe relative to earlier GPT-3-era practice?"}

@@ -309,11 +309,25 @@ function parseSseEvent(rawEvent: string): string[] {
   return dataLines;
 }
 
+export interface StreamChatCompletionsOptions {
+  /**
+   * When true, route the request through the Lile capsule proxy at
+   * `/api/lile/v1/chat/completions` instead of the default llama-server
+   * endpoint. The caller is responsible for populating any lile-specific
+   * body fields (e.g. `after_commit_token`).
+   */
+  lileMode?: boolean;
+}
+
 export async function* streamChatCompletions(
   payload: OpenAIChatCompletionsRequest,
   signal: AbortSignal,
+  options: StreamChatCompletionsOptions = {},
 ): AsyncGenerator<OpenAIChatChunk> {
-  const response = await authFetch("/v1/chat/completions", {
+  const url = options.lileMode
+    ? "/api/lile/v1/chat/completions"
+    : "/v1/chat/completions";
+  const response = await authFetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
