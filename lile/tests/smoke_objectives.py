@@ -101,6 +101,58 @@ def main() -> int:
     })
     print(f"       loss={r['loss']:.4f} components={r['components']}")
 
+    # ---- Unlike (surgical unlikelihood) ----
+    # Resolve two arbitrary single-token ids for the bad / good targets. We
+    # just need real ids the tokenizer will accept — numeric tokens are a
+    # safe choice because they are typically single tokens across BPE
+    # vocabularies (including Qwen3). The rank_below=100 threshold is
+    # deliberately loose so the trigger fires on a cold model where we have
+    # no a-priori expectation about argmax; the smoke only verifies the
+    # forward/backward path, not behavioral correctness.
+    print("[smoke] unlike step (no positive teacher)…")
+    tok = state.tokenizer
+    bad_ids = tok(text=" 7", add_special_tokens=False).input_ids
+    good_ids = tok(text=" 8", add_special_tokens=False).input_ids
+    bad_tok = bad_ids[0] if bad_ids else 0
+    good_tok = good_ids[0] if good_ids else 1
+    r = engine.step({
+        "objective": "unlike",
+        "samples": [{
+            "prefix": "The answer is",
+            "bad_token_id": int(bad_tok),
+            "rank_below": 100, "prob_above": None,
+        }],
+    })
+    print(f"       loss={r['loss']:.4f} components={r['components']}")
+
+    print("[smoke] unlike step (with positive teacher)…")
+    r = engine.step({
+        "objective": "unlike",
+        "samples": [{
+            "prefix": "The answer is",
+            "bad_token_id": int(bad_tok),
+            "good_token_id": int(good_tok),
+            "rank_below": 100, "prob_above": None,
+        }],
+    })
+    print(f"       loss={r['loss']:.4f} components={r['components']}")
+
+    # Composition check: unlike + kl_anchor on the same batch. Confirms the
+    # prompt/prefix schema fallback in kl._sample_text works end-to-end.
+    print("[smoke] unlike + kl_anchor composition…")
+    r = engine.step({
+        "objective": "unlike",
+        "samples": [{
+            "prefix": "The answer is",
+            "bad_token_id": int(bad_tok),
+            "good_token_id": int(good_tok),
+            "rank_below": 100, "prob_above": None,
+        }],
+        "batch_objectives": [{"name": "kl_anchor", "weight": 0.1,
+                              "scope": "prompt"}],
+    })
+    print(f"       loss={r['loss']:.4f} components={r['components']}")
+
     # ---- VRAM report ----
     if torch.cuda.is_available():
         peak_gb = torch.cuda.max_memory_allocated() / (1024 ** 3)

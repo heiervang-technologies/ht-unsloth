@@ -16,7 +16,12 @@ from typing import Any
 
 import torch
 
-from ._utils import _to_int_list, pad_and_stack, sequence_logprob
+from ._utils import (
+    _to_int_list,
+    extract_target_positions,
+    pad_and_stack,
+    sequence_logprob,
+)
 
 
 def ntp_loss(model: Any, tokenizer: Any, samples: list[dict[str, Any]],
@@ -44,4 +49,12 @@ def ntp_loss(model: Any, tokenizer: Any, samples: list[dict[str, Any]],
     shifted_labels = batch["labels"][:, 1:]
     n_tokens = (shifted_labels != -100).sum(dim=-1).clamp_min(1).float().to(summed.device)
     nll = -(summed / n_tokens).mean()
-    return {"loss": nll, "components": {"ntp_nll": float(nll.detach().cpu())}}
+    positions, target_ids = extract_target_positions(batch["labels"])
+    return {
+        "loss": nll,
+        "components": {"ntp_nll": float(nll.detach().cpu())},
+        "target_positions": positions,
+        "target_token_ids": target_ids,
+        "input_ids": batch["input_ids"],
+        "attention_mask": batch["attention_mask"],
+    }

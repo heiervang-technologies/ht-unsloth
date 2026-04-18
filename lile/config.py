@@ -34,6 +34,14 @@ class ServeConfig:
     # SIGKILLed mid-flight regardless of the graceful path.
     shutdown_hard_stop_grace_s: float = 30.0
 
+    # Engine default LR. This value is a **known-unsafe regime** for the
+    # ``unlike`` objective with a positive teacher — see ``objectives/unlike.py``
+    # module docstring and ``DESIGN.md`` §Safety regime. Cleo's
+    # razin-safety-sharpened.md (``docs/research/proofs/``) shows that at small
+    # eta the positive-teacher side of unlike can push ``p_bad`` UP rather than
+    # down. Scripts that call ``objective="unlike"`` should override via
+    # ``per_objective_lr={"unlike": 5e-5}`` or higher (empirical safe floor
+    # pending the ``unlike-defaults-calibration-sweep.md`` deliverable).
     default_lr: float = 1e-5
     default_objective: str = "sft"
 
@@ -102,6 +110,23 @@ class ServeConfig:
     # params. See ``docs/research/optimizer-sample-efficiency.md`` §3.
     per_objective_optim: bool = False
     per_objective_lr: dict[str, float] = field(default_factory=dict)
+
+    # --- /v1/commits/stream SSE -------------------------------------------
+    # Per-commit event stream, one event per successful train-task cursor
+    # advance. See ``lile/docs/research/pr-specs/commits-sse-stream.md``.
+    # When false the subscriber set short-circuits and the training path
+    # pays zero cost. Clients filter on the consumer side — no server-side
+    # filter expressions (would drift toward per-workflow state).
+    commits_sse_enabled: bool = True
+
+    # --- safety_monitor daemon-global watchlist ---------------------------
+    # Three-tier union at step time: this daemon-global floor
+    # (absolute-never tokens — PII / safety-critical), ∪ batch-level
+    # ``batch_objectives[].watchlist``, ∪ per-sample ``sample["watchlist"]``.
+    # Consumed only when a ``safety_monitor`` batch objective is present
+    # in the spec; zero cost otherwise. See
+    # ``lile/docs/research/pr-specs/safety-monitor-primitive.md``.
+    default_watchlist: list[int] = field(default_factory=list)
 
 
 @dataclass

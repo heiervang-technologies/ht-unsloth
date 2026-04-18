@@ -141,6 +141,8 @@ class _ControllerGaugeCollector(Collector):
         snap_count = 0.0
         snap_bytes = 0.0
         shutting_down = 0.0
+        adapter_norm = 0.0
+        residual_norm = 0.0
         if c is not None:
             try:
                 queue_depth = float(c.queue._q.qsize())
@@ -167,6 +169,23 @@ class _ControllerGaugeCollector(Collector):
                 pass
             try:
                 shutting_down = 1.0 if getattr(c, "_shutting_down", False) else 0.0
+            except Exception:  # pragma: no cover
+                pass
+            try:
+                if c.state is not None and c.state.model is not None:
+                    sq = 0.0
+                    for p in c.state.model.parameters():
+                        if p.requires_grad:
+                            sq += float(p.detach().pow(2).sum())
+                    adapter_norm = sq ** 0.5
+            except Exception:  # pragma: no cover
+                pass
+            try:
+                if c.state is not None:
+                    sq = 0.0
+                    for d in c.state.merged_deltas.values():
+                        sq += float(d.detach().pow(2).sum())
+                    residual_norm = sq ** 0.5
             except Exception:  # pragma: no cover
                 pass
 
@@ -204,6 +223,20 @@ class _ControllerGaugeCollector(Collector):
             "lile_shutting_down",
             "1 when the controller is draining for shutdown, 0 otherwise.",
             value=shutting_down,
+        )
+        yield GaugeMetricFamily(
+            "lile_adapter_norm",
+            "Frobenius norm of the live LoRA adapter params (sum over "
+            "requires_grad=True tensors). Cumulative size of the in-flight "
+            "delta since the last merge.",
+            value=adapter_norm,
+        )
+        yield GaugeMetricFamily(
+            "lile_residual_norm",
+            "Frobenius norm of the merged_deltas residual (bf16 CPU). "
+            "Grows across merges — the canonical record of what has been "
+            "trained into the model since daemon start.",
+            value=residual_norm,
         )
 
 

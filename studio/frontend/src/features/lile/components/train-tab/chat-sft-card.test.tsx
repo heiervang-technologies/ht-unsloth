@@ -32,12 +32,7 @@ describe("ChatSftCard", () => {
     expect(spy.mock.calls[0][0]).toMatchObject({
       objective: "sft",
       samples: [
-        {
-          messages: [
-            { role: "user", content: "hi" },
-            { role: "assistant", content: "hello" },
-          ],
-        },
+        { prompt: "hi", response: "hello" },
       ],
     });
 
@@ -62,13 +57,7 @@ describe("ChatSftCard", () => {
     expect(spy.mock.calls[0][0]).toMatchObject({
       objective: "weighted_sft",
       samples: [
-        {
-          weight: 3,
-          messages: [
-            { role: "user", content: "hi" },
-            { role: "assistant", content: "hello" },
-          ],
-        },
+        { prompt: "hi", response: "hello", weight: 3 },
       ],
     });
 

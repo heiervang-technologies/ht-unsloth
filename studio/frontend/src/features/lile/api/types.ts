@@ -17,14 +17,12 @@ export type CapsuleStatus =
 export type TrainStepEvent = {
   offset: number;
   kind: "train_step";
-  batch_id: number;
+  batch_id: string;
   objective: string;
   loss: number;
   batch_size: number;
   commit_token?: number;
-  grad_norm_total?: number;
-  grad_clipped?: boolean;
-  components?: Record<string, number>;
+  components?: Record<string, number | boolean>;
   ts?: number;
 };
 

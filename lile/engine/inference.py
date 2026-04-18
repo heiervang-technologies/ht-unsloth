@@ -59,15 +59,19 @@ def generate_chat(model: Any, tokenizer: Any, messages: list[dict[str, str]],
             pass
 
         with torch.no_grad():
-            out = model.generate(
-                input_ids=input_ids,
-                attention_mask=attn,
-                max_new_tokens=max_new_tokens,
-                do_sample=True,
-                temperature=temperature,
-                top_p=top_p,
-                pad_token_id=tokenizer.pad_token_id or tokenizer.eos_token_id,
-            )
+            gen_kwargs: dict[str, Any] = {
+                "input_ids": input_ids,
+                "attention_mask": attn,
+                "max_new_tokens": max_new_tokens,
+                "pad_token_id": tokenizer.pad_token_id or tokenizer.eos_token_id,
+            }
+            if temperature is None or temperature <= 1e-4:
+                gen_kwargs["do_sample"] = False
+            else:
+                gen_kwargs["do_sample"] = True
+                gen_kwargs["temperature"] = temperature
+                gen_kwargs["top_p"] = top_p
+            out = model.generate(**gen_kwargs)
 
     gen = out[0, input_ids.size(-1):]
     text = tokenizer.decode(gen, skip_special_tokens=True).strip()
@@ -112,16 +116,20 @@ def generate_chat_stream(model: Any, tokenizer: Any, messages: list[dict[str, st
 
         def _run():
             with torch.no_grad():
-                model.generate(
-                    input_ids=input_ids,
-                    attention_mask=attn,
-                    max_new_tokens=max_new_tokens,
-                    do_sample=True,
-                    temperature=temperature,
-                    top_p=top_p,
-                    pad_token_id=tokenizer.pad_token_id or tokenizer.eos_token_id,
-                    streamer=streamer,
-                )
+                gen_kwargs: dict[str, Any] = {
+                    "input_ids": input_ids,
+                    "attention_mask": attn,
+                    "max_new_tokens": max_new_tokens,
+                    "pad_token_id": tokenizer.pad_token_id or tokenizer.eos_token_id,
+                    "streamer": streamer,
+                }
+                if temperature is None or temperature <= 1e-4:
+                    gen_kwargs["do_sample"] = False
+                else:
+                    gen_kwargs["do_sample"] = True
+                    gen_kwargs["temperature"] = temperature
+                    gen_kwargs["top_p"] = top_p
+                model.generate(**gen_kwargs)
 
         thread = Thread(target=_run, daemon=True)
         thread.start()
