@@ -189,10 +189,23 @@ class Controller:
         kind = task.kind
         payload = task.payload
         if kind == "train":
-            result = self.train_engine.step(payload)
+            objective = payload.get("objective", "") or "unknown"
+            try:
+                result = self.train_engine.step(payload)
+            except BaseException as exc:
+                # Log a visible error event so UIs reading the trajectory tail
+                # can surface the failure; the queue worker still records
+                # ``task.error`` so ``wait_for`` callers see it too.
+                self.trajectory.log_event("train_error", {
+                    "batch_id": task.batch_id,
+                    "objective": objective,
+                    "commit_token": task.token,
+                    "error_type": type(exc).__name__,
+                    "error": str(exc),
+                })
+                raise
             components = result.get("components")
             wall = time.time() - t0
-            objective = payload.get("objective", "") or "unknown"
             # Canonical log entry for every committed step.
             self.trajectory.log_train(
                 batch_id=task.batch_id,

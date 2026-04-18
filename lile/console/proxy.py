@@ -14,6 +14,8 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 HTML = HERE / "demo.html"
+DASHBOARD = HERE / "dashboard.html"
+METRICS = HERE / "metrics.html"
 UPSTREAM = "http://127.0.0.1:" + os.environ.get("LILE_PORT", "8768")
 PORT = int(os.environ.get("LILE_PROXY_PORT", "8766"))
 
@@ -22,8 +24,8 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         sys.stderr.write("[proxy] %s — %s\n" % (self.address_string(), fmt % args))
 
-    def _serve_html(self):
-        data = HTML.read_bytes()
+    def _serve_file(self, path: Path):
+        data = path.read_bytes()
         self.send_response(200)
         self.send_header("content-type", "text/html; charset=utf-8")
         self.send_header("content-length", str(len(data)))
@@ -91,7 +93,11 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/" or self.path == "/index.html":
-            self._serve_html(); return
+            self._serve_file(HTML); return
+        if self.path == "/dashboard" or self.path == "/dashboard.html":
+            self._serve_file(DASHBOARD); return
+        if self.path == "/metrics" or self.path == "/metrics.html":
+            self._serve_file(METRICS); return
         if self.path.startswith("/api/") or self.path == "/api":
             self._proxy("GET"); return
         self.send_error(404)

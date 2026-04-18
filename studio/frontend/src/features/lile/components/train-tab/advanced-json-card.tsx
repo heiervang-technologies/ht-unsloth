@@ -44,7 +44,7 @@ export function AdvancedJsonCard(): ReactElement {
         <Label htmlFor="advanced-json">Raw JSON</Label>
         <Textarea
           id="advanced-json"
-          placeholder={`{"objective":"sft","samples":[{"messages":[...]}]}`}
+          placeholder={`{"objective":"sft","samples":[{"prompt":"...","response":"..."}]}`}
           value={raw}
           onChange={(e) => setRaw(e.target.value)}
           disabled={submitting}
