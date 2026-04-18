@@ -106,6 +106,19 @@ class TrainEngine:
             # KL anchor) consume it, the rest absorb it via **_.
             if self.state.frozen_ref is not None and "pi_ref" not in kwargs:
                 kwargs["pi_ref"] = self.state.frozen_ref
+            # Plumb the effective LR + batch_objectives into the primary
+            # objective kwargs. Every objective absorbs unknown kwargs via
+            # ``**_`` — ``unlike_loss`` consumes them to drive its tiered
+            # precondition gate (see ``unlike-tiered-preconditions.md``).
+            # Keeps the primitive pure — no reach-through into config.
+            if "effective_lr" not in kwargs:
+                kwargs["effective_lr"] = self.per_objective_lr.get(
+                    name, self.lr,
+                )
+            if "batch_objectives" not in kwargs:
+                kwargs["batch_objectives"] = list(
+                    spec.get("batch_objectives", []) or [],
+                )
             fn = get_objective(name)
             result = fn(self.state.model, self.state.tokenizer, samples, **kwargs)
             loss = result["loss"]

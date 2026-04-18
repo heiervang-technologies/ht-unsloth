@@ -64,21 +64,123 @@ target and accumulates likelihood displacement fast — a KL anchor
 batch-level composition is **required**, not optional, in that mode.
 Principled scope: ``{"name": "kl_anchor", "scope": "target_position"}``
 with the surgery tokens excluded (derived per-sample via schema
-fallback). The unlike primitive enforces tiered preconditions
-(error / warn / warn) on pure-unlike calls — pass ``allow_unanchored=True``
-to override for research / adversarial-testing workflows.
+fallback).
+
+The unlike primitive enforces four-tier preconditions at dispatch:
+
+- **Tier 1 (error)** — pure-unlike sample with no ``kl_anchor`` in
+  ``batch_objectives`` ⇒ ``ValueError``. Pass ``allow_unanchored=True``
+  to override for research / adversarial-testing workflows.
+- **Tier 2 (warn)** — pure-unlike + ``kl_anchor`` with
+  ``scope != "target_position"``: the anchor does not brake the mass
+  movement the push-down is driving.
+- **Tier 3 (warn)** — pure-unlike + target-position anchor whose
+  exclude set omits the surgery tokens; the anchor fights the push-down.
+- **Tier 4 (warn)** — any unlike sample (pure OR positive-teacher) when
+  ``effective_lr < _UNLIKE_LR_HEURISTIC_FLOOR`` (5e-5). Flags the
+  known-unsafe-η regime on the SFT-on-good side. Upgrades to Cleo's
+  closed-form per-sample ``eta_min`` when task A lands.
 
 The ``unlike`` samples carry ``prefix`` rather than ``prompt``;
 ``kl._sample_text`` accepts either, so the composition is drop-in.
 """
 from __future__ import annotations
 
+import warnings
 from typing import Any
 
 import torch
 import torch.nn.functional as F
 
 from ._utils import _to_int_list
+
+
+# Tier-4 small-η safety floor. Upgrades to Cleo's A closed-form per-sample
+# eta_min(p_bad, p_good, V, λ_kl, ε) when that lands — see
+# ``docs/research/proofs/razin-safety-sharpened.md`` and the tier-4 upgrade
+# note in ``unlike-tiered-preconditions.md``. A static 5e-5 is the stop-gap:
+# below it, the positive-teacher side of unlike enters the known-unsafe
+# regime where -log p(good) pushes p(bad) UP rather than down.
+_UNLIKE_LR_HEURISTIC_FLOOR = 5e-5
+
+
+def _check_preconditions(
+    samples: list[dict[str, Any]],
+    batch_objectives: list[dict[str, Any]] | None,
+    allow_unanchored: bool,
+    effective_lr: float | None,
+) -> None:
+    """Four-tier anchor-shape + small-η safety gate.
+
+    Tiers 1-3 check pure-unlike (``good_token_id is None``) samples against
+    the batch's ``kl_anchor`` configuration. Tier 4 checks the effective
+    learning rate for *all* unlike samples (pure OR positive-teacher) —
+    Cleo's razin-safety-sharpened.md theorem shows the unsafe-small-η
+    failure lives on the SFT-on-good side, not the push-down side.
+
+    When called as a bare primitive (no ``batch_objectives`` passed),
+    Tiers 1-3 are skipped — the caller has opted out of the anchor-shape
+    contract. Tier 4 is skipped when ``effective_lr`` is unknown.
+
+    Tier 1 is ordered before Tier 4 so a ``ValueError`` preempts the
+    warn — the user sees the more urgent error first.
+    """
+    if batch_objectives is not None:
+        pure = [s for s in samples if s.get("good_token_id") is None]
+        if pure:
+            anchors = [bo for bo in batch_objectives
+                       if bo.get("name") == "kl_anchor"]
+            if not anchors and not allow_unanchored:
+                raise ValueError(
+                    "pure-unlike requires kl_anchor in batch_objectives "
+                    "(see GLOSSARY.md / design-notes-2026-04-18.md §9); "
+                    "pass allow_unanchored=True to override",
+                )
+            for bo in anchors:
+                scope = bo.get("scope", "prompt")
+                if scope != "target_position":
+                    warnings.warn(
+                        f"pure-unlike detected with kl_anchor scope="
+                        f"'{scope}'; the anchor does not brake "
+                        "target-position mass movement. Consider "
+                        "scope='target_position' (see design-notes §9).",
+                        RuntimeWarning, stacklevel=2,
+                    )
+                    continue
+                batch_exclude = set(bo.get("exclude_token_ids") or [])
+                for s in pure:
+                    # Schema fallback in kl._derive_exclude_ids unions the
+                    # per-sample {bad,good} automatically — Tier 3 only
+                    # fires when the manual ``exclude_token_ids`` batch
+                    # list omits surgery tokens AND per-sample derivation
+                    # would also miss them. Check the same union the
+                    # anchor actually applies.
+                    sample_surgery = {
+                        s.get("bad_token_id"), s.get("good_token_id"),
+                    } - {None}
+                    per_sample_derived = sample_surgery  # schema fallback
+                    if not sample_surgery.issubset(
+                        batch_exclude | per_sample_derived,
+                    ):
+                        warnings.warn(
+                            "kl_anchor scope='target_position' but "
+                            "exclude_token_ids does not cover the surgery "
+                            "tokens; the anchor fights the push-down at "
+                            "the bad/good positions, producing a muddier "
+                            "gradient.",
+                            RuntimeWarning, stacklevel=2,
+                        )
+
+    if effective_lr is not None and effective_lr < _UNLIKE_LR_HEURISTIC_FLOOR:
+        warnings.warn(
+            f"unlike dispatched with effective_lr={effective_lr:g} < 5e-5 "
+            "(known-unsafe regime — the positive-teacher side can push "
+            "p_bad UP; see unlike.py docstring and GLOSSARY). Override via "
+            "per_objective_lr={\"unlike\": 5e-5} or higher. This heuristic "
+            "floor will be replaced by Cleo's closed-form eta_min when "
+            "task A lands.",
+            RuntimeWarning, stacklevel=2,
+        )
 
 
 def _should_trigger(rank_bad: int, p_bad: float,
@@ -130,14 +232,28 @@ def unlike_loss(model: Any, tokenizer: Any, samples: list[dict[str, Any]],
                 default_rank_below: int | None = 5,
                 default_prob_above: float | None = 0.1,
                 eps: float = 1e-6,
+                allow_unanchored: bool = False,
+                batch_objectives: list[dict[str, Any]] | None = None,
+                effective_lr: float | None = None,
                 **_: Any) -> dict[str, Any]:
     """Surgical unlikelihood loss.
 
     See module docstring for sample shape. ``default_rank_below`` and
     ``default_prob_above`` apply when a sample doesn't set its own trigger.
+
+    ``batch_objectives`` / ``effective_lr`` / ``allow_unanchored`` drive
+    the four-tier precondition gate — see ``_check_preconditions``. When
+    called bare (no ``batch_objectives`` passed) the anchor-shape tiers
+    are skipped; when ``effective_lr`` is ``None`` the small-η tier is
+    skipped. ``TrainEngine.step`` plumbs both through so live dispatches
+    run the full gate.
     """
     if not samples:
         raise ValueError("unlike_loss requires at least one sample")
+
+    _check_preconditions(
+        samples, batch_objectives, allow_unanchored, effective_lr,
+    )
 
     pad_id = tokenizer.pad_token_id or tokenizer.eos_token_id or 0
     tokenized = [_prefix_ids(tokenizer, s["prefix"]) for s in samples]
