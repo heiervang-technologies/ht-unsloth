@@ -19,6 +19,10 @@ cfg = ServeConfig(
     port=int(os.environ.get("LILE_PORT", "8768")),
     idle_replay=False,
     frozen_ref=False,
+    # Dev defaults: hot reload + crash-safe state. Override via env.
+    dev_autoreload=os.environ.get("LILE_DEV_AUTORELOAD", "1") == "1",
+    autosave_on_exit=os.environ.get("LILE_AUTOSAVE_ON_EXIT", "1") == "1",
+    autoload_on_boot=os.environ.get("LILE_AUTOLOAD_ON_BOOT", "1") == "1",
 )
 print(f"[launch] starting lile on http://{cfg.host}:{cfg.port} with {cfg.model}")
 serve(cfg)

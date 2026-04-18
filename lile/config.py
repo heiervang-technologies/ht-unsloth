@@ -119,6 +119,23 @@ class ServeConfig:
     # filter expressions (would drift toward per-workflow state).
     commits_sse_enabled: bool = True
 
+    # --- dev-mode hot reload + crash-safe model state ---------------------
+    # Two-layer approach. (1) ``dev_autoreload`` enables ``jurigged``: function
+    # bodies across ``lile/**/*.py`` are patched live when you save a file, so
+    # most edits apply to the running daemon without restart — model,
+    # optimizer, residual, trajectory all stay warm. Body-level only:
+    # structural edits (new file, new import, class hierarchy, registry dict
+    # mutation) still require a process bounce. (2) For that bounce — or any
+    # crash / reboot — ``autosave_on_exit`` writes a byte-exact snapshot
+    # during graceful shutdown, and ``autoload_on_boot`` restores it on next
+    # startup. The "_autosave" slot is the reserved name; user snapshots live
+    # beside it unaffected. See ``lile/dev/autoreload.py`` and
+    # ``lile/snapshot.py``.
+    dev_autoreload: bool = False
+    autosave_on_exit: bool = True
+    autoload_on_boot: bool = True
+    autosave_snapshot_name: str = "_autosave"
+
     # --- safety_monitor daemon-global watchlist ---------------------------
     # Three-tier union at step time: this daemon-global floor
     # (absolute-never tokens — PII / safety-critical), ∪ batch-level

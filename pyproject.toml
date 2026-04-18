@@ -74,6 +74,14 @@ eval = [
     "evalplus>=0.3.0",
 ]
 
+# lile dev-mode hot reload — jurigged patches live function code objects
+# in place so edits to lile/**/*.py bodies apply to the running daemon
+# without a process restart (keeps the model + optimizer + residual warm).
+# Enable via `cfg.dev_autoreload=True` or LILE_DEV_AUTORELOAD=1.
+dev = [
+    "jurigged>=0.5.0",
+]
+
 huggingfacenotorch = [
     "wheel>=0.42.0",
     "packaging",

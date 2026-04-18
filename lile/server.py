@@ -106,9 +106,43 @@ def create_app(cfg: ServeConfig | None = None) -> FastAPI:
         # Startup — Controller was constructed below (pre-lifespan) so routes
         # can close over it without waiting for this hook.
         await app.state.controller.start()
+
+        # Crash-safe auto-restore: if the previous run wrote an _autosave
+        # snapshot, load it before we accept requests. Failures here are
+        # non-fatal — we just log and keep the freshly-loaded base weights.
+        if cfg.autoload_on_boot:
+            name = cfg.autosave_snapshot_name
+            try:
+                if name in app.state.controller.snapshots.list():
+                    log.info("autoload_on_boot — restoring snapshot %r", name)
+                    await app.state.controller.request_snapshot_load(name)
+                    log.info("autoload_on_boot — restored %r", name)
+            except Exception:
+                log.exception("autoload_on_boot — load %r failed; continuing cold", name)
+
+        # Hot reload: patches function bodies in place on file save.
+        # Gated on cfg.dev_autoreload (or LILE_DEV_AUTORELOAD=1). Safe to
+        # call without jurigged installed — logs a warning and proceeds.
+        if cfg.dev_autoreload or os.environ.get("LILE_DEV_AUTORELOAD") == "1":
+            from .dev.autoreload import enable as _enable_autoreload
+            _enable_autoreload()
+
         try:
             yield
         finally:
+            # Auto-snapshot before graceful shutdown so the next boot picks
+            # up exactly where this one left off. Written while the queue is
+            # still alive so the snapshot task runs through the same
+            # single-writer path as user-requested saves.
+            if cfg.autosave_on_exit:
+                name = cfg.autosave_snapshot_name
+                try:
+                    log.info("autosave_on_exit — saving snapshot %r", name)
+                    await app.state.controller.request_snapshot_save(name)
+                    log.info("autosave_on_exit — saved %r", name)
+                except Exception:
+                    log.exception("autosave_on_exit — save %r failed", name)
+
             # Prefer the graceful path so pending /v1/wait callers get
             # ShutdownDroppedError envelopes instead of hanging on their own
             # 60s timeout (see issue #11).
