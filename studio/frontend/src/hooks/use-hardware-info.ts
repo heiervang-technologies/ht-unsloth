@@ -4,10 +4,19 @@
 import { authFetch } from "@/features/auth";
 import { useEffect, useState } from "react";
 
+export interface GpuInfo {
+    index: number;
+    name: string;
+    vramTotalGb: number;
+    vramFreeGb: number;
+}
+
 export interface HardwareInfo {
     gpuName: string | null;
     vramTotalGb: number | null;
     vramFreeGb: number | null;
+    gpuCount: number;
+    gpus: GpuInfo[];
     torch: string | null;
     cuda: string | null;
     transformers: string | null;
@@ -18,6 +27,8 @@ const DEFAULT: HardwareInfo = {
     gpuName: null,
     vramTotalGb: null,
     vramFreeGb: null,
+    gpuCount: 0,
+    gpus: [],
     torch: null,
     cuda: null,
     transformers: null,
@@ -37,10 +48,18 @@ async function fetchOnce(): Promise<HardwareInfo> {
             const res = await authFetch("/api/system/hardware");
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
+            const rawGpus = data?.gpu?.gpus ?? [];
             const info: HardwareInfo = {
                 gpuName: data?.gpu?.gpu_name ?? null,
                 vramTotalGb: data?.gpu?.vram_total_gb ?? null,
                 vramFreeGb: data?.gpu?.vram_free_gb ?? null,
+                gpuCount: data?.gpu?.gpu_count ?? (data?.gpu?.gpu_name ? 1 : 0),
+                gpus: rawGpus.map((g: { index: number; name: string; vram_total_gb: number; vram_free_gb: number }) => ({
+                    index: g.index,
+                    name: g.name,
+                    vramTotalGb: g.vram_total_gb,
+                    vramFreeGb: g.vram_free_gb,
+                })),
                 torch: data?.versions?.torch ?? null,
                 cuda: data?.versions?.cuda ?? null,
                 transformers: data?.versions?.transformers ?? null,

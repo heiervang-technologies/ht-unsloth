@@ -33,6 +33,7 @@ from auth.authentication import (
     get_current_subject,
     get_current_subject_allow_password_change,
     refresh_access_token,
+    DISABLE_AUTH,
 )
 
 router = APIRouter()
@@ -192,6 +193,13 @@ def _clear_login_bucket(key: tuple[str, str]) -> None:
 @router.get("/status", response_model = AuthStatusResponse)
 async def auth_status() -> AuthStatusResponse:
     """Auth initialization state; ``default_username`` is exposed for first-boot UI prefill only."""
+    if DISABLE_AUTH:
+        return AuthStatusResponse(
+            initialized = True,
+            default_username = storage.DEFAULT_ADMIN_USERNAME,
+            requires_password_change = False,
+            auth_disabled = True,
+        )
     return AuthStatusResponse(
         initialized = storage.is_initialized(),
         default_username = storage.DEFAULT_ADMIN_USERNAME,
@@ -205,7 +213,15 @@ async def auth_status() -> AuthStatusResponse:
 
 @router.post("/login", response_model = Token)
 async def login(payload: AuthLoginRequest, request: Request) -> Token:
-    """Login with username/password. Per-account + per-IP rate-limited."""
+    """Login with username/password. Per-account + per-IP rate-limited.
+    UNSLOTH_DISABLE_AUTH=1 short-circuits to a sentinel token (dev/desktop)."""
+    if DISABLE_AUTH:
+        return Token(
+            access_token = "disabled",
+            refresh_token = "disabled",
+            token_type = "bearer",
+            must_change_password = False,
+        )
     key = _bucket_key(request, payload.username)
     unknown_key = _unknown_user_key(request)
     blocked_for = max(_login_blocked(key), _login_blocked(unknown_key))
