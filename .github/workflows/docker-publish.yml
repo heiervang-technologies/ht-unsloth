@@ -1,0 +1,55 @@
+name: Build and Push Docker Image
+
+# SECURITY: Only trigger on push to ht branch, NEVER on pull_request.
+# pull_request events from forks can access secrets in some configurations.
+on:
+  push:
+    branches: [ht]
+    paths:
+      - 'Dockerfile'
+      - 'studio/**'
+      - 'unsloth/**'
+      - 'unsloth_cli/**'
+      - 'lile/**'
+      - 'pyproject.toml'
+  workflow_dispatch:
+
+# Restrict permissions to minimum needed
+permissions:
+  contents: read
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    # Extra guard: only run on the main repo, not forks of the fork
+    if: github.repository == 'heiervang-technologies/ht-unsloth'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: marksverdhei
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: marksverdhei/ht-unsloth-studio
+          tags: |
+            type=raw,value=latest
+            type=sha,prefix=
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

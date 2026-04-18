@@ -27,6 +27,7 @@ from auth.authentication import (
     get_current_subject,
     get_current_subject_allow_password_change,
     refresh_access_token,
+    DISABLE_AUTH,
 )
 
 router = APIRouter()
@@ -39,7 +40,16 @@ async def auth_status() -> AuthStatusResponse:
 
     - initialized = False -> frontend should wait for the seeded admin bootstrap.
     - initialized = True  -> frontend should show login or force the first password change.
+    - When UNSLOTH_DISABLE_AUTH=1, returns initialized=True, requires_password_change=False
+      so the frontend skips the login flow entirely.
     """
+    if DISABLE_AUTH:
+        return AuthStatusResponse(
+            initialized = True,
+            default_username = storage.DEFAULT_ADMIN_USERNAME,
+            requires_password_change = False,
+            auth_disabled = True,
+        )
     return AuthStatusResponse(
         initialized = storage.is_initialized(),
         default_username = storage.DEFAULT_ADMIN_USERNAME,
@@ -56,6 +66,13 @@ async def login(payload: AuthLoginRequest) -> Token:
     """
     Login with username/password and receive access + refresh tokens.
     """
+    if DISABLE_AUTH:
+        return Token(
+            access_token = "disabled",
+            refresh_token = "disabled",
+            token_type = "bearer",
+            must_change_password = False,
+        )
     record = storage.get_user_and_secret(payload.username)
     if record is None:
         raise HTTPException(
