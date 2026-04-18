@@ -28,8 +28,14 @@ def _sample_text(s: dict[str, Any], scope: str) -> str:
     Extending scope to response-only (mask out prompt positions) is the
     logical next step but needs per-sample boundaries; deferred until a
     downstream PR needs it. See sample-efficiency-synthesis.md §1a.
+
+    Schema fallback: accepts ``prompt`` OR ``prefix``. The KL anchor is
+    semantically "anchor against the same context the main objective
+    trained on", so for objectives whose sample schema uses a different
+    field name for context (the ``unlike`` objective uses ``prefix``),
+    we fall back transparently. Callers don't need to duplicate fields.
     """
-    prompt = s["prompt"]
+    prompt = s.get("prompt") or s.get("prefix") or ""
     if scope == "prompt":
         return prompt
     if scope == "full_sequence":
