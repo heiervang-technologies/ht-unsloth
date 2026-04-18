@@ -146,6 +146,8 @@ def create_app(cfg: ServeConfig | None = None) -> FastAPI:
             "queue_depth": c.queue._q.qsize(),
             "commit_cursor": c.queue.committed,
             "merges": c.state.merges_applied if c.state else 0,
+            "commit_sse_subscribers": c.commits.subscriber_count,
+            "commit_sse_drops": c.commits.drops,
         }
 
     # --------------------------------------------------------------- chat
@@ -309,6 +311,49 @@ def create_app(cfg: ServeConfig | None = None) -> FastAPI:
         if since_offset is None:
             return {"events": traj.tail(n)}
         return traj.tail_structured(n=n, since_offset=since_offset)
+
+    # --------------------------------------------------------------- commits SSE
+    @app.get("/v1/commits/stream")
+    async def commits_stream():
+        """Per-commit event stream; see docs/research/pr-specs/commits-sse-stream.md.
+
+        One ``event: commit`` per successful train-task cursor advance.
+        ``: keepalive`` comment line every 15s when idle. Terminal
+        ``event: shutdown`` on daemon stop, then stream closes.
+        """
+        c: Controller = app.state.controller
+        if not cfg.commits_sse_enabled:
+            # Return an empty stream that closes immediately rather than 404 —
+            # callers can tell the feature is off but the route itself is
+            # stable.
+            async def _disabled():
+                yield "event: shutdown\ndata: {\"reason\":\"disabled\"}\n\n"
+            return StreamingResponse(_disabled(), media_type="text/event-stream")
+
+        sub = c.commits.subscribe()
+
+        async def gen():
+            keepalive_interval = 15.0
+            try:
+                while True:
+                    try:
+                        event = await asyncio.wait_for(
+                            sub.get(), timeout=keepalive_interval,
+                        )
+                    except asyncio.TimeoutError:
+                        yield ": keepalive\n\n"
+                        continue
+                    if event.get("_shutdown"):
+                        yield (
+                            "event: shutdown\n"
+                            f"data: {json.dumps({'reason': 'daemon_stop'})}\n\n"
+                        )
+                        return
+                    yield f"event: commit\ndata: {json.dumps(event)}\n\n"
+            finally:
+                c.commits.unsubscribe(sub)
+
+        return StreamingResponse(gen(), media_type="text/event-stream")
 
     # --------------------------------------------------------------- block-for-commit helper
     @app.post("/v1/wait")

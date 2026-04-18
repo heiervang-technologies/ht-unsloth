@@ -45,6 +45,7 @@ _TORCHLESS_OK = {
     "test_replay_streams.py",       # replay_streams scaffold — stdlib-only imports
     "test_trajectory_tail.py",      # lile.trajectory is pure Python
     "test_whitelist_consistency.py", # self-validation of _TORCHLESS_OK
+    "test_commits_sse_stream.py",   # lile.commit_stream is pure asyncio + FastAPI
     "conftest.py",
     "__init__.py",
 }
