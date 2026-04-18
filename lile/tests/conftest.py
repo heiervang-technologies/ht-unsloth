@@ -38,14 +38,11 @@ _TORCHLESS_OK = {
     "test_errors.py",               # lazy lile.errors import inside tests
     "test_error_middleware.py",     # same; also uses FastAPI/TestClient
     "test_eval_harness.py",         # harness smoke — urllib-only
-    "test_graceful_shutdown.py",    # control-plane only; Controller is stubbed
     "test_logging_backends.py",     # lile.logging_backends is lazy on heavy deps
-    "test_metrics.py",              # lile.metrics is pure stdlib + prometheus_client
     "test_queue_cursor.py",         # lile.queue is pure Python
     "test_queue_graceful_drain.py", # lile.queue drain path, asyncio-only
     "test_reasoning.py",            # lile.reasoning is pure Python
     "test_replay_streams.py",       # replay_streams scaffold — stdlib-only imports
-    "test_sigterm_lifespan.py",     # subprocess smoke — module scope is stdlib+httpx
     "test_trajectory_tail.py",      # lile.trajectory is pure Python
     "test_whitelist_consistency.py", # self-validation of _TORCHLESS_OK
     "conftest.py",
@@ -89,6 +86,13 @@ def _cpu_only_whitelist_violations(
     at module scope (in which case filtering it out is correct, and adding
     it to the whitelist would break CI). Only files that both advertise
     cpu_only *and* would actually collect here are violations.
+
+    Boundary: this only checks *module-level* importability. A file whose
+    module scope is stdlib-only but whose test bodies lazy-import torch or
+    prometheus_client will pass the probe and still fail at test-run time.
+    That's a misclassification bug in the test file itself (the
+    ``cpu_only`` marker is lying); the fix is to drop the marker or make
+    the dep available to the cpu_only CI env, not to extend this probe.
     """
     violations: list[str] = []
     for p in sorted(tests_dir.glob("test_*.py")):

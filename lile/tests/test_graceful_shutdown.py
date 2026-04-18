@@ -24,7 +24,11 @@ from typing import Any
 
 import pytest
 
-pytestmark = pytest.mark.cpu_only
+# NOTE: despite the module docstring's "cpu_only" framing, these tests
+# import ``lile.controller`` / ``lile.server`` inside their bodies,
+# which pull torch and uvicorn transitively. Keep unmarked so the
+# torchless CI bucket filters the file out via _TORCHLESS_OK rather
+# than collecting it and failing at test-run time.
 
 
 # ---------------------------------------------------------------- fixtures
