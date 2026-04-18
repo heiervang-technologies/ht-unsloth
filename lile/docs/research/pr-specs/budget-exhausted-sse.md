@@ -3,16 +3,18 @@
 **Author:** claude-opus (live-learn-architect)
 **Date:** 2026-04-18
 **Status:** proposed
-**Priority:** P2 — composes with Tier 5 (pending Cleo §7 K_session calibration)
+**Priority:** P2 — composes with Tier 5 (Mei a76392ce landed; `K_session* = 0.27`)
 **Task:** #22
-**Depends on:** commits-sse-stream (#18, MERGED), unlike-trajectory-bound.md (Cleo, pending §7)
-**Blocks:** nothing; landing early unblocks the Tier 5 wire-through the moment K_session lands
+**Depends on:** commits-sse-stream (#18, MERGED), unlike-trajectory-bound.md (Cleo §7 closed), unlike-tiered-preconditions.md Tier 5 (Mei, landed a76392ce)
+**Blocks:** nothing
 
 ---
 
 ## Problem
 
-Cleo's trajectory bound (A rev3 + trajectory rev1) defines a per-session cumulative-drift functional `Φ_obs := Σ TV_sim^{emp}_i` (sum of per-step simulated off-S TV) and a refuse threshold `K_session`. Mei's Tier 5 (forthcoming in `unlike-tiered-preconditions.md`) gates unlike dispatch on `Φ_obs ≥ K_session`, refusing further steps until snapshot-restore.
+Cleo's trajectory bound (A rev3 + trajectory rev1) defines a per-session cumulative-drift functional `Φ_obs := Σ TV_sim^{emp}_i` (sum of per-step simulated off-S TV) with closed-form refuse threshold `K_session* = 0.27` (95th percentile, random-drift prior; Cleo §7). Mei's Tier 5 (landed a76392ce in `unlike-tiered-preconditions.md`) gates unlike dispatch on `Φ_obs ≥ K_session`, refusing further steps until snapshot-restore.
+
+> **Correlated-workload caveat (Mei, pinned config label).** `K_session* = 0.27` is the 95th percentile on a random-drift prior (decorrelated `(b, g)` across steps). Production workloads (household tutor hammering one misconception) are a **correlated-drift regime** where Φ_obs can outpace the prior. Tier 4's per-step `TV_sim^{emp}` ceiling bounds individual steps even there; Tier 5's session prior will tighten once production telemetry accumulates. Ship with `cfg.cumulative_session_budget_source = "random-drift-prior"` so future telemetry-driven retunes don't silently overwrite the semantic.
 
 > **Framing note (2026-04-18, Mei/Cleo §7).** Earlier drafts referenced `Φ_obs` with an `exp(-α E_k)` anchor-energy discount. Calibration showed E_k is uncorrelated with off-S drift (α sweep moved the functional only 1.42 → 1.35), so the discount was inert. `Φ_obs` is the simpler non-discounted sum of empirically-simulated per-step TV. Architect rebudget semantics hold verbatim — they're trajectory-of-weights properties, agnostic to the inner functional shape.
 
