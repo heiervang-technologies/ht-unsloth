@@ -59,6 +59,29 @@ useful — only that they carry the theoretical risk and need safeguards
 (KL anchors, reasonable pair sampling, reference-model divergence
 caps). Razin-safe objectives give you a free pass on that concern.
 
+## composite-safe
+
+A **composite loss** (e.g. `unlike` with a positive teacher: `-log(1-p_b) + w_+ · -log(p_g)`)
+is **composite-safe** at `(p, w_+, ε, η)` iff `η ∈ [η_min(p, w_+), η_max(p, w_+, ε)]`
+and the window is non-empty. The bounds come from Cleo's
+`docs/research/proofs/unlike-kl-step-size-bound.md` (A sketch):
+
+- `η_min(p, w_+)` — below this, the SFT-on-good side pushes `p_bad` UP against
+  the unlike push-down (§4 linearization).
+- `η_max(p, w_+, ε)` — above this, the off-anchor ε-collateral is exceeded (§5).
+- `ε_*(p, w_+) := η_min · w_+ · (||p||² - p_b² - p_g²)` — when the user-configured
+  `ε < ε_*`, the safe window is empty and the run should refuse to step.
+
+Under plain SGD / AdamW the KL anchor does not gradient-pull at step one (reference
+distribution is `p|_S` itself); ε is a **post-step audit**, not an in-step constraint
+(A §6.1 — natural-gradient reading rejected for AdamW). Trajectory bound across N
+steps is the follow-up theorem (`unlike-trajectory-bound.md`, deferred).
+
+Composes with **Razin-safe / B**: the per-token growth predicate `p_j < M_p(η)`
+(B) and the per-target safe-window `[η_min, η_max]` (A) are two readings of the
+same small-η displacement mechanism; both bounds are what `lile/objectives/unlike.py`'s
+tiered preconditions (Tier 4) should carry at dispatch time.
+
 ### Why it matters for lile
 
 lile's live-learning loop ingests small, noisy feedback batches and

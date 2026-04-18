@@ -74,6 +74,14 @@ The canonical cautionary tale is the filter-to-misses result: an interim recover
 - PR descriptions carry the tuple.
 - A finding that can't survive restating with the tuple isn't a finding.
 
+**Objective-specific mandatory labels.** When the A/B involves a composite-safe
+objective (unlike + SFT-on-good), the regime tuple extends with the safe-window
+triple `(η_min, η_max, ε_*)` per `unlike-kl-step-size-bound.md` §4–§5. A run that
+executed below `η_min` or with `ε < ε_*` is labeled `unsafe-window` and its
+accuracy numbers are quoted only alongside the window-violation note. A run
+inside the window is labeled `composite-safe(η_min=…, η_max=…, ε_*=…)`. No
+unlike A/B without the window tuple.
+
 ## Length-compression observation (NOT yet a finding)
 
 The filter-to-misses full-n summary notes:

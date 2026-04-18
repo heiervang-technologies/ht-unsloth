@@ -110,4 +110,9 @@ Land after #15 (kl_anchor target-position scope). Single-file change (`lile/obje
 ## Follow-up (not this PR)
 
 - **Per-objective safe-LR registry.** If a second objective grows a theoretical safe-LR floor (e.g. a future DPO variant), Tier 4's hardcoded `_UNLIKE_LR_HEURISTIC_FLOOR` generalizes to a registry `_OBJECTIVE_SAFE_FLOORS: dict[str, float]` consulted by `TrainEngine.step`. Deferred until N=2 — premature for one objective.
-- **Tier 4 upgrade:** when Cleo's task A produces the closed-form `eta_min(p_bad, p_good, V, λ_kl, ε)`, Tier 4's floor becomes per-sample rather than global, and the warning message includes the exceeded predicted bound.
+- **Tier 4 upgrade (A sketch landed 2026-04-18).** Cleo's `unlike-kl-step-size-bound.md` (rev1) closes the closed-form tuple:
+  - `η_min(p, w_+)` — §4 linearization: `(w_+ · (||p||² - p_g - p_b) - R(p,b,g))_+ / [p_b · (1 + w_+)]`; conservative (tighter than the true crossing).
+  - `η_max(p, w_+, ε)` — §5: `ε / [w_+ · (||p||² - p_b² - p_g²)]`.
+  - `ε_*(p, w_+) := η_min · w_+ · (||p||² - p_b² - p_g²)` — empty-window threshold; refuse-to-step when user ε falls below.
+  - Tier 4 static floor `5e-5` upgrades to per-sample `η_min`; dispatch-time warn carries the `(η_min, η_max, ε_*)` tuple; refuse-to-step on empty window (`η_min > η_max` ⟺ `ε < ε_*`). Anchor remains a **post-step audit** (`unlike-kl-step-size-bound.md` §6.1) — we do not enforce ε in-step under plain SGD / AdamW.
+  - Trajectory bound (cumulative drift across N steps) is the follow-up theorem; deferred to `unlike-trajectory-bound.md`.
