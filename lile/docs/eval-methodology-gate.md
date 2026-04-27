@@ -2,7 +2,7 @@
 
 **Author:** mei (math-validator), with claude-opus (architect)
 **Date:** 2026-04-18
-**Status:** draft — pins after trained_det_run_2 lands
+**Status:** pinned (2026-04-27) — gate 3 noise floor pinned at K=7 class-flips from `trained_500_det_run2.json`
 
 ---
 
@@ -53,14 +53,17 @@ The canonical cautionary tale is the filter-to-misses result: an interim recover
 - **Non-byte-identical ⟹ noise floor = flip_count.** Deltas must exceed this to be quoted.
 - Call-sites: every A/B harness. Write the double-run result to `<eval_name>_det_run_2.json` next to the primary.
 
-#### The canonical pin (pending)
+#### The canonical pin (pinned 2026-04-27)
 
-`trained_det_run_2` is in flight at the time of drafting. Expected outcomes:
+`trained_500_det_run2.json` landed. Same-snapshot, same-seed, same deterministic config. Two-run diff:
 
-- **Best case:** byte-identical to `trained_500_det.json`. Noise floor = 0. The filter-to-misses +0.40pp is then a signed delta, and McNemar's p=0.839 is the statistical read (null).
-- **Likely case:** a handful of class-flips (historical anchor: 24 flips on a prior Qwen3 run). Noise floor > |+2| net delta. The +0.40pp drops below noise floor and is **unsigned**.
+- **Class-flips on `correct` field: 7** (4 recoveries + 3 regressions, net +1 across the two runs)
+- **Extracted-answer flips: 13** (extraction can flip without changing correctness when gold-string normalization is loose)
+- **Response-length flips: 55 / 500** — 11% of responses differ in byte length between the two runs; len diff range −358 to +409 chars, mean −4.25.
 
-*Pin the actual flip count here once trained_det_run_2 lands. — placeholder, ~15min of rework.*
+**K = 7. The +0.40pp filter-to-misses net delta (+2 correct, n=500) is below this floor — `unsigned`.** McNemar p=0.839 already read null on extracted-answer concordance; the deterministic noise floor closes gate 3 in the same direction. The "+0.6pp / +1.6pp" early reads of the same A/B never had this gate applied; they are retroactively unsigned.
+
+The 55/500 response-length flip count also kills the length-compression observation as a signed finding. The trained-vs-cold mean delta (−6 chars on ~800 baseline) is two orders of magnitude smaller than the per-sample run-to-run len-diff range (−358 to +409); the asymmetric −0.9% / −0.3% read is already-known-null per paired-bootstrap CI [−3.32, +2.02], and the 11% same-weight len-flip rate confirms there is nothing left to ascribe to weights.
 
 ### 4. Writeup protocol — regime labels mandatory
 
@@ -118,9 +121,9 @@ The filter-to-misses full-n summary notes:
 |---|---|---|
 | 1. Cold-baseline pairing | ✅ applied to filter_to_misses full-n | `cold-qwen3.5-9b-20260418` reusable |
 | 2. Regression-on-solves | ✅ applied | `filter_to_misses_full_det_summary.md` |
-| 3. Noise-floor determinism | ⏳ pending `trained_det_run_2` (~60min) | `trained_500_det_run2.json` |
+| 3. Noise-floor determinism | ✅ pinned K=7 class-flips (2026-04-27) | `trained_500_det_run2.json` |
 | 4. Regime labels | ✅ applied to new summaries | Template in this doc's header block |
 
-## When this doc is pinned
+## Pin status
 
-After trained_det_run_2 lands, replace the "pending pin" placeholder in gate 3 with the actual flip count, and promote status from `draft` to `pinned`.
+Pinned 2026-04-27 against `trained_500_det_run2.json`. K=7. Re-pin only if a future run discovers a different floor on a different model/decoder configuration, in which case the new K is named alongside the model+config tuple it characterizes.
