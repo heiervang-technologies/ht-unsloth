@@ -26,11 +26,18 @@ from prometheus_client import (
     generate_latest,
 )
 from prometheus_client.core import GaugeMetricFamily
+from prometheus_client.exposition import CONTENT_TYPE_LATEST
+from prometheus_client.openmetrics.exposition import (
+    CONTENT_TYPE_LATEST as OPENMETRICS_CONTENT_TYPE,
+    generate_latest as generate_openmetrics,
+)
 from prometheus_client.registry import Collector
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 from starlette.types import ASGIApp
+
+from .middleware import current_request_id
 
 log = logging.getLogger(__name__)
 
@@ -82,24 +89,26 @@ _REPLAY_ENQUEUED = Counter(
 
 # ---------------------------------------------------------------- histograms
 
-# Bucket choices: default prom buckets are tuned for web-request seconds;
-# step latency and generate latency are both naturally in the tens-of-ms
-# to multi-second range, so we use the same bucket family scaled to ms.
-_LATENCY_MS_BUCKETS = (5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 30000)
+# Prometheus convention: base units are seconds (histogram suffix ``_seconds``).
+# Buckets cover the ms-to-tens-of-seconds range both train-step and generate
+# paths actually exercise.
+_LATENCY_SECONDS_BUCKETS = (
+    0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0,
+)
 
 _STEP_LATENCY = Histogram(
-    "lile_step_latency_ms",
+    "lile_step_latency_seconds",
     "Wall-clock time spent inside TrainEngine.step.",
     labelnames=("objective",),
-    buckets=_LATENCY_MS_BUCKETS,
+    buckets=_LATENCY_SECONDS_BUCKETS,
     registry=REGISTRY,
 )
 
 _GENERATE_LATENCY = Histogram(
-    "lile_generate_latency_ms",
+    "lile_generate_latency_seconds",
     "Wall-clock time for a chat completion. stream=true means time-to-first-token.",
     labelnames=("stream",),
-    buckets=_LATENCY_MS_BUCKETS,
+    buckets=_LATENCY_SECONDS_BUCKETS,
     registry=REGISTRY,
 )
 
@@ -276,6 +285,34 @@ def render_prometheus() -> bytes:
     return generate_latest(REGISTRY)
 
 
+def render_openmetrics() -> bytes:
+    """Return the OpenMetrics text exposition (includes exemplars)."""
+    return generate_openmetrics(REGISTRY)
+
+
+def render_negotiated(accept_header: str | None) -> tuple[bytes, str]:
+    """Pick the response format based on the Accept header.
+
+    Prometheus' scraper sends ``Accept: application/openmetrics-text;…`` when
+    it wants exemplars; anything else (curl, browser probes) gets plain text.
+    Returns ``(body, content_type)``.
+    """
+    if accept_header and "application/openmetrics-text" in accept_header:
+        return render_openmetrics(), OPENMETRICS_CONTENT_TYPE
+    return render_prometheus(), CONTENT_TYPE_LATEST
+
+
+def _exemplar() -> dict[str, str] | None:
+    """Bundle the active request id as an exemplar, if one is bound.
+
+    Exemplars render only in the OpenMetrics exposition format; ``generate_latest``
+    (plain-text Prometheus) ignores them. Keeping the attribute present on every
+    observe is cheap and lets scrapers opt into exemplar-aware queries.
+    """
+    rid = current_request_id()
+    return {"request_id": rid} if rid else None
+
+
 # ---------------------------------------------------------------- hot-path hooks
 
 
@@ -286,11 +323,15 @@ def record_request(*, route: str, status: int) -> None:
 
 def record_train_step(*, objective: str, latency_s: float, loss: float | None = None) -> None:
     """Bump `lile_train_steps_total{objective}` + observe latency/loss histograms."""
-    _TRAIN_STEPS.labels(objective=objective or "unknown").inc()
-    _STEP_LATENCY.labels(objective=objective or "unknown").observe(latency_s * 1000.0)
+    objective = objective or "unknown"
+    exemplar = _exemplar()
+    _TRAIN_STEPS.labels(objective=objective).inc()
+    _STEP_LATENCY.labels(objective=objective).observe(latency_s, exemplar=exemplar)
     if loss is not None:
         try:
-            _OBJECTIVE_LOSS.labels(objective=objective or "unknown").observe(float(loss))
+            _OBJECTIVE_LOSS.labels(objective=objective).observe(
+                float(loss), exemplar=exemplar,
+            )
         except (TypeError, ValueError):  # pragma: no cover — defensive
             pass
 
@@ -313,9 +354,9 @@ def record_replay_enqueued(n: int = 1) -> None:
 
 
 def record_generate_latency(*, stream: bool, latency_s: float) -> None:
-    """Observe `lile_generate_latency_ms{stream}`. For streams this is TTFT."""
+    """Observe `lile_generate_latency_seconds{stream}`. For streams this is TTFT."""
     _GENERATE_LATENCY.labels(stream="true" if stream else "false").observe(
-        latency_s * 1000.0
+        latency_s, exemplar=_exemplar(),
     )
 
 
@@ -352,5 +393,7 @@ def _resolve_route(request: Request) -> str:
     path = getattr(route, "path", None)
     if path:
         return path
-    # Fallback for unmatched routes (404 on unknown path).
-    return request.url.path or "unknown"
+    # Collapse unmatched routes (scanners, probes, 404s) into a single label
+    # value — using ``request.url.path`` would let a hostile client mint
+    # unbounded cardinality in ``lile_requests_total``.
+    return "unmatched"

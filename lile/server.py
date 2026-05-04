@@ -12,7 +12,7 @@ import time
 from typing import Any
 
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -130,11 +130,11 @@ def create_app(cfg: ServeConfig | None = None) -> FastAPI:
 
     # --------------------------------------------------------------- metrics
     @app.get("/metrics")
-    async def metrics_endpoint() -> Response:
-        return Response(
-            metrics_mod.render_prometheus(),
-            media_type="text/plain; version=0.0.4; charset=utf-8",
+    async def metrics_endpoint(request: Request) -> Response:
+        body, content_type = metrics_mod.render_negotiated(
+            request.headers.get("accept"),
         )
+        return Response(body, media_type=content_type)
 
     # --------------------------------------------------------------- health
     @app.get("/health")
@@ -376,4 +376,5 @@ def serve(cfg: ServeConfig | None = None) -> None:
 
 
 if __name__ == "__main__":
-    serve()
+    from .cli import parse_cli_args
+    serve(parse_cli_args())
