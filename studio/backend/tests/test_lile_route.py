@@ -52,107 +52,40 @@ def test_start_noop_when_already_running(client, monkeypatch, respx_mock):
     assert body["externally_managed"] is True
 
 
-def test_start_spawns_subprocess_when_absent(client, monkeypatch, respx_mock):
-    from routes import lile as lile_mod
-    spawned = {}
-
-    class FakePopen:
-        def __init__(self, argv, **kw):
-            spawned["argv"] = argv
-            self.pid = 4242
-
-    monkeypatch.setenv("LILE_HOST", "127.0.0.1")
-    monkeypatch.setenv("LILE_PORT", "59998")
-    # Stub the initial /health gate as unreachable so the spawn branch runs.
-    # Using respx keeps this deterministic — no real network probe on 59998.
-    respx_mock.get("http://127.0.0.1:59998/health").mock(
-        side_effect=__import__("httpx").ConnectError("refused")
-    )
-    monkeypatch.setattr(lile_mod.subprocess, "Popen", FakePopen)
-    async def fake_probe():
-        return {"ok": True, "model": "qwen3", "queue_depth": 0,
-                "commit_cursor": 0, "merges": 0}
-    monkeypatch.setattr(lile_mod, "_probe_health", fake_probe)
-
-    r = client.post("/api/lile/capsule/start",
-                    json={"model": "unsloth/Qwen3-0.6B-unsloth-bnb-4bit"})
+def test_start_reports_unreachable_when_daemon_absent(client, monkeypatch):
+    """capsule/start no longer spawns; it just reports daemon reachability."""
+    monkeypatch.setenv("LILE_DAEMON_URL", "http://127.0.0.1:59998")
+    r = client.post("/api/lile/capsule/start", json={})
     assert r.status_code == 200
     body = r.json()
-    assert body["running"] is True
-    assert body["externally_managed"] is False
-    assert body["pid"] == 4242
-    assert "lile.server" in " ".join(spawned["argv"])
-    assert "--port" in spawned["argv"]
+    assert body["running"] is False
+    assert body["externally_managed"] is True
+    assert "LILE_DAEMON_URL" in body["error"]
 
 
-def test_start_closes_log_handle_when_popen_fails(client, monkeypatch, respx_mock):
-    """If Popen raises, the daemon.log file handle must not leak."""
-    import builtins
-    from routes import lile as lile_mod
-
-    monkeypatch.setenv("LILE_HOST", "127.0.0.1")
-    monkeypatch.setenv("LILE_PORT", "59998")
-    respx_mock.get("http://127.0.0.1:59998/health").mock(
-        side_effect=__import__("httpx").ConnectError("refused")
-    )
-
-    opened = []
-    real_open = builtins.open
-
-    class TrackingFH:
-        def __init__(self, *a, **kw):
-            self._real = real_open(*a, **kw)
-            self.closed_ = False
-            opened.append(self)
-        def __getattr__(self, name):
-            return getattr(self._real, name)
-        def close(self):
-            self.closed_ = True
-            return self._real.close()
-
-    def fake_open(path, *args, **kwargs):
-        # Only track daemon.log, leave everything else alone so FastAPI /
-        # logging internals keep working.
-        if str(path).endswith("daemon.log"):
-            return TrackingFH(path, *args, **kwargs)
-        return real_open(path, *args, **kwargs)
-
-    monkeypatch.setattr(builtins, "open", fake_open)
-
-    def boom(*args, **kwargs):
-        raise OSError("simulated Popen failure")
-    monkeypatch.setattr(lile_mod.subprocess, "Popen", boom)
-
-    # FastAPI will surface the OSError as a 500. What we really care about
-    # is that the daemon.log fh we opened was closed.
-    try:
-        client.post("/api/lile/capsule/start", json={})
-    except OSError:
-        pass  # propagated by TestClient in some configs
-    assert opened, "expected daemon.log to be opened"
-    assert all(fh.closed_ for fh in opened), "fh leaked on Popen failure"
-
-
-def test_stop_refuses_when_externally_managed(client, monkeypatch):
-    from routes import lile as lile_mod
-    monkeypatch.setattr(lile_mod, "_spawned_pid", None)
+def test_stop_is_always_externally_managed(client):
+    """capsule/stop is a no-op since lile is externally managed."""
     r = client.post("/api/lile/capsule/stop")
     assert r.status_code == 200
     assert r.json() == {"stopped": False, "reason": "externally_managed"}
 
 
-def test_stop_sends_signal_when_we_spawned(client, monkeypatch):
+def test_base_url_requires_configuration(monkeypatch):
+    """_lile_base_url raises if no env hints are set, surfacing the move."""
     from routes import lile as lile_mod
-    killed = {}
-    monkeypatch.setattr(lile_mod, "_spawned_pid", 4242)
-    def fake_kill(pid, sig):
-        killed["pid"] = pid; killed["sig"] = sig
-    monkeypatch.setattr(lile_mod.os, "kill", fake_kill)
-    r = client.post("/api/lile/capsule/stop")
-    assert r.status_code == 200
-    assert r.json()["stopped"] is True
-    assert killed == {"pid": 4242, "sig": lile_mod.signal.SIGTERM}
-    assert lile_mod._spawned_pid is None
+    monkeypatch.delenv("LILE_DAEMON_URL", raising=False)
+    monkeypatch.delenv("LILE_HOST", raising=False)
+    monkeypatch.delenv("LILE_PORT", raising=False)
+    with pytest.raises(RuntimeError, match="LILE_DAEMON_URL"):
+        lile_mod._lile_base_url()
+
+
+def test_base_url_prefers_daemon_url_over_host_port(monkeypatch):
+    from routes import lile as lile_mod
+    monkeypatch.setenv("LILE_DAEMON_URL", "http://lile.example:8080/")
+    monkeypatch.setenv("LILE_HOST", "ignored")
+    monkeypatch.setenv("LILE_PORT", "9999")
+    assert lile_mod._lile_base_url() == "http://lile.example:8080"
 
 
 def test_proxy_forwards_get(client, monkeypatch, respx_mock):
