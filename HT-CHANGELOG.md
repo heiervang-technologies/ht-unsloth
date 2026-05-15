@@ -4,6 +4,26 @@ All notable changes in the HT fork (relative to upstream unsloth) are documented
 
 ## Unreleased
 
+## 2026-05-15
+
+### lile relocated to heiervang-technologies/agi
+
+`lile` (the LiveLearn live-training daemon) has moved to its own repository. `ht-unsloth` keeps the Unsloth fork + Studio; the daemon is now externally managed and Studio talks to it over HTTP.
+
+- **New home:** [`heiervang-technologies/agi`](https://github.com/heiervang-technologies/agi). Installable as `pip install lile @ git+https://github.com/heiervang-technologies/agi`. Authorship preserved via `git filter-repo`.
+- **Cross-repo coupling:** `agi`'s `pyproject.toml` pins `unsloth @ git+https://github.com/heiervang-technologies/ht-unsloth@ht-2026-05-15`. Bump intentionally when ht-unsloth syncs with upstream.
+- **Removed from this fork** (PR #53):
+  - `lile/`, `lile_data/`, `compose.lile-dev.yaml`, `.claude/skills/lile/`
+  - Lile-only `pyproject.toml` extras (`eval`, `dev`) and `[tool.pytest.ini_options]`
+  - `.github/workflows/test.yml` (lile-specific CI)
+- **Studio integration changed** (`studio/backend/routes/lile.py`):
+  - `/api/lile/capsule/status` and `/api/lile/capsule/start` now probe reachability of the externally-managed daemon at `LILE_DAEMON_URL` (preferred) or legacy `LILE_HOST` + `LILE_PORT`.
+  - `/api/lile/capsule/stop` is a no-op (`{stopped: false, reason: "externally_managed"}`).
+  - Transparent proxy (`/api/lile/{path}`) and SSE pass-through unchanged — chat + train + state-snapshot UX preserved.
+  - `studio/backend/tests/test_lile_route.py` updated for the externally-managed contract.
+- **Last lile commit on `ht`:** `53757129` (squashed PR #52 — RLVR rig + GPT-OSS-120B teacher + ARC-AGI-3 runner + combined-loss engine). agi tracks from that point. Tagged as [`ht-2026-05-15`](https://github.com/heiervang-technologies/ht-unsloth/releases/tag/ht-2026-05-15).
+- **Runner offline note:** self-hosted runners were offline during the migration window; CI ran on cloud runners and verified green before merge.
+
 ### Prompt Baking — 4th training mode in Studio
 
 Integrates [marksverdhei/bakery](https://github.com/marksverdhei/bakery) as a new training method alongside QLoRA, LoRA, and Full fine-tune. Prompt baking distils a system prompt into LoRA weights via KL divergence so the model exhibits the prompted behavior at zero inference-time cost.
