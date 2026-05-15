@@ -69,8 +69,16 @@ def _can_spawn() -> bool:
     Checked at call time (not import time) so the route module loads even
     when lile isn't installed. Studio's optional extra
     ``ht-unsloth-studio[lile]`` brings it in.
+
+    ``find_spec`` raises ``ModuleNotFoundError`` when a *parent* package is
+    missing (e.g. ``lile.console`` is asked for but ``lile.console`` itself
+    isn't a package). We treat that the same as "missing" — the module is
+    not importable in this interpreter.
     """
-    return importlib.util.find_spec("lile.console.launch") is not None
+    try:
+        return importlib.util.find_spec("lile.console.launch") is not None
+    except (ModuleNotFoundError, ValueError):
+        return False
 
 
 def _spawn_port() -> int:
