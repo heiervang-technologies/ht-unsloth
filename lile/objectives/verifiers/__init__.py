@@ -87,3 +87,14 @@ def select(prompt: str) -> str | None:
 # claim first, so "math" wins over "code" on ambiguous prompts.
 from . import _math  # noqa: F401, E402
 from . import _code  # noqa: F401, E402
+
+# ARC-AGI-3 verifier lives in the teach/arc_agi_3 subpackage so the loader,
+# prompts, and runner stay co-located. Importing it here triggers the
+# ``@register("arc")`` decorator. Wrapped in a try/except because the lile
+# package can be imported in slim environments (cpu_only test runs) before
+# the teach subpackage is available; the registry should never crash the
+# import of the rest of lile.
+try:
+    from lile.teach.arc_agi_3 import verifier as _arc  # noqa: F401, E402
+except Exception:  # pragma: no cover — defensive; teach package is in-tree
+    pass

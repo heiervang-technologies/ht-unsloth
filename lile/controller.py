@@ -190,6 +190,11 @@ class Controller:
         payload = task.payload
         if kind == "train":
             objective = payload.get("objective", "") or "unknown"
+            if not payload.get("objective") and payload.get("objectives"):
+                # Combined-loss path — surface a useful label so trajectory
+                # readers don't see "unknown" for every multi step.
+                names = [o.get("name", "?") for o in payload["objectives"]]
+                objective = "multi[" + "+".join(sorted(set(names))) + "]"
             try:
                 result = self.train_engine.step(payload)
             except BaseException as exc:
@@ -279,19 +284,31 @@ class Controller:
             except (asyncio.TimeoutError, KeyError):
                 pass
         parse_reasoning = kwargs.pop("parse_reasoning", True)
+        use_adapter = kwargs.pop("use_adapter", True)
         # Run the actual generation outside the queue — training+inference
         # share weights; there is no race because training mutates atomically
         # via the compute queue's single-worker discipline.
         from .engine.inference import generate_chat
         from .reasoning import get_parser_for_model
         loop = asyncio.get_running_loop()
-        text = await loop.run_in_executor(
-            None,
-            lambda: generate_chat(
-                self.state.model, self.state.tokenizer, messages,
+        model = self.state.model
+
+        def _run() -> str:
+            # `disable_adapter()` is only present on PEFT-wrapped models; the
+            # base-only path (e.g. smoke tests with a raw HF model) doesn't
+            # have it, so we degrade gracefully.
+            if not use_adapter and hasattr(model, "disable_adapter"):
+                with model.disable_adapter():
+                    return generate_chat(
+                        model, self.state.tokenizer, messages,
+                        mode_lock=self.state.mode_lock, **kwargs,
+                    )
+            return generate_chat(
+                model, self.state.tokenizer, messages,
                 mode_lock=self.state.mode_lock, **kwargs,
-            ),
-        )
+            )
+
+        text = await loop.run_in_executor(None, _run)
         rid = new_response_id()
         self.trajectory.log_inference(
             response_id=rid,
@@ -327,22 +344,34 @@ class Controller:
             except (asyncio.TimeoutError, KeyError):
                 pass
         parse_reasoning = kwargs.pop("parse_reasoning", True)
+        use_adapter = kwargs.pop("use_adapter", True)
 
         from .engine.inference import generate_chat_stream
         from .reasoning import get_parser_for_model
+        import contextlib
         import threading
         loop = asyncio.get_running_loop()
         q: asyncio.Queue = asyncio.Queue()
         DONE = object()
         ERR: dict[str, Any] = {}
+        model = self.state.model
 
         def _producer():
+            # Wrap in `disable_adapter()` when the caller asked for the base
+            # model. The context manager's __exit__ re-enables the adapter
+            # after the generator drains, so concurrent training on the
+            # PEFT model is unaffected.
+            if not use_adapter and hasattr(model, "disable_adapter"):
+                ctx = model.disable_adapter()
+            else:
+                ctx = contextlib.nullcontext()
             try:
-                for chunk in generate_chat_stream(
-                    self.state.model, self.state.tokenizer, messages,
-                    mode_lock=self.state.mode_lock, **kwargs,
-                ):
-                    asyncio.run_coroutine_threadsafe(q.put(chunk), loop)
+                with ctx:
+                    for chunk in generate_chat_stream(
+                        model, self.state.tokenizer, messages,
+                        mode_lock=self.state.mode_lock, **kwargs,
+                    ):
+                        asyncio.run_coroutine_threadsafe(q.put(chunk), loop)
             except Exception as e:
                 ERR["exc"] = e
             finally:
@@ -414,9 +443,35 @@ class Controller:
             )
 
     async def submit_train(self, spec: dict[str, Any]) -> dict[str, Any]:
-        """Chunk a train batch into queue tasks and return the final commit_token."""
+        """Chunk a train batch into queue tasks and return the final commit_token.
+
+        Two shapes:
+        - Single objective: ``{"objective": "...", "samples": [...]}`` — chunked
+          by ``chunk_size``, one queue task per chunk.
+        - Multi objective:  ``{"objectives": [{"name", "weight", "samples"?}, ...]}``
+          — runs as ONE queue task. Per-objective samples may differ; the
+          engine combines them in a single backward pass. Caller is responsible
+          for batching upstream if rollouts get large.
+        """
         self._reject_if_shutting_down()
+        has_obj = "objective" in spec and spec.get("objective")
+        has_objs = "objectives" in spec and spec.get("objectives")
+        if has_obj and has_objs:
+            raise ValueError("submit_train: set exactly one of 'objective' or 'objectives'")
+        if not has_obj and not has_objs:
+            raise ValueError("submit_train: must set 'objective' or 'objectives'")
         batch_id = new_batch_id()
+
+        if has_objs:
+            # Multi-objective: don't chunk — one combined-loss step.
+            t = await self.queue.submit("train", dict(spec), batch_id=batch_id)
+            return {
+                "batch_id": batch_id,
+                "commit_token": t.token,
+                "n_chunks": 1,
+                "queue_depth": self.queue._q.qsize(),
+            }
+
         samples = spec.get("samples", [])
         chunk_size = spec.get("chunk_size", 2)  # small default for 0.6B; caller can bump
         tasks = []

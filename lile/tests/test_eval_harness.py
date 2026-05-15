@@ -35,9 +35,19 @@ pytestmark = [pytest.mark.cpu_only, pytest.mark.eval]
 
 # ----------------------------------------------------------------- registry
 def test_lm_eval_task_registry_is_stable() -> None:
-    assert set(LM_EVAL_TASKS) == {"hellaswag", "arc_easy", "arc_challenge", "gsm8k"}
+    # Track E added ``arc_agi_3`` with a ``custom_runner`` instead of an
+    # ``lm_eval_name`` (lm-eval has no ARC-AGI-3 wrapper). Each task must
+    # carry exactly one of the two routing keys.
+    assert set(LM_EVAL_TASKS) == {
+        "hellaswag", "arc_easy", "arc_challenge", "gsm8k", "arc_agi_3",
+    }
     for name, meta in LM_EVAL_TASKS.items():
-        assert {"metric", "lm_eval_name"} <= meta.keys()
+        assert "metric" in meta
+        has_lm_eval = "lm_eval_name" in meta
+        has_custom = "custom_runner" in meta
+        assert has_lm_eval ^ has_custom, (
+            f"{name}: must have exactly one of lm_eval_name / custom_runner"
+        )
 
 
 def test_code_task_registry_is_stable() -> None:

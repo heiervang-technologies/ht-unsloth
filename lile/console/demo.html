@@ -90,6 +90,14 @@
   .pill.sft { background: #2a503a; color: #9ece6a; }
   .pill.merge, .pill.snapshot { background: #503a2a; color: #e0af68; }
   .pill.ntp { background: #2a4a50; color: #7dcfff; }
+  .pill.pending { background: #3d2f1a; color: #e0af68; }
+  .pill.pending::before { content: "⋯ "; }
+  .pill.landed { background: #1f3d28; color: #9ece6a; animation: flash-in .9s ease-out; }
+  .pill.landed::before { content: "✓ "; }
+  @keyframes flash-in {
+    0%   { background: #9ece6a; color: #0f1115; transform: scale(1.08); }
+    100% { background: #1f3d28; color: #9ece6a; transform: scale(1); }
+  }
 
   .card { background: var(--panel2); border: 1px solid #2d333e; border-radius: 8px;
     padding: 12px 14px; margin-bottom: 12px; }
@@ -159,6 +167,7 @@
   <div class="stat">queue&nbsp;<b id="st-queue">0</b></div>
   <div class="stat">commit&nbsp;<b id="st-commit">0</b></div>
   <div class="stat">merges&nbsp;<b id="st-merges">0</b></div>
+  <div class="stat" title="idle replays enqueued / idle checks (continual learning)">replay&nbsp;<b id="st-replay">off</b></div>
   <div class="stat" id="st-ping" style="color: var(--err)">offline</div>
   <button id="btn-merge" title="Fold active LoRA into residual">merge now</button>
 </header>
@@ -345,10 +354,31 @@ async function pollHealth() {
     $("#st-queue").textContent = h.queue_depth;
     $("#st-commit").textContent = h.commit_cursor;
     $("#st-merges").textContent = h.merges;
+    const rp = h.replay || {};
+    if (!rp.enabled) {
+      $("#st-replay").textContent = "off";
+      $("#st-replay").style.color = "var(--dim)";
+    } else {
+      const n = rp.replays_enqueued ?? 0;
+      const k = rp.idle_checks ?? 0;
+      $("#st-replay").textContent = `${n}/${k}`;
+      $("#st-replay").style.color = n > 0 ? "var(--ok)" : "var(--accent)";
+    }
     $("#st-ping").textContent = "online"; $("#st-ping").style.color = "var(--ok)";
+    promoteLandedCommits(h.commit_cursor);
   } catch (e) {
     $("#st-ping").textContent = "offline"; $("#st-ping").style.color = "var(--err)";
   }
+}
+// Pending-commit pills flip to "landed" once cursor catches up.
+function promoteLandedCommits(cursor) {
+  document.querySelectorAll(".pill.pending[data-commit-token]").forEach(el => {
+    const tok = parseInt(el.dataset.commitToken, 10);
+    if (!isNaN(tok) && cursor >= tok) {
+      el.classList.remove("pending");
+      el.classList.add("landed");
+    }
+  });
 }
 setInterval(pollHealth, 1500); pollHealth();
 
@@ -359,12 +389,20 @@ const history = []; // {role, content}
 function attachAssistantMeta(el, { rid, latency, commit, content, historyIdx }) {
   // clear any previous meta on this element (streaming updates replace)
   el.querySelectorAll(".meta").forEach(n => n.remove());
+  el.dataset.rid = rid;  // lookup key for feedback pills added later
   const meta = document.createElement("div");
   meta.className = "meta";
   const rcSpan = document.createElement("span"); rcSpan.className = "rid";
   rcSpan.textContent = `id:${rid.slice(0, 8)}`; meta.appendChild(rcSpan);
   if (latency != null) {
     const l = document.createElement("span"); l.textContent = `latency ${latency.toFixed(2)}s`; meta.appendChild(l);
+    if (content && latency > 0) {
+      const tok = Math.max(1, Math.round((content || "").length / 4));
+      const tps = tok / latency;
+      const t = document.createElement("span");
+      t.textContent = `~${tps.toFixed(1)} tok/s`;
+      meta.appendChild(t);
+    }
   }
   if (commit != null) {
     const c = document.createElement("span"); c.textContent = `commit ${commit}`; meta.appendChild(c);
@@ -598,10 +636,12 @@ async function sendBinary(rid, value, metaEl) {
       body: { response_id: rid, kind: "binary", value, weight: 3.0 } });
     lastCommitToken = j.commit_token;
     const tag = document.createElement("span");
-    tag.className = "pill kto";
-    tag.textContent = `→ kto ${value} · commit ${j.commit_token}`;
+    tag.className = "pill kto pending";
+    tag.dataset.commitToken = String(j.commit_token);
+    tag.textContent = `kto ${value} · commit ${j.commit_token}`;
     metaEl.appendChild(tag);
     refreshTraj();
+    pollHealth();
   } catch (e) { alert("feedback failed: " + e.message); }
 }
 
@@ -639,7 +679,17 @@ $("#fb-submit").onclick = async () => {
     $("#fb-status").textContent = "submitted · commit_token " + j.commit_token;
     $("#fb-status").className = "status-line ok";
     setTimeout(() => $("#fb-modal").classList.remove("open"), 700);
+    // attach a pending pill to the targeted assistant message so it lights up on land
+    const meta = document.querySelector(`.msg[data-rid="${critiqueTarget.rid}"] .meta`);
+    if (meta) {
+      const tag = document.createElement("span");
+      tag.className = "pill coh pending";
+      tag.dataset.commitToken = String(j.commit_token);
+      tag.textContent = `${body.kind} · commit ${j.commit_token}`;
+      meta.appendChild(tag);
+    }
     refreshTraj();
+    pollHealth();
   } catch (e) {
     $("#fb-status").textContent = "error: " + e.message;
     $("#fb-status").className = "status-line err";
