@@ -56,7 +56,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Iterable
 
-from ..objectives.verifiers import select as select_verifier
+# Verifier registry is imported lazily inside the call site (build_combined_spec)
+# so this module stays torchless at import time — needed for the CI's cpu_only
+# pytest collection. ``lile.objectives.__init__`` pulls in torch via the sft loss.
 from .arc_agi_3.loader import load_tasks
 from .arc_agi_3.prompts import build_prompt as build_arc_prompt
 from .teacher_oss120b import JudgeResult, judge
@@ -456,6 +458,8 @@ class RLVRScheduler:
         if source_label == "arc":
             domain: str = "arc"
         else:
+            # Lazy import: lile.objectives pulls in torch at module init.
+            from ..objectives.verifiers import select as select_verifier
             domain = select_verifier(prompt) or source_label or "general"
 
         try:
