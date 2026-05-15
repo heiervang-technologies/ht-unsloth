@@ -1,17 +1,16 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Copyright 2026-present the Unsloth AI Inc. team. All rights reserved. See /studio/LICENSE.AGPL-3.0
 
-"""Lile capsule lifecycle + transparent proxy."""
+"""Lile capsule status + transparent proxy.
+
+The lile daemon moved to heiervang-technologies/agi on 2026-05-15. Studio
+no longer spawns it; it just proxies HTTP traffic at LILE_DAEMON_URL.
+"""
 
 from __future__ import annotations
 
-import asyncio
 import json
 import os
-import signal
-import subprocess
-import sys
-from pathlib import Path
 
 import httpx
 from fastapi import APIRouter, Request
@@ -22,13 +21,19 @@ router = APIRouter(prefix="/api/lile", tags=["lile"])
 
 
 def _lile_base_url() -> str:
-    host = os.environ.get("LILE_HOST", "127.0.0.1")
-    port = os.environ.get("LILE_PORT", "8768")
-    return f"http://{host}:{port}"
-
-
-# Module-level cell; flipped by /capsule/start when we spawn.
-_spawned_pid: int | None = None
+    url = os.environ.get("LILE_DAEMON_URL")
+    if url:
+        return url.rstrip("/")
+    host = os.environ.get("LILE_HOST")
+    port = os.environ.get("LILE_PORT")
+    if host and port:
+        return f"http://{host}:{port}"
+    raise RuntimeError(
+        "lile daemon location not configured: set LILE_DAEMON_URL "
+        "(or legacy LILE_HOST + LILE_PORT). lile lives in "
+        "heiervang-technologies/agi since 2026-05-15 and is no longer "
+        "spawnable from this process."
+    )
 
 
 @router.get("/capsule/status")
@@ -41,7 +46,7 @@ async def capsule_status() -> dict:
             return {"running": False}
         return {
             "running": True,
-            "externally_managed": _spawned_pid is None,
+            "externally_managed": True,
             "health": r.json(),
             "url": _lile_base_url(),
         }
@@ -58,82 +63,31 @@ class StartRequest(BaseModel):
     frozen_ref: bool | None = None
 
 
-async def _probe_health() -> dict | None:
-    try:
-        async with httpx.AsyncClient(timeout=0.5) as c:
-            r = await c.get(f"{_lile_base_url()}/health")
-        if r.status_code == 200:
-            return r.json()
-    except httpx.HTTPError:
-        pass
-    return None
-
-
-def _data_dir() -> Path:
-    default = Path(__file__).resolve().parents[3] / "lile_data"
-    d = Path(os.environ.get("LILE_DATA_DIR", str(default)))
-    d.mkdir(parents=True, exist_ok=True)
-    return d
-
-
 @router.post("/capsule/start")
 async def capsule_start(req: StartRequest) -> dict:
-    global _spawned_pid
-    # Initial gate: inline probe so tests can independently monkeypatch
-    # `_probe_health` for the post-spawn readiness loop without short-
-    # circuiting the spawn branch.
+    # lile lives in heiervang-technologies/agi since 2026-05-15 and is no
+    # longer spawned by Studio. The endpoint stays so the frontend's
+    # capsule lifecycle UI keeps working; it now just reports whether the
+    # externally-managed daemon at LILE_DAEMON_URL is reachable.
+    del req  # all spawn-time parameters are configured on the daemon side
     try:
         async with httpx.AsyncClient(timeout=0.5) as c:
             r = await c.get(f"{_lile_base_url()}/health")
         if r.status_code == 200:
             return {"running": True, "externally_managed": True,
                     "health": r.json(), "url": _lile_base_url()}
-    except (httpx.ConnectError, httpx.TimeoutException):
+    except httpx.HTTPError:
         pass
-
-    port = os.environ.get("LILE_PORT", "8768")
-    log_path = _data_dir() / "daemon.log"
-    argv = [sys.executable, "-m", "lile.server", "--port", str(port)]
-    if req.model:
-        argv += ["--model", req.model]
-
-    fh = open(log_path, "ab", buffering=0)
-    try:
-        proc = subprocess.Popen(
-            argv, stdout=fh, stderr=subprocess.STDOUT,
-            start_new_session=True, close_fds=True,
-        )
-    except Exception:
-        # Popen failed (e.g. ENOENT on python, fork failure). Close the
-        # daemon.log handle we opened a moment ago so it doesn't leak.
-        fh.close()
-        raise
-    _spawned_pid = proc.pid
-
-    for _ in range(240):  # 240 * 0.5s = 120s
-        health = await _probe_health()
-        if health is not None:
-            return {"running": True, "externally_managed": False,
-                    "pid": proc.pid, "url": _lile_base_url(),
-                    "health": health}
-        await asyncio.sleep(0.5)
-
-    return {"running": False, "error": "health-check timeout (120s)",
-            "pid": proc.pid, "log": str(log_path)}
+    return {"running": False, "externally_managed": True,
+            "url": _lile_base_url(),
+            "error": "lile daemon not reachable at LILE_DAEMON_URL; start "
+                     "it from the agi repo (python -m lile.console.launch)"}
 
 
 @router.post("/capsule/stop")
 async def capsule_stop() -> dict:
-    global _spawned_pid
-    if _spawned_pid is None:
-        return {"stopped": False, "reason": "externally_managed"}
-    try:
-        os.kill(_spawned_pid, signal.SIGTERM)
-    except ProcessLookupError:
-        pass
-    pid = _spawned_pid
-    _spawned_pid = None
-    return {"stopped": True, "pid": pid}
+    # lile is externally managed since the move to heiervang-technologies/agi.
+    return {"stopped": False, "reason": "externally_managed"}
 
 
 _HOP_BY_HOP = {"connection", "keep-alive", "proxy-authenticate",
