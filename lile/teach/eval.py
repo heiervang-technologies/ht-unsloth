@@ -21,6 +21,8 @@ crashing — so scaffolding lands before the full pipeline.
 from __future__ import annotations
 
 import argparse
+import asyncio
+import importlib
 import json
 import math
 import sys
@@ -30,15 +32,20 @@ import urllib.request
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 
 # ----------------------------------------------------------------- task registry
+# Each task either has ``lm_eval_name`` (route to lm-eval-harness) or
+# ``custom_runner`` (route to a project-internal callable). lm-eval has
+# no ARC-AGI-3 wrapper, so that one carries ``custom_runner`` instead;
+# the dispatch in :func:`run` branches on which key is present.
 LM_EVAL_TASKS: dict[str, dict[str, Any]] = {
     "hellaswag":     {"metric": "acc_norm",    "lm_eval_name": "hellaswag"},
     "arc_easy":      {"metric": "acc_norm",    "lm_eval_name": "arc_easy"},
     "arc_challenge": {"metric": "acc_norm",    "lm_eval_name": "arc_challenge"},
     "gsm8k":         {"metric": "exact_match", "lm_eval_name": "gsm8k_cot_zeroshot"},
+    "arc_agi_3":     {"metric": "acc",         "custom_runner": "lile.teach.eval_arc_smoke:run_arc_eval"},
 }
 
 CODE_TASKS: dict[str, dict[str, Any]] = {
@@ -127,6 +134,51 @@ def _run_lm_eval(task: str, endpoint: str, model: str, limit: int,
     )
 
 
+def _resolve_custom_runner(spec: str) -> Callable[..., Any]:
+    """Resolve a ``"pkg.mod:callable"`` string to the underlying function.
+
+    Used by tasks in :data:`LM_EVAL_TASKS` that carry a ``custom_runner``
+    instead of an lm-eval task name. Kept tiny so tests can monkey-patch
+    it cleanly without importing the runner up-front.
+    """
+    if ":" not in spec:
+        raise ValueError(f"custom_runner spec must be 'module:callable', got {spec!r}")
+    mod_name, attr = spec.split(":", 1)
+    mod = importlib.import_module(mod_name)
+    return getattr(mod, attr)
+
+
+def _run_custom(task: str, endpoint: str, limit: int) -> TaskResult:
+    """Dispatch to a task-local runner registered via ``custom_runner``.
+
+    The custom runner is a callable returning a dict with at least
+    ``correct: int`` / ``total: int`` / ``pass_rate: float`` (the shape
+    that ``run_arc_eval`` produces). Async callables are awaited.
+
+    The metric value reported is ``pass_rate`` — if a custom task ever
+    needs something else, add a per-task hook here rather than expanding
+    the runner contract.
+    """
+    meta = LM_EVAL_TASKS[task]
+    runner = _resolve_custom_runner(meta["custom_runner"])
+    # The custom runner takes a *daemon* URL (no trailing /v1) — strip if
+    # the caller passed an OpenAI-flavored endpoint.
+    daemon_url = endpoint
+    if daemon_url.rstrip("/").endswith("/v1"):
+        daemon_url = daemon_url.rstrip("/")[:-3]
+    t0 = time.time()
+    out = runner(daemon_url=daemon_url, n=limit)
+    if asyncio.iscoroutine(out):
+        out = asyncio.run(out)
+    correct = int(out.get("correct", 0))
+    total = int(out.get("total", 0))
+    value = float(out.get("pass_rate", (correct / total) if total else 0.0))
+    return TaskResult(
+        task=task, metric=meta["metric"], value=value, n=total,
+        wall_clock_s=time.time() - t0, raw=out,
+    )
+
+
 def _run_evalplus(task: str, endpoint: str, model: str,
                   limit: int) -> TaskResult:
     """Run an evalplus code task via its OpenAI-compat backend.
@@ -165,7 +217,11 @@ def run(endpoint: str, model: str, tasks: list[str], code_tasks: list[str],
         if task not in LM_EVAL_TASKS:
             raise SystemExit(f"unknown lm-eval task: {task!r} (known: {sorted(LM_EVAL_TASKS)})")
         print(f"[eval] {task} (n={limit})", file=sys.stderr)
-        results.append(_run_lm_eval(task, endpoint, model, limit, batch_size))
+        meta = LM_EVAL_TASKS[task]
+        if meta.get("custom_runner"):
+            results.append(_run_custom(task, endpoint, limit))
+        else:
+            results.append(_run_lm_eval(task, endpoint, model, limit, batch_size))
 
     for task in code_tasks:
         if task not in CODE_TASKS:

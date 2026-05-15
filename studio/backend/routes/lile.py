@@ -23,7 +23,7 @@ router = APIRouter(prefix="/api/lile", tags=["lile"])
 
 def _lile_base_url() -> str:
     host = os.environ.get("LILE_HOST", "127.0.0.1")
-    port = os.environ.get("LILE_PORT", "8765")
+    port = os.environ.get("LILE_PORT", "8768")
     return f"http://{host}:{port}"
 
 
@@ -91,7 +91,7 @@ async def capsule_start(req: StartRequest) -> dict:
     except (httpx.ConnectError, httpx.TimeoutException):
         pass
 
-    port = os.environ.get("LILE_PORT", "8765")
+    port = os.environ.get("LILE_PORT", "8768")
     log_path = _data_dir() / "daemon.log"
     argv = [sys.executable, "-m", "lile.server", "--port", str(port)]
     if req.model:
