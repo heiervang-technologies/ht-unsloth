@@ -145,6 +145,38 @@ class ServeConfig:
     # ``lile/docs/research/pr-specs/safety-monitor-primitive.md``.
     default_watchlist: list[int] = field(default_factory=list)
 
+    # --- RLVR online teacher (Track B) -------------------------------------
+    # The four-role teacher (grade / critique / counterfactual /
+    # demonstration) that drives the online RLVR loop. One OpenRouter call
+    # per RLVR step routes through ``lile/teach/teacher_oss120b.py``; the
+    # API key is read from ``OPENROUTER_API_KEY`` in the daemon env (see
+    # ``compose.lile-dev.yaml``). ``teacher_max_concurrent`` caps in-flight
+    # judge() calls so a stuck OpenRouter region can't pile up requests.
+    teacher_model: str = "openai/gpt-oss-120b"
+    teacher_url: str = "https://openrouter.ai/api/v1"
+    teacher_max_concurrent: int = 4
+
+    # --- RLVR online scheduler (Track C) -----------------------------------
+    # Drives the online RLVR loop in ``lile/teach/rlvr_loop.py``. Default-off
+    # so the daemon ships dark; flip ``rlvr_online`` to wire the scheduler
+    # into the lifespan once the prompt sources and the daemon-side teacher
+    # call budget are sized. ``rlvr_weights`` is the linear-combination
+    # weighting consumed by the combined-loss engine (Track A): wᵢ in
+    # Σ wᵢ·Lᵢ for the per-rollout objectives that the four-role teacher
+    # routes to. ``kl`` is the always-on anchor (scope="target_position")
+    # that brakes mass movement on the rest of the vocab.
+    rlvr_online: bool = False
+    rlvr_k: int = 4
+    rlvr_source: str = "mixed"  # "math" | "code" | "arc" | "mixed"
+    rlvr_weights: dict[str, float] = field(default_factory=lambda: {
+        "sft": 0.1,
+        "coh": 1.0,
+        "kto": 1.0,
+        "unlike": 0.5,
+        "kl": 0.05,
+    })
+    rlvr_log_path: str = "lile_data/rlvr_loop.jsonl"
+
 
 @dataclass
 class KLAnchorSpec:

@@ -112,10 +112,21 @@ def _tokenize_prefixes_with_last_idx(
     for s in samples:
         text = s.get("prefix") or s.get("prompt") or ""
         if getattr(tokenizer, "chat_template", None):
-            raw = tokenizer.apply_chat_template(
-                [{"role": "user", "content": text}],
-                add_generation_prompt=True, tokenize=True, return_tensors=None,
-            )
+            # transformers 5.x apply_chat_template iterates over message["content"]
+            # expecting list-of-typed-blocks for multimodal-capable models.
+            # Fall back to plain-string content first (works for text-only
+            # models); on TypeError retry with the typed-block form.
+            try:
+                raw = tokenizer.apply_chat_template(
+                    [{"role": "user", "content": text}],
+                    add_generation_prompt=True, tokenize=True, return_tensors=None,
+                )
+            except TypeError:
+                raw = tokenizer.apply_chat_template(
+                    [{"role": "user",
+                      "content": [{"type": "text", "text": text}]}],
+                    add_generation_prompt=True, tokenize=True, return_tensors=None,
+                )
             ids = _to_int_list(raw)
         else:
             ids = _to_int_list(

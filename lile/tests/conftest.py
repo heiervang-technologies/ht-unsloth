@@ -47,6 +47,7 @@ _TORCHLESS_OK = {
     "test_whitelist_consistency.py", # self-validation of _TORCHLESS_OK
     "test_commits_sse_stream.py",   # lile.commit_stream is pure asyncio + FastAPI
     "test_server_cli.py",           # argparse-only — no torch import
+    "test_rlvr_loop.py",            # lile.teach.rlvr_loop is torchless (urllib + stdlib)
     "conftest.py",
     "__init__.py",
 }

@@ -108,9 +108,10 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    print(f"[proxy] serving {HTML} at http://127.0.0.1:{PORT}/")
+    bind = os.environ.get("LILE_PROXY_BIND", "127.0.0.1")
+    print(f"[proxy] serving {HTML} at http://{bind}:{PORT}/")
     print(f"[proxy] forwarding /api/* -> {UPSTREAM}/*")
-    ThreadingHTTPServer(("127.0.0.1", PORT), Handler).serve_forever()
+    ThreadingHTTPServer((bind, PORT), Handler).serve_forever()
 
 
 if __name__ == "__main__":

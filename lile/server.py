@@ -57,6 +57,11 @@ class ChatRequest(BaseModel):
     # when thinking is on (raw tags stay in ``content``).
     enable_thinking: bool | None = None
     parse_reasoning: bool = True
+    # When False, wrap the generation in ``model.disable_adapter()`` so the
+    # response comes from the frozen base model rather than the live LoRA.
+    # Lets a client pick "lile with LoRA" vs "lile base" at request time
+    # without standing up a second model.
+    use_adapter: bool = True
 
 
 class TrainSample(BaseModel):
@@ -77,8 +82,24 @@ class TrainSample(BaseModel):
         extra = "allow"
 
 
+class ObjectiveSpec(BaseModel):
+    """One primary in a combined-loss train spec.
+
+    ``samples`` and ``kwargs`` default to the spec-level fields when None,
+    so callers can either share data across primaries or route per-rollout.
+    """
+    name: str
+    weight: float = 1.0
+    samples: list[dict[str, Any]] | None = None
+    kwargs: dict[str, Any] | None = None
+
+    class Config:
+        extra = "allow"
+
+
 class TrainRequest(BaseModel):
-    objective: str
+    objective: str | None = None
+    objectives: list[ObjectiveSpec] | None = None
     samples: list[dict[str, Any]] = Field(default_factory=list)
     batch_objectives: list[dict[str, Any]] = Field(default_factory=list)
     kwargs: dict[str, Any] = Field(default_factory=dict)
@@ -95,6 +116,21 @@ class FeedbackRequest(BaseModel):
 
 class SnapshotRequest(BaseModel):
     name: str
+
+
+class MemorizeRequest(BaseModel):
+    """Body for POST /v1/train/memorize.
+
+    Drives the greedy-memorize loop in ``lile.memorize``. Threshold is the
+    argmax-match fraction at which training stops; max_steps caps the loop.
+    """
+    prompt: str
+    response: str
+    max_steps: int = 30
+    threshold: float = 0.95
+    lr: float | None = None
+    weight: float = 1.0
+    plateau_patience: int = 3
 
 
 # ---------------------------------------------------------------------- app
@@ -174,6 +210,11 @@ def create_app(cfg: ServeConfig | None = None) -> FastAPI:
     @app.get("/health")
     async def health() -> dict[str, Any]:
         c = app.state.controller
+        replay: dict[str, Any] = {"enabled": bool(cfg.idle_replay)}
+        sched = getattr(c, "_replay", None)
+        if sched is not None:
+            replay.update(sched.stats)
+            replay["idle_threshold_s"] = sched.policy.idle_threshold_s
         return {
             "ok": True,
             "model": cfg.model,
@@ -182,6 +223,7 @@ def create_app(cfg: ServeConfig | None = None) -> FastAPI:
             "merges": c.state.merges_applied if c.state else 0,
             "commit_sse_subscribers": c.commits.subscriber_count,
             "commit_sse_drops": c.commits.drops,
+            "replay": replay,
         }
 
     # --------------------------------------------------------------- chat
@@ -203,6 +245,7 @@ def create_app(cfg: ServeConfig | None = None) -> FastAPI:
                         after_commit_token=req.after_commit_token,
                         enable_thinking=req.enable_thinking,
                         parse_reasoning=req.parse_reasoning,
+                        use_adapter=req.use_adapter,
                     ):
                         if "error" in ev:
                             rid = current_request_id() or ""
@@ -234,6 +277,39 @@ def create_app(cfg: ServeConfig | None = None) -> FastAPI:
                                          "response_id": ev["response_id"]},
                             }
                             yield f"data: {json.dumps(payload)}\n\n"
+                            # OpenAI-spec final `usage` chunk (choices=[], usage
+                            # populated). Lets the Studio chat adapter compute
+                            # real tokens-per-second instead of the chars/4
+                            # fallback. Best-effort: any tokenizer hiccup just
+                            # drops the usage chunk — the stream still closes
+                            # cleanly with [DONE].
+                            try:
+                                tok = c.state.tokenizer
+                                prompt_ids = tok.apply_chat_template(
+                                    messages,
+                                    tokenize=True,
+                                    add_generation_prompt=True,
+                                )
+                                completion_ids = tok.encode(
+                                    ev.get("full", ""),
+                                    add_special_tokens=False,
+                                )
+                                p_tok = len(prompt_ids)
+                                c_tok = len(completion_ids)
+                                usage_payload = {
+                                    "id": ev["response_id"],
+                                    "object": "chat.completion.chunk",
+                                    "model": cfg.model,
+                                    "choices": [],
+                                    "usage": {
+                                        "prompt_tokens": p_tok,
+                                        "completion_tokens": c_tok,
+                                        "total_tokens": p_tok + c_tok,
+                                    },
+                                }
+                                yield f"data: {json.dumps(usage_payload)}\n\n"
+                            except Exception:
+                                pass
                             yield "data: [DONE]\n\n"
                             return
                         # delta event — emit whichever channel(s) had bytes.
@@ -286,6 +362,7 @@ def create_app(cfg: ServeConfig | None = None) -> FastAPI:
             after_commit_token=req.after_commit_token,
             enable_thinking=req.enable_thinking,
             parse_reasoning=req.parse_reasoning,
+            use_adapter=req.use_adapter,
         )
         latency = time.time() - t0
         metrics_mod.record_generate_latency(stream=False, latency_s=latency)
@@ -313,6 +390,21 @@ def create_app(cfg: ServeConfig | None = None) -> FastAPI:
         c: Controller = app.state.controller
         spec = req.model_dump()
         return await c.submit_train(spec)
+
+    @app.post("/v1/train/memorize")
+    async def train_memorize(req: MemorizeRequest) -> dict[str, Any]:
+        from .memorize import iterate_memorize
+        c: Controller = app.state.controller
+        return await iterate_memorize(
+            c,
+            prompt=req.prompt,
+            response=req.response,
+            max_steps=req.max_steps,
+            threshold=req.threshold,
+            lr=req.lr,
+            weight=req.weight,
+            plateau_patience=req.plateau_patience,
+        )
 
     # --------------------------------------------------------------- feedback
     @app.post("/v1/feedback")
