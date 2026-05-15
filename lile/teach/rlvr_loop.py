@@ -458,9 +458,15 @@ class RLVRScheduler:
         if source_label == "arc":
             domain: str = "arc"
         else:
-            # Lazy import: lile.objectives pulls in torch at module init.
-            from ..objectives.verifiers import select as select_verifier
-            domain = select_verifier(prompt) or source_label or "general"
+            # Lazy + tolerant: lile.objectives pulls in torch at module init,
+            # which the cpu_only / eval CI runners don't ship. When torch
+            # isn't available we fall back to the source label — losing
+            # auto-domain inference but keeping the scheduler usable.
+            try:
+                from ..objectives.verifiers import select as select_verifier
+                domain = select_verifier(prompt) or source_label or "general"
+            except ModuleNotFoundError:
+                domain = source_label or "general"
 
         try:
             judge_result = judge(prompt, rollouts, domain=domain)  # type: ignore[arg-type]
