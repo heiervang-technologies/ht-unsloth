@@ -237,8 +237,11 @@ package-lock.json
 !studio/package-lock.json
 llama.cpp/
 
-# lile runtime state — kept for the original lile-introduction commit;
-# commit 1afa1407 (gitignore lile leftovers post-relocation) later
-# replaces these with broader /lile/ and /lile_data/ ignores.
-/lile_data/trajectory.jsonl
-/lile_data/snapshots/
+# lile relocated to heiervang-technologies/agi on 2026-05-15 (PR #52/#53).
+# These directories must not re-accumulate here — if you find yourself
+# generating files at these paths, you're in the wrong repo.
+/lile/
+/lile_data/
+
+# Playwright MCP cache — we don't use it (see CLAUDE.md memory).
+/.playwright-mcp/
