@@ -218,9 +218,11 @@ server.pid
 *.log
 package-lock.json
 
-# lile runtime state — per-process, not evidence.
-# bench_*.json files in lile_data/ are intentionally tracked (checked-in
-# reproducibility evidence for the §11 benchmark); the log + snapshots are
-# ephemeral. See PR#8 review.
-/lile_data/trajectory.jsonl
-/lile_data/snapshots/
+# lile relocated to heiervang-technologies/agi on 2026-05-15 (PR #52/#53).
+# These directories must not re-accumulate here — if you find yourself
+# generating files at these paths, you're in the wrong repo.
+/lile/
+/lile_data/
+
+# Playwright MCP cache — we don't use it (see CLAUDE.md memory).
+/.playwright-mcp/
