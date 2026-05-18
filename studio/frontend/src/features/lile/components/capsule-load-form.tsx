@@ -19,6 +19,11 @@ const MODEL_SUGGESTIONS = [
 export function CapsuleLoadForm(): ReactElement {
   const status = useLileCapsuleStore((s) => s.status);
   const running = status?.running === true;
+  // External-mode daemons are not Studio's lifecycle to own; Stop is a
+  // no-op on the backend (returns {stopped:false, reason:"externally_managed"}).
+  // Surface that to the user instead of letting them click and see nothing.
+  const mode = status?.mode;
+  const externalLifecycle = running && mode === "external";
 
   const [model, setModel] = useState("");
   const [maxSeqLength, setMaxSeqLength] = useState(2048);
@@ -69,10 +74,19 @@ export function CapsuleLoadForm(): ReactElement {
         <Button
           variant="destructive"
           onClick={handleStop}
-          disabled={submitting}
+          disabled={submitting || externalLifecycle}
+          title={externalLifecycle
+            ? "Daemon is externally managed — stop it from where it was launched"
+            : undefined}
         >
           {submitting ? "Stopping…" : "Stop capsule"}
         </Button>
+        {externalLifecycle && (
+          <p className="text-xs text-muted-foreground">
+            Daemon is externally managed at <code>{status?.url}</code>.
+            Stop it from the process that launched it.
+          </p>
+        )}
         {error && (
           <p className="text-sm text-destructive">{error}</p>
         )}
