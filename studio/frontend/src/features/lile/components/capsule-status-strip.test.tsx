@@ -35,4 +35,54 @@ describe("CapsuleStatusStrip", () => {
     expect(screen.getByText(/commit 77/)).toBeTruthy();
     expect(screen.getByText(/queue 3/)).toBeTruthy();
   });
+
+  it("shows spawned badge with pid when mode=spawned", () => {
+    useLileCapsuleStore.getState().setStatus({
+      running: true,
+      mode: "spawned",
+      pid: 4242,
+      health: {
+        ok: true, model: "qwen3-8b",
+        queue_depth: 0, commit_cursor: 0, merges: 0,
+      },
+      url: "http://127.0.0.1:8768",
+    });
+    render(<CapsuleStatusStrip />);
+    expect(screen.getByText(/spawned/)).toBeTruthy();
+    expect(screen.getByText(/pid 4242/)).toBeTruthy();
+  });
+
+  it("shows external badge when mode=external", () => {
+    useLileCapsuleStore.getState().setStatus({
+      running: true,
+      mode: "external",
+      health: {
+        ok: true, model: "qwen3-8b",
+        queue_depth: 0, commit_cursor: 0, merges: 0,
+      },
+      url: "http://remote.example:8768",
+    });
+    render(<CapsuleStatusStrip />);
+    expect(screen.getByText(/external/)).toBeTruthy();
+  });
+
+  it("explains unconfigured offline state", () => {
+    useLileCapsuleStore.getState().setStatus({
+      running: false,
+      mode: "unconfigured",
+    });
+    render(<CapsuleStatusStrip />);
+    expect(screen.getByText(/not configured/i)).toBeTruthy();
+    expect(screen.getByText(/LILE_DAEMON_URL/)).toBeTruthy();
+  });
+
+  it("surfaces unreachable-URL when external probe failed", () => {
+    useLileCapsuleStore.getState().setStatus({
+      running: false,
+      mode: "external-unreachable",
+      url: "http://remote.example:8768",
+    });
+    render(<CapsuleStatusStrip />);
+    expect(screen.getByText(/not reachable at http:\/\/remote\.example:8768/)).toBeTruthy();
+  });
 });

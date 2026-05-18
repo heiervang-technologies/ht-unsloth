@@ -9,10 +9,22 @@ export type HealthReport = {
   merges: number;
 };
 
+// Capsule mode (set by studio/backend/routes/lile.py:capsule_status):
+//   external      — daemon reachable at LILE_DAEMON_URL; we don't own its lifecycle
+//   spawned       — Studio launched the daemon as a subprocess; we own SIGTERM
+//   external-unreachable — env points somewhere but /health doesn't respond
+//   unconfigured  — no LILE_DAEMON_URL / LILE_HOST set
+export type CapsuleMode =
+  | "external"
+  | "spawned"
+  | "external-unreachable"
+  | "unconfigured";
+
 export type CapsuleStatus =
-  | { running: false }
-  | { running: true; externally_managed: boolean; health: HealthReport;
-      url: string };
+  | { running: false; mode?: CapsuleMode; url?: string; pid?: number;
+      error?: string }
+  | { running: true; mode?: CapsuleMode; externally_managed?: boolean;
+      health: HealthReport; url: string; pid?: number };
 
 export type TrainStepEvent = {
   offset: number;
