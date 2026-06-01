@@ -1,0 +1,74 @@
+name: Studio Tests
+
+# Runs the Studio backend's lile-route tests in two configurations:
+#   - lile-absent: only Studio backend deps installed. Proves
+#     `studio/backend/routes/lile.py` imports and serves cleanly without
+#     the `lile` package present in the interpreter.
+#   - lile-installed: lile pulled from heiervang-technologies/agi at the
+#     current cross-repo pin tag. Proves the spawn-local path still works.
+#
+# Both cells must stay green to merge.
+
+on:
+  pull_request:
+    branches: [ht, main]
+    paths:
+      - 'studio/backend/**'
+      - '.github/workflows/studio-tests.yml'
+  push:
+    branches: [ht]
+    paths:
+      - 'studio/backend/**'
+      - '.github/workflows/studio-tests.yml'
+  workflow_dispatch:
+
+jobs:
+  lile-contract:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: lile-absent
+            install_lile: false
+          - name: lile-installed
+            install_lile: true
+            # Bump in lockstep with HT-CHANGELOG.md "Unreleased" → next ht-YYYY-MM-DD tag.
+            lile_ref: ht-2026-05-15
+    name: ${{ matrix.name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Studio backend deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r studio/backend/requirements/studio.txt
+          pip install pytest pytest-asyncio respx httpx
+
+      - name: Install lile (matrix=lile-installed only)
+        if: matrix.install_lile
+        run: |
+          pip install "lile @ git+https://github.com/heiervang-technologies/agi@${{ matrix.lile_ref }}"
+
+      - name: Assert lile state matches matrix
+        run: |
+          python - <<'PY'
+          import importlib.util, os, sys
+          want_installed = os.environ["EXPECT_INSTALLED"] == "true"
+          spec = importlib.util.find_spec("lile")
+          have_installed = spec is not None
+          if want_installed != have_installed:
+              print(f"::error::expected lile installed={want_installed}, got {have_installed}")
+              sys.exit(1)
+          print(f"lile installed={have_installed} (matches matrix)")
+          PY
+        env:
+          EXPECT_INSTALLED: ${{ matrix.install_lile && 'true' || 'false' }}
+
+      - name: Run lile-route tests
+        working-directory: studio/backend
+        run: pytest tests/test_lile_route.py -v

@@ -123,7 +123,7 @@ def test_start_falls_back_to_spawn_when_external_unreachable(client, monkeypatch
     monkeypatch.setenv("LILE_HOST", "127.0.0.1")
     monkeypatch.setenv("LILE_PORT", "59996")  # nothing on this port
     monkeypatch.delenv("LILE_DAEMON_URL", raising=False)
-    monkeypatch.setattr(lile_mod, "_can_spawn", lambda: True)
+    monkeypatch.setattr(lile_mod, "lile_available", lambda: True)
 
     spawn_info = {"pid": 4242, "port": 59996,
                   "url": "http://127.0.0.1:59996",
@@ -147,7 +147,7 @@ def test_start_reports_unreachable_when_no_spawn_available(client, monkeypatch):
     """Neither external nor spawnable => mode=external-unreachable with guidance."""
     from routes import lile as lile_mod
     monkeypatch.setenv("LILE_DAEMON_URL", "http://127.0.0.1:59998")
-    monkeypatch.setattr(lile_mod, "_can_spawn", lambda: False)
+    monkeypatch.setattr(lile_mod, "lile_available", lambda: False)
     r = client.post("/api/lile/capsule/start", json={})
     body = r.json()
     assert body["running"] is False
@@ -160,7 +160,7 @@ def test_start_records_pid_even_when_health_times_out(client, monkeypatch):
     from routes import lile as lile_mod
     monkeypatch.setenv("LILE_HOST", "127.0.0.1")
     monkeypatch.setenv("LILE_PORT", "59996")
-    monkeypatch.setattr(lile_mod, "_can_spawn", lambda: True)
+    monkeypatch.setattr(lile_mod, "lile_available", lambda: True)
     info = {"pid": 5555, "port": 59996, "url": "http://127.0.0.1:59996",
             "log_path": "/tmp/lile-spawn-59996.log", "started_at": 0}
     monkeypatch.setattr(lile_mod, "_spawn_lile", lambda req: info)
