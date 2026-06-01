@@ -83,22 +83,24 @@ Working notes from the 2026-06-01 rebase rehearsal. Captures the conflict patter
 
 ## Resolution order
 
-The 16 HT commits cluster into categories that conflict at different rates:
+Confirmed counts from the 2026-06-01 actual rebase (not just rehearsal):
 
-| Commit | Conflict rate | Notes |
+| Commit | Conflict files | Notes |
 |---|---|---|
 | 1: 2777b86fe `fix(studio/data)` | 0 | Auto-merge |
-| 2: 98ba737a3 `feat(studio): HT branding + fork-sync CI` | 2 files | Patterns E, G |
-| 3: d0d027c9a `feat(studio): multi-GPU + Docker + UNSLOTH_DISABLE_AUTH` | 4 files | Patterns B, C, D, H |
-| 4: 27781af7a `feat(studio): prompt baking` | 7 files | Pattern A everywhere |
+| 2: 98ba737a3 `feat(studio): HT branding + fork-sync CI` | 2 | Patterns E, G — `studio/setup.sh`, `unsloth_cli/commands/studio.py` |
+| 3: d0d027c9a `feat(studio): multi-GPU + Docker + UNSLOTH_DISABLE_AUTH` | 4 | Patterns B, C, D, H — auth.py, auth-guards.ts, vram.ts, stale.yml (rm) |
+| 4: 27781af7a `feat(studio): prompt baking` | 7 | Pattern A everywhere — types/training.ts, config.ts, constants.ts, model-section, params-section, mappers, training-config-store. Side-effect: training-methods.ts + en.ts + zh-CN.ts also need additions |
 | 5: 36c784b67 `feat(studio/ht): HT mascot` | 0 | Auto-merge |
-| 6: 0cb41b63d `feat(lile): LiveLearn daemon + Studio integration` | 6 files | Pattern F + chat integration; biggest single commit |
-| 7-9: lile follow-ups + RLVR + lile removal | 0 each | All `lile/**` paths; upstream never touched |
-| 10-12: docs + chore | 0 each | Auto-merge |
-| 13: fe3a71720 `studio: hybrid lile capsule` | low | Re-writes commit 6's lile integration; reapplies cleanly on top of itself |
+| 6: 0cb41b63d `feat(lile): LiveLearn daemon + Studio integration` | 8 | Biggest commit. Pattern F + chat integration. Took `--theirs` for 5 chat files (commit 13 reshapes them anyway — confirmed byte-identical to origin/ht after full rebase) |
+| 7: dc045d7a4 `docs(ht): README` | 1 | README.md — took `--theirs` (commit 12 reshapes it for lile-relocation) |
+| 8-9: lile follow-ups + RLVR | 0 each | All `lile/**` paths; upstream never touched |
+| 10: 4c04c7fd8 `chore: remove lile` | 1 | pyproject.toml — kept upstream's `[tool.pytest.ini_options]` for security testpath (this section's drift was already resolved in commit 6) |
+| 11-12: docs + chore | 0 each | Auto-merge |
+| 13: 1afa1407d `chore: gitignore lile leftovers` | 1 | `.gitignore` — took commit 13's broader `/lile/` + `/lile_data/` + `/.playwright-mcp/` ignores; the lile_data ignores from commit 6 are obsolete |
 | 14-16: capsule mode + tests | 0 each | New files only |
 
-So the actual conflict commits are 2, 3, 4, 6, and possibly 13. Five real-conflict commits out of 16. The lile-relocation commits (7-9, 11-12) cleanly delete/restore lile-only files.
+Actual conflict commits: **7 out of 16** (commits 2, 3, 4, 6, 7, 10, 13). The lile-relocation commits (8-9, 11-12) cleanly delete/restore lile-only files. Total wall-clock for the rebase: ~25 min with these patterns memorized.
 
 ## Commit 6 specifically (lile introduction)
 
