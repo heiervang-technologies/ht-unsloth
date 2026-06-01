@@ -20,6 +20,10 @@ Action required (out-of-band from this repo):
 
 Coupled to this fix: PR adding `tests/test_matmul_lora_contract.py` + `.github/workflows/unsloth-kernel-contract.yml`. These pin the HT-only fused-LoRA dispatch (signature, Float8 branches, LoRA delta application, 3D reshape) at source-level so the 396-commit catch-up rebase can't silently rewrite the kernel.
 
+### Rebase resumption guide
+
+`docs/rebase-resumption-guide.md` — captures the conflict patterns observed during the 2026-06-01 rebase rehearsal so the next session can pick up where the prep left off. 25 files truly conflict (per merge-tree preview); only 5 commits out of 16 actually need manual resolution. Documents 9 resolution patterns (A–I) with concrete examples from the rehearsal, plus the per-commit conflict map and post-rebase verification steps. Read this BEFORE attempting the real rebase.
+
 ### Studio-as-lile-optional contract codified
 
 `studio/backend/routes/lile.py` previously had an internal `_can_spawn()` helper that probed `lile` package importability. Renamed to public `lile_available()` and added a Module contract section to the docstring that makes the invariant explicit: **"Studio MUST import and serve cleanly when the lile package is absent."**
