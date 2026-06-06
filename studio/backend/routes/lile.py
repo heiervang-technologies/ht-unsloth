@@ -17,6 +17,26 @@ lile (the LiveLearn daemon) lives in heiervang-technologies/agi since
 ``capsule/start`` tries external first (cheap reachability probe), then
 falls back to spawn if available. ``capsule/status`` reports mode so the
 frontend can switch Load/Stop affordances.
+
+Module contract
+---------------
+This module MUST import cleanly in a Python interpreter where the
+``lile`` package is absent. Studio is shipped without lile as a
+dependency, so installations that don't opt in to live-learning must
+still get a working backend. Concretely:
+
+1. No top-level ``import lile``. All lile-import probing happens at
+   request time via :func:`lile_available`, which catches
+   ``ModuleNotFoundError`` / ``ValueError``.
+2. Routes degrade gracefully — ``/capsule/status`` returns
+   ``{"running": false, "mode": "unconfigured"}`` when no daemon is
+   reachable and ``lile`` is not installed, instead of raising.
+3. The :func:`lile_available` helper is the single canonical entrypoint
+   for "is lile installed in this interpreter?" Don't add other try/except
+   ``import lile`` patterns elsewhere — extend this one.
+
+The CI workflow at ``.github/workflows/studio-tests.yml`` exercises both
+the lile-absent and lile-installed configurations.
 """
 
 from __future__ import annotations
@@ -63,12 +83,12 @@ def _lile_base_url() -> str:
     )
 
 
-def _can_spawn() -> bool:
+def lile_available() -> bool:
     """Is the lile package importable in this Python interpreter?
 
-    Checked at call time (not import time) so the route module loads even
-    when lile isn't installed. Studio's optional extra
-    ``ht-unsloth-studio[lile]`` brings it in.
+    Canonical entrypoint for the "is lile installed?" check. Called at
+    request time (not import time) so this module loads cleanly even when
+    lile is absent — see the Module contract in the file docstring.
 
     ``find_spec`` raises ``ModuleNotFoundError`` when a *parent* package is
     missing (e.g. ``lile.console`` is asked for but ``lile.console`` itself
@@ -112,7 +132,7 @@ def _spawn_lile(req: "StartRequest") -> dict[str, Any]:
     sets ``_spawned`` to this dict once the daemon is health-probable so
     /capsule/status can report mode=spawned.
     """
-    if not _can_spawn():
+    if not lile_available():
         raise RuntimeError(
             "lile package not importable; pip install lile @ git+...agi "
             "or set LILE_DAEMON_URL to point at a running daemon."
@@ -230,7 +250,7 @@ async def capsule_start(req: StartRequest) -> dict:
                     "health": health}
 
     # Stage 3: try to spawn locally
-    if _can_spawn():
+    if lile_available():
         try:
             info = _spawn_lile(req)
         except Exception as exc:  # noqa: BLE001
