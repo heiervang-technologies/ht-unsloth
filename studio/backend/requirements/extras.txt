@@ -15,6 +15,7 @@ pytest<9.0
 pytest-json-report
 pytest-rerunfailures==15.1
 pytest-xdist
+respx                            # HTTP mocking for lile capsule/proxy tests
 # Also needed by sentence_transformers (installed with --no-deps in extras-no-deps.txt)
 scikit-learn==1.7.1
 

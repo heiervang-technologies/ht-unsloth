@@ -4,6 +4,7 @@ fastapi
 uvicorn
 pydantic
 packaging
+prometheus-client
 matplotlib
 pandas
 nest_asyncio

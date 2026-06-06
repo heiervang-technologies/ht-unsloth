@@ -190,7 +190,8 @@ cython_debug/
 .pypirc
 .vscode
 .idea/
-.claude/
+.claude/*
+!.claude/skills/
 *.swp
 *.swo
 
@@ -235,3 +236,12 @@ package-lock.json
 !studio/backend/core/data_recipe/oxc-validator/package-lock.json
 !studio/package-lock.json
 llama.cpp/
+
+# lile relocated to heiervang-technologies/agi on 2026-05-15 (PR #52/#53).
+# These directories must not re-accumulate here — if you find yourself
+# generating files at these paths, you're in the wrong repo.
+/lile/
+/lile_data/
+
+# Playwright MCP cache — we don't use it (see CLAUDE.md memory).
+/.playwright-mcp/
