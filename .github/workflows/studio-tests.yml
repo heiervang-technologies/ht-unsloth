@@ -1,0 +1,115 @@
+name: Studio Tests
+
+# Runs the Studio backend's lile-route tests in two configurations:
+#   - lile-absent: only Studio backend deps installed. Proves
+#     `studio/backend/routes/lile.py` imports and serves cleanly without
+#     the `lile` package present in the interpreter. This is the
+#     load-bearing contract proof — MUST stay green.
+#   - lile-installed: lile pulled from heiervang-technologies/agi at the
+#     current cross-repo pin tag. Proves the spawn-local path still works.
+#     Best-effort cell — agi is a private repo, so this cell needs a PAT
+#     secret (AGI_READ_TOKEN) to clone. Without it, the cell self-skips
+#     with a warning instead of failing the workflow.
+
+on:
+  pull_request:
+    branches: [ht, main]
+    paths:
+      - 'studio/backend/**'
+      - '.github/workflows/studio-tests.yml'
+  push:
+    branches: [ht]
+    paths:
+      - 'studio/backend/**'
+      - '.github/workflows/studio-tests.yml'
+  workflow_dispatch:
+
+jobs:
+  lile-absent:
+    name: lile-absent
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Studio backend deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r studio/backend/requirements/studio.txt
+          # FastAPI form-data support — required by routes/datasets.py upload
+          # endpoint, which loads at app-import time via routes/__init__.py.
+          pip install python-multipart
+          # Test deps
+          pip install pytest pytest-asyncio respx httpx
+
+      - name: Assert lile is NOT importable
+        run: |
+          python - <<'PY'
+          import importlib.util, sys
+          if importlib.util.find_spec("lile") is not None:
+              print("::error::lile is unexpectedly installed in lile-absent matrix cell")
+              sys.exit(1)
+          print("lile not installed — contract precondition met")
+          PY
+
+      - name: Run lile-route tests
+        working-directory: studio/backend
+        run: pytest tests/test_lile_route.py -v
+
+  lile-installed:
+    name: lile-installed
+    runs-on: ubuntu-latest
+    # Best-effort: agi is private, so without a read token this cell can't
+    # clone. We don't want that to block PR merge — the lile-absent cell is
+    # the contract proof. Continue-on-error keeps the result visible but
+    # non-blocking.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Studio backend deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r studio/backend/requirements/studio.txt
+          pip install python-multipart pytest pytest-asyncio respx httpx
+
+      - name: Install lile from agi (skip if no token)
+        id: install_lile
+        env:
+          # Optional secret. Set this on the repo (Settings → Secrets) to a
+          # PAT with read access to heiervang-technologies/agi if you want
+          # this cell to actually exercise the spawn-local path.
+          AGI_READ_TOKEN: ${{ secrets.AGI_READ_TOKEN }}
+        run: |
+          if [ -z "$AGI_READ_TOKEN" ]; then
+            echo "::warning::AGI_READ_TOKEN secret not set; skipping lile-installed cell"
+            echo "skipped=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Bump in lockstep with HT-CHANGELOG.md "Unreleased" → next ht-YYYY-MM-DD tag.
+          LILE_REF=ht-2026-05-15
+          pip install "lile @ git+https://${AGI_READ_TOKEN}@github.com/heiervang-technologies/agi@${LILE_REF}"
+          echo "skipped=false" >> "$GITHUB_OUTPUT"
+
+      - name: Assert lile IS importable
+        if: steps.install_lile.outputs.skipped == 'false'
+        run: |
+          python - <<'PY'
+          import importlib.util, sys
+          if importlib.util.find_spec("lile") is None:
+              print("::error::lile install reported success but package not importable")
+              sys.exit(1)
+          print("lile installed and importable — proceeding to tests")
+          PY
+
+      - name: Run lile-route tests
+        if: steps.install_lile.outputs.skipped == 'false'
+        working-directory: studio/backend
+        run: pytest tests/test_lile_route.py -v

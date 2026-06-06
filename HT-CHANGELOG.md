@@ -4,6 +4,35 @@ All notable changes in the HT fork (relative to upstream unsloth) are documented
 
 ## Unreleased
 
+### Fork-sync drift diagnosis (2026-06-01)
+
+As of 2026-06-01 the daily `Fork Sync` workflow has been failing every run for ~20+ days. Root cause: `git push origin main` returns **HTTP 403** — the `HAI_GH_PAT` secret either expired or lost write access to the `main` branch (likely branch-protection rule change).
+
+Symptoms:
+- `origin/main` frozen at `b36408022` (2026-05-10), while `upstream/main` is at `e3b52eb98` (2026-06-01) — **294 commits behind on main**.
+- Local `ht` branch is **396 commits behind** `upstream/main` (16 ahead with HT-only changes).
+- Every Fork Sync run reaches the `git fetch upstream` + fast-forward step cleanly, then dies at `git push origin "$UPSTREAM_BRANCH"` with `fatal: unable to access 'https://github.com/heiervang-technologies/ht-unsloth/': The requested URL returned error: 403`.
+- The job exits 128 at the push step, so `rebase ht` is never attempted (`REBASE_RESULT: skipped`).
+
+Action required (out-of-band from this repo):
+- Rotate / re-issue `HAI_GH_PAT` with `repo` scope and ensure the bot account has push access to `main` (or is on the branch-protection bypass list).
+- The reusable workflow at `heiervang-technologies/.github/.github/workflows/fork-sync-reusable.yml` already surfaces the failure as `::error` — the workflow itself is fine; this is a credential issue.
+
+Coupled to this fix: PR adding `tests/test_matmul_lora_contract.py` + `.github/workflows/unsloth-kernel-contract.yml`. These pin the HT-only fused-LoRA dispatch (signature, Float8 branches, LoRA delta application, 3D reshape) at source-level so the 396-commit catch-up rebase can't silently rewrite the kernel.
+
+### Rebase resumption guide
+
+`docs/rebase-resumption-guide.md` — captures the conflict patterns observed during the 2026-06-01 rebase rehearsal so the next session can pick up where the prep left off. 25 files truly conflict (per merge-tree preview); only 5 commits out of 16 actually need manual resolution. Documents 9 resolution patterns (A–I) with concrete examples from the rehearsal, plus the per-commit conflict map and post-rebase verification steps. Read this BEFORE attempting the real rebase.
+
+### Studio-as-lile-optional contract codified
+
+`studio/backend/routes/lile.py` previously had an internal `_can_spawn()` helper that probed `lile` package importability. Renamed to public `lile_available()` and added a Module contract section to the docstring that makes the invariant explicit: **"Studio MUST import and serve cleanly when the lile package is absent."**
+
+- `lile_available()` is now the **single canonical entrypoint** for the import probe; do not add other try/except `import lile` patterns elsewhere.
+- New CI workflow `.github/workflows/studio-tests.yml` runs the lile-route tests in a 2-cell matrix: `lile-absent` (proves the contract) and `lile-installed` (pulls lile from `agi@ht-2026-05-15`, proves the spawn-local path).
+- New doc [`docs/studio-lile-integration.md`](docs/studio-lile-integration.md) — one-page contract spec.
+- Cross-repo pin discipline: ht-unsloth tags `ht-YYYY-MM-DD` per upstream-sync; agi's `unsloth` pin and Studio's `matrix.lile_ref` both bump to that tag together.
+
 ## 2026-05-15
 
 ### lile relocated to heiervang-technologies/agi

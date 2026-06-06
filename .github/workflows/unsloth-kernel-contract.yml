@@ -1,0 +1,32 @@
+name: Unsloth Kernel Contract
+
+# Pins the HT-fork-specific shape of `matmul_lora` in unsloth/kernels/utils.py
+# so we catch upstream rewrites at rebase-PR time, not in production. Pure
+# source-level AST checks — no CUDA, no triton, no torch needed.
+
+on:
+  pull_request:
+    branches: [ht, main]
+    paths:
+      - 'unsloth/kernels/utils.py'
+      - 'tests/test_matmul_lora_contract.py'
+      - '.github/workflows/unsloth-kernel-contract.yml'
+  push:
+    branches: [ht]
+    paths:
+      - 'unsloth/kernels/utils.py'
+      - 'tests/test_matmul_lora_contract.py'
+  workflow_dispatch:
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pytest
+        run: pip install pytest
+      - name: Run contract test
+        run: pytest tests/test_matmul_lora_contract.py -v
