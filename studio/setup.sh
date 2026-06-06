@@ -450,8 +450,8 @@ if [ -d "$SCRIPT_DIR/backend/core/data_recipe/oxc-validator" ] && command -v npm
 fi
 
 # ── Python venv + deps ──
-# UNSLOTH_STUDIO_HOME (or STUDIO_HOME alias) overrides the install root
-# (mirrors install.sh). UNSLOTH_STUDIO_HOME wins when both are set.
+# UNSLOTH_STUDIO_HOME (or STUDIO_HOME alias) overrides the install root.
+# Upstream block — strict superset of the HT-fork's original simpler form.
 _studio_override_var=""
 _studio_override="${UNSLOTH_STUDIO_HOME:-}"
 if [ -n "$_studio_override" ]; then
@@ -460,16 +460,12 @@ else
     _studio_override="${STUDIO_HOME:-}"
     [ -n "$_studio_override" ] && _studio_override_var="STUDIO_HOME"
 fi
-# Strip whitespace so " " is treated as unset (matches Python .strip()).
 _studio_override=$(printf '%s' "$_studio_override" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
 case "$_studio_override" in
     "~") _studio_override="$HOME" ;;
     "~/"*) _studio_override="$HOME/${_studio_override#'~/'}" ;;
 esac
 if [ -n "$_studio_override" ]; then
-    # setup.sh runs against an existing install (via 'unsloth studio update');
-    # a typo in the override must fail fast instead of materializing an
-    # empty workspace dir. Mirrors setup.ps1 behavior.
     if [ ! -d "$_studio_override" ]; then
         echo "ERROR: $_studio_override_var=$_studio_override does not exist." >&2
         echo "       Run install.sh to create the install root before 'unsloth studio update'." >&2

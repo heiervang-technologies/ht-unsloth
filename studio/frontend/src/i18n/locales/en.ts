@@ -371,6 +371,7 @@ export const en = {
       needsVram: "Needs ~{vram}GB VRAM (GPU: {gpu}GB)",
       tightVram: "~{vram}GB VRAM (tight fit on {gpu}GB)",
       vramEstimate: "~{vram}GB VRAM",
+      multiGpuVram: "~{vram}GB VRAM (split across {gpuCount} GPUs, {gpu}GB total)",
       method: "Method",
       methodTooltip:
         "QLoRA uses 4-bit quantization for lowest VRAM. LoRA uses 16-bit. Full updates all weights. CPT (Continued Pretraining) trains on raw text to adapt the model to a new domain without chat formatting.",

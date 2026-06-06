@@ -8,6 +8,9 @@ const BACKEND_TRAINING_TYPE: Record<TrainingMethod, string> = {
   lora: "LoRA/QLoRA",
   full: "Full Finetuning",
   cpt: "Continued Pretraining",
+  // HT fork — bakery integration. Baking trains LoRA weights, so on the
+  // backend it presents as LoRA/QLoRA with is_prompt_baking=true.
+  "prompt-baking": "LoRA/QLoRA",
 };
 
 const TRAINING_METHOD_LABELS: Record<TrainingMethod, string> = {
@@ -15,6 +18,7 @@ const TRAINING_METHOD_LABELS: Record<TrainingMethod, string> = {
   lora: "LoRA",
   full: "Full",
   cpt: "CPT",
+  "prompt-baking": "Baking",
 };
 
 export function toBackendTrainingType(trainingMethod: TrainingMethod): string {

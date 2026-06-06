@@ -23,6 +23,7 @@ export function buildTrainingStartPayload(
   const isCpt = config.trainingMethod === "cpt";
   const adapterMethod = config.trainingMethod !== "full";
   const isQloraMethod = config.trainingMethod === "qlora";
+  const isPromptBaking = config.trainingMethod === "prompt-baking";
   const _selectedModelLower = (config.selectedModel ?? "").toLowerCase();
   const isFourBitModel = _selectedModelLower.includes("4bit");
   // DeepSeek OCR ignores user-selected image size; do not send it.
@@ -114,6 +115,13 @@ export function buildTrainingStartPayload(
     is_dataset_image: isEmbedding ? false : !!config.isDatasetImage,
     is_dataset_audio: isEmbedding ? false : config.isDatasetAudio,
     is_embedding: isEmbedding,
+    is_prompt_baking: isPromptBaking,
+    baking_system_prompt: isPromptBaking ? config.bakingSystemPrompt : null,
+    baking_num_trajectories: config.bakingNumTrajectories,
+    baking_trajectory_length: config.bakingTrajectoryLength,
+    baking_temperature: config.bakingTemperature,
+    baking_sampling_temperature: config.bakingSamplingTemperature,
+    baking_use_prefill: config.bakingUsePrefill,
     enable_wandb: config.enableWandb,
     wandb_token: config.enableWandb ? config.wandbToken.trim() || null : null,
     wandb_project: config.enableWandb

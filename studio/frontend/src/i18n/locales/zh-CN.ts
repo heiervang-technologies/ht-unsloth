@@ -358,6 +358,7 @@ export const zhCN = {
       needsVram: "约需 {vram}GB 显存（GPU：{gpu}GB）",
       tightVram: "约 {vram}GB 显存（在 {gpu}GB 上偏紧）",
       vramEstimate: "约 {vram}GB 显存",
+      multiGpuVram: "约 {vram}GB 显存（分布在 {gpuCount} 个 GPU 上，共 {gpu}GB）",
       method: "方法",
       methodTooltip:
         "QLoRA 使用 4 位量化以最大限度降低显存。LoRA 使用 16 位。Full 会更新所有权重。CPT（持续预训练）在原始文本上训练，使模型适配新领域，不使用聊天格式。",

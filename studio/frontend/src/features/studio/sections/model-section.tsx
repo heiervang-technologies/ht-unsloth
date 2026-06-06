@@ -69,6 +69,7 @@ const METHOD_DOTS: Record<string, string> = {
   lora: "bg-blue-400",
   full: "bg-amber-400",
   cpt: "bg-purple-400",
+  "prompt-baking": "bg-fuchsia-400",
 };
 
 const DARK_TRIGGER =
@@ -518,14 +519,20 @@ export function ModelSection() {
                                             vram: vramEst,
                                             gpu: gpu.memoryTotalGb,
                                           })
-                                        : fitStatus === "tight"
-                                          ? t("studio.model.tightVram", {
+                                        : fitStatus === "multi_gpu"
+                                          ? t("studio.model.multiGpuVram", {
                                               vram: vramEst,
+                                              gpuCount: gpu.gpuCount ?? 1,
                                               gpu: gpu.memoryTotalGb,
                                             })
-                                          : t("studio.model.vramEstimate", {
-                                              vram: vramEst,
-                                            })}
+                                          : fitStatus === "tight"
+                                            ? t("studio.model.tightVram", {
+                                                vram: vramEst,
+                                                gpu: gpu.memoryTotalGb,
+                                              })
+                                            : t("studio.model.vramEstimate", {
+                                                vram: vramEst,
+                                              })}
                                     </span>
                                   )}
                               </TooltipContent>
@@ -539,6 +546,11 @@ export function ModelSection() {
                               {fitStatus === "tight" && (
                                 <span className="text-[9px] font-medium !text-amber-400">
                                   TIGHT
+                                </span>
+                              )}
+                              {fitStatus === "multi_gpu" && (
+                                <span className="text-[9px] font-medium !text-purple-700 !bg-purple-50 dark:!text-purple-400 dark:!bg-purple-950 px-1.5 py-0.5 rounded">
+                                  MULTI-GPU
                                 </span>
                               )}
                               {detail && (
@@ -635,6 +647,14 @@ export function ModelSection() {
                       className={`size-2 shrink-0 rounded-full ${METHOD_DOTS.cpt}`}
                     />
                     {t("studio.model.continuedPretraining")}
+                  </span>
+                </SelectItem>
+                <SelectItem value="prompt-baking">
+                  <span className="flex items-center gap-2">
+                    <span
+                      className={`size-2 shrink-0 rounded-full ${METHOD_DOTS["prompt-baking"]}`}
+                    />
+                    Prompt Baking
                   </span>
                 </SelectItem>
               </SelectContent>
