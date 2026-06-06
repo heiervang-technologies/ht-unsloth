@@ -4,6 +4,18 @@ All notable changes in the HT fork (relative to upstream unsloth) are documented
 
 ## Unreleased
 
+## 2026-06-01
+
+### Caught up with upstream/main (`e3b52eb98`)
+
+Closed a 396-commit drift gap. `ht` now sits at `750e3e4ce` — 17 commits ahead of `upstream/main` (16 HT-only changes + the PR #60 squash). Tagged as [`ht-2026-06-01`](https://github.com/heiervang-technologies/ht-unsloth/releases/tag/ht-2026-06-01).
+
+- **Strategy**: per-commit rebase on `ht` against `upstream/main`; conflicts hit 7 of 16 commits (HT branding, multi-GPU/auth, prompt baking, lile introduction, README, lile-removal pyproject, gitignore leftovers). Resolved per the patterns documented in [`docs/rebase-resumption-guide.md`](docs/rebase-resumption-guide.md) — same doc remains the runbook for the next catch-up.
+- **Verification**: `tests/test_matmul_lora_contract.py` (4 AST-level checks pinning the HT-only fused-LoRA kernel signature, Float8 branches, LoRA delta application, 3D reshape) — all pass on the rebased tree. `unsloth/kernels/utils.py:matmul_lora` at L1055 unchanged.
+- **Force-update on `ht`**: was the only way to land the rebase since GitHub's PR machinery sees the rebased branch as "conflicting" with `ht`'s original-SHA commits even though the diffs match. The 16 HT-only commits are present in the new history at new SHAs; their original SHAs are reachable via the `pre-sync-*` tags.
+- **`origin/main` advanced** from `b36408022` (2026-05-10) to `e3b52eb98` (today) — confirms the daily `Fork Sync` PAT issue is bot-account-specific, not branch protection blocking everyone. The reusable workflow's push step should work once `HAI_GH_PAT` is rotated.
+- **agi pin bump**: bump `agi`'s `pyproject.toml` from `unsloth @ git+...@ht-2026-05-15` to `@ht-2026-06-01` in a follow-up PR there. Studio's `studio-tests.yml` matrix `lile_ref` should follow.
+
 ### Fork-sync drift diagnosis (2026-06-01)
 
 As of 2026-06-01 the daily `Fork Sync` workflow has been failing every run for ~20+ days. Root cause: `git push origin main` returns **HTTP 403** — the `HAI_GH_PAT` secret either expired or lost write access to the `main` branch (likely branch-protection rule change).
