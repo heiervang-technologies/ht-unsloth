@@ -20,10 +20,10 @@ function parseSliceValue(value: string | null): number | null {
 export function buildTrainingStartPayload(
   config: TrainingConfigState,
 ): TrainingStartRequest {
-  const isCpt = config.trainingMethod === "cpt";
+  const isCpt = config.trainingObjective === "cpt";
+  const isPromptBaking = config.trainingObjective === "prompt-baking";
   const adapterMethod = config.trainingMethod !== "full";
   const isQloraMethod = config.trainingMethod === "qlora";
-  const isPromptBaking = config.trainingMethod === "prompt-baking";
   const _selectedModelLower = (config.selectedModel ?? "").toLowerCase();
   const isFourBitModel = _selectedModelLower.includes("4bit");
   // DeepSeek OCR ignores user-selected image size; do not send it.
@@ -57,7 +57,7 @@ export function buildTrainingStartPayload(
 
   return {
     model_name: config.selectedModel ?? "",
-    training_type: toBackendTrainingType(config.trainingMethod),
+    training_type: toBackendTrainingType(config.trainingMethod, config.trainingObjective),
     hf_token: config.hfToken.trim() || null,
     load_in_4bit: (adapterMethod && isQloraMethod) || (isCpt && isFourBitModel),
     max_seq_length: config.contextLength,

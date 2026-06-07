@@ -8,6 +8,7 @@ import type {
   ModelType,
   StepNumber,
   TrainingMethod,
+  TrainingObjective,
 } from "@/types/training";
 import type { BackendModelConfig } from "../api/models-api";
 
@@ -21,6 +22,7 @@ export interface TrainingConfigState {
   modelType: ModelType | null;
   selectedModel: string | null;
   trainingMethod: TrainingMethod;
+  trainingObjective: TrainingObjective;
   hfToken: string;
   datasetSource: DatasetSource;
   datasetFormat: DatasetFormat;
@@ -101,6 +103,7 @@ export interface TrainingConfigActions {
   ensureModelDefaultsLoaded: () => void;
   ensureDatasetChecked: () => void;
   setTrainingMethod: (method: TrainingMethod) => void;
+  setTrainingObjective: (objective: TrainingObjective) => void;
   setHfToken: (token: string) => void;
   setDatasetSource: (source: DatasetSource) => void;
   selectHfDataset: (dataset: string | null) => void;

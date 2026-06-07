@@ -173,8 +173,8 @@ export function ParamsSection(): ReactElement {
   const store = useTrainingConfigStore();
   const platformDeviceType = usePlatformStore((s) => s.deviceType);
   const isLora = isAdapterMethod(store.trainingMethod);
-  const isCpt = store.trainingMethod === "cpt";
-  const isPromptBaking = store.trainingMethod === "prompt-baking";
+  const isCpt = store.trainingObjective === "cpt";
+  const isPromptBaking = store.trainingObjective === "prompt-baking";
   const isRawText = isRawTextDatasetFormat(store.datasetFormat);
   const showVisionLora = store.isVisionModel && store.isDatasetImage === true;
   // DeepSeek OCR uses a coupled preset; backend ignores user image size.

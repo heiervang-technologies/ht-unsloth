@@ -5,7 +5,7 @@ import { CPT_TARGET_MODULES, DEFAULT_HYPERPARAMS, LR_DEFAULT_CPT, LR_DEFAULT_FUL
 import { authFetch } from "@/features/auth";
 import { isAdapterMethod } from "@/types/training";
 import type { DatasetFormat } from "@/types/training";
-import type { ModelType, StepNumber, TrainingMethod } from "@/types/training";
+import type { ModelType, StepNumber, TrainingMethod, TrainingObjective } from "@/types/training";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { checkDatasetFormat } from "../api/datasets-api";
@@ -60,6 +60,7 @@ const initialState: TrainingConfigState = {
   modelType: null,
   selectedModel: null,
   trainingMethod: "qlora",
+  trainingObjective: "sft",
   hfToken: "",
   datasetSource: "huggingface",
   datasetFormat: "auto",
@@ -174,6 +175,7 @@ type TrainingMethodStatePatch = Partial<
   Pick<
     TrainingConfigState,
     | "trainingMethod"
+    | "trainingObjective"
     | "learningRate"
     | "loraRank"
     | "loraAlpha"
@@ -239,21 +241,17 @@ function getRestoreDatasetFormatFromCptPatch(): TrainingMethodStatePatch {
 function resolveTrainingMethodLearningRate(
   prevMethod: TrainingMethod,
   nextMethod: TrainingMethod,
+  objective: TrainingObjective,
 ): number | undefined {
   if (_learningRateManuallySet) {
     return undefined;
   }
-
-  const wasCpt = prevMethod === "cpt";
-  const wasAdapter = isAdapterMethod(prevMethod);
-  const nowAdapter = isAdapterMethod(nextMethod);
-
-  if (nextMethod === "cpt") {
+  if (objective === "cpt") {
+    // CPT pins its own LR regardless of weight strategy.
     return LR_DEFAULT_CPT;
   }
-  if (wasCpt && nowAdapter) {
-    return _yamlLearningRate ?? LR_DEFAULT_LORA;
-  }
+  const wasAdapter = isAdapterMethod(prevMethod);
+  const nowAdapter = isAdapterMethod(nextMethod);
   if (wasAdapter && nowAdapter) {
     return undefined;
   }
@@ -263,15 +261,28 @@ function resolveTrainingMethodLearningRate(
 function buildTrainingMethodPatch(
   prevMethod: TrainingMethod,
   nextMethod: TrainingMethod,
-  currentDatasetFormat: DatasetFormat,
+  objective: TrainingObjective,
 ): TrainingMethodStatePatch {
   const patch: TrainingMethodStatePatch = { trainingMethod: nextMethod };
+  const learningRate = resolveTrainingMethodLearningRate(prevMethod, nextMethod, objective);
+  if (learningRate !== undefined) {
+    patch.learningRate = learningRate;
+  }
+  return patch;
+}
 
-  if (prevMethod !== "cpt" && nextMethod === "cpt") {
+function buildTrainingObjectivePatch(
+  prevObjective: TrainingObjective,
+  nextObjective: TrainingObjective,
+  currentDatasetFormat: DatasetFormat,
+): TrainingMethodStatePatch {
+  const patch: TrainingMethodStatePatch = { trainingObjective: nextObjective };
+
+  if (prevObjective !== "cpt" && nextObjective === "cpt") {
     recordCptDatasetFormatOverride(currentDatasetFormat);
     Object.assign(patch, getCptTrainingPatch());
   }
-  if (prevMethod === "cpt" && nextMethod !== "cpt") {
+  if (prevObjective === "cpt" && nextObjective !== "cpt") {
     Object.assign(
       patch,
       getRestoreFromCptPatch(),
@@ -279,9 +290,12 @@ function buildTrainingMethodPatch(
     );
   }
 
-  const learningRate = resolveTrainingMethodLearningRate(prevMethod, nextMethod);
-  if (learningRate !== undefined) {
-    patch.learningRate = learningRate;
+  if (!_learningRateManuallySet) {
+    if (nextObjective === "cpt") {
+      patch.learningRate = LR_DEFAULT_CPT;
+    } else if (prevObjective === "cpt") {
+      patch.learningRate = _yamlLearningRate ?? LR_DEFAULT_LORA;
+    }
   }
 
   return patch;
@@ -350,11 +364,11 @@ export const useTrainingConfigStore = create<TrainingConfigStore>()(
             // Auto-select LoRA vs QLoRA based on GPU memory.
             // Skip if user has manually chosen CPT -- don't override it.
             const modelSizeBytes = modelDetails.model_size_bytes;
-            if (modelSizeBytes && modelSizeBytes > 0 && get().trainingMethod !== "cpt") {
+            if (modelSizeBytes && modelSizeBytes > 0 && get().trainingObjective !== "cpt") {
               void autoSelectTrainingMethod(modelSizeBytes, patch.contextLength ?? get().contextLength)
                 .then((method) => {
                   if (get().selectedModel !== modelName) return;
-                  if (get().trainingMethod === "cpt") return;
+                  if (get().trainingObjective === "cpt") return;
                   if (method) {
                     const lrPatch = !_learningRateManuallySet && !modelConfigHasLR
                       ? { learningRate: method === "full" ? LR_DEFAULT_FULL : LR_DEFAULT_LORA }
@@ -367,7 +381,7 @@ export const useTrainingConfigStore = create<TrainingConfigStore>()(
             // Preserve CPT hyperparams: YAML adapter defaults (r/alpha/targets/LR)
             // are tuned for standard LoRA and would otherwise clobber CPT settings.
             const cptOverrides =
-              get().trainingMethod === "cpt"
+              get().trainingObjective === "cpt"
                 ? getCptModelDefaultsPatch()
                 : {};
 
@@ -554,6 +568,16 @@ export const useTrainingConfigStore = create<TrainingConfigStore>()(
             buildTrainingMethodPatch(
               state.trainingMethod,
               trainingMethod,
+              state.trainingObjective,
+            ),
+          );
+        },
+        setTrainingObjective: (trainingObjective) => {
+          const state = get();
+          set(
+            buildTrainingObjectivePatch(
+              state.trainingObjective,
+              trainingObjective,
               state.datasetFormat,
             ),
           );
@@ -588,7 +612,7 @@ export const useTrainingConfigStore = create<TrainingConfigStore>()(
         },
         setDatasetFormat: (datasetFormat) =>
           set((state) => {
-            if (state.trainingMethod === "cpt") {
+            if (state.trainingObjective === "cpt") {
               if (isRawTextDatasetFormat(datasetFormat)) {
                 clearCptDatasetFormatTracking();
               }
@@ -799,7 +823,7 @@ export const useTrainingConfigStore = create<TrainingConfigStore>()(
     },
     {
       name: "unsloth_training_config_v1",
-      version: 10,
+      version: 11,
       migrate: (persisted, version) => {
         const s = persisted as Record<string, unknown>;
         if (version < 2 && s.datasetSubset == null && s.datasetConfig != null) {
@@ -854,6 +878,23 @@ export const useTrainingConfigStore = create<TrainingConfigStore>()(
           s.bakingTemperature ??= 1.0;
           s.bakingSamplingTemperature ??= 0.8;
           s.bakingUsePrefill ??= false;
+        }
+        if (version < 11) {
+          // HT fork — split single `trainingMethod` enum into orthogonal
+          // `trainingObjective` (sft|cpt|prompt-baking) + `trainingMethod`
+          // (qlora|lora|full). Persisted values "cpt" / "prompt-baking" on
+          // trainingMethod migrate to the objective field; the strategy
+          // field defaults to "qlora" since the legacy combos always ran
+          // 4-bit.
+          if (s.trainingMethod === "cpt") {
+            s.trainingObjective = "cpt";
+            s.trainingMethod = "qlora";
+          } else if (s.trainingMethod === "prompt-baking") {
+            s.trainingObjective = "prompt-baking";
+            s.trainingMethod = "qlora";
+          } else {
+            s.trainingObjective ??= "sft";
+          }
         }
         return s as unknown as TrainingConfigStore;
       },
