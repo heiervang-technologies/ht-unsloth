@@ -164,7 +164,7 @@ const SingleContent = memo(function SingleContent({
       newThreadNonce={newThreadNonce}
     >
       <div className="flex min-h-0 min-w-0 flex-1 basis-0 flex-col overflow-hidden">
-        <Thread hideWelcome={Boolean(threadId)} targetThreadId={threadId} />
+        <Thread hideWelcome={Boolean(threadId)} />
       </div>
     </ChatRuntimeProvider>
   );
@@ -1615,17 +1615,6 @@ export function ChatPage(): ReactElement {
         onOpenChange={setSettingsOpen}
         params={inferenceParams}
         onParamsChange={setInferenceParams}
-        isExternalModel={isExternalModel}
-        providerCapabilities={activeProviderCapabilities}
-        activeExternalProvider={activeExternalProvider}
-        onExternalProviderChange={(updatedProvider) => {
-          setExternalProviders(
-            externalProviders.map((provider) =>
-              provider.id === updatedProvider.id ? updatedProvider : provider,
-            ),
-          );
-        }}
-        externalProviderType={activeExternalProviderType}
         onReloadModel={() => {
           const state = useChatRuntimeStore.getState();
           if (state.params.checkpoint) {
