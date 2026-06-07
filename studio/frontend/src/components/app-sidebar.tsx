@@ -543,7 +543,7 @@ export function AppSidebar() {
                     alt="Unsloth"
                     className="size-8 rounded-lg shrink-0"
                   />
-                  <div className="flex flex-col gap-0.5 leading-none group-data-[collapsible=icon]:hidden">
+                  <div className="flex flex-col gap-0.5 leading-tight group-data-[collapsible=icon]:hidden">
                     <span className="truncate text-sm font-semibold">Unsloth</span>
                     <span className="truncate text-[11px] text-muted-foreground">Train</span>
                   </div>
