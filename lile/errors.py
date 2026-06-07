@@ -29,6 +29,7 @@ ERROR_CODES: frozenset[str] = frozenset({
     "shutdown_dropped",
     "timeout",
     "internal",
+    "batch_too_large",
 })
 
 
@@ -68,9 +69,15 @@ class NotFoundError(LileError):
     retryable = False
 
 
+class BatchTooLargeError(LileError):
+    code = "batch_too_large"
+    status_code = 413
+    retryable = False
+
+
 class QueueFullError(LileError):
     code = "queue_full"
-    status_code = 503
+    status_code = 429
     retryable = True
 
 

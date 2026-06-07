@@ -35,6 +35,7 @@ collect_ignore_glob: list[str] = []
 # Files that can be imported on a torchless runner. Everything else in
 # ``lile/tests/`` will be skipped at collection time when torch is absent.
 _TORCHLESS_OK = {
+    "test_admission.py",
     "test_errors.py",               # lazy lile.errors import inside tests
     "test_error_middleware.py",     # same; also uses FastAPI/TestClient
     "test_eval_harness.py",         # harness smoke — urllib-only

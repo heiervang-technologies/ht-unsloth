@@ -19,7 +19,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from .errors import ShutdownDroppedError, ShuttingDownError
+from .errors import QueueFullError, ShutdownDroppedError, ShuttingDownError
 
 log = logging.getLogger(__name__)
 
@@ -82,6 +82,13 @@ class ComputeQueue:
         self._last_enqueue_ts = time.monotonic()
         await self._q.put(task)
         return task
+
+    async def try_submit(self, kind: str, payload: Any, batch_id: str = "") -> QueueTask:
+        if self._q.full():
+            raise QueueFullError(
+                f"compute queue depth {self._q.qsize()}/{self._q.maxsize}; retry after backoff"
+            )
+        return await self.submit(kind, payload, batch_id)
 
     # ------------------------------------------------------------------ idleness
     def is_idle_for(self, seconds: float) -> bool:
