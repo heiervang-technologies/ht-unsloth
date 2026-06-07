@@ -97,7 +97,12 @@ _tokenizer_class_cache: dict[str, bool] = {}
 _config_needs_550_cache: dict[str, bool] = {}
 
 # Versions
-TRANSFORMERS_550_VERSION = "5.5.0"
+# HT fork bump: 5.5.0 → 5.10.2. The Gemma 4 12B Unified arch (gemma4_unified)
+# isn't recognized until transformers 5.10. The `_550` tier label is kept
+# (and the .venv_t5_550 dir name with it) to avoid a fork-wide rename; the
+# label denotes "highest 5.x tier we ship" — the version string is what the
+# runtime actually installs.
+TRANSFORMERS_550_VERSION = "5.10.2"
 TRANSFORMERS_530_VERSION = "5.3.0"
 TRANSFORMERS_DEFAULT_VERSION = "4.57.6"
 # Backwards-compat alias — points to 5.5.0 (the highest 5.x tier).

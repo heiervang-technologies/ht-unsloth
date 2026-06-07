@@ -131,13 +131,24 @@ def run_prompt_baking(event_queue: Any, stop_queue: Any, config: dict) -> None:
         if gradient_checkpointing in ("none", "", None):
             gradient_checkpointing = False
 
+        # PEFT 0.18+ requires the "all-linear" sentinel be passed as a
+        # *string*, not a single-element list. Studio's yaml configs ship
+        # target_modules as ["all-linear"]; unwrap that here.
+        _target_modules = config.get("target_modules") or [
+            "q_proj", "k_proj", "v_proj", "o_proj",
+            "gate_proj", "up_proj", "down_proj",
+        ]
+        if (
+            isinstance(_target_modules, (list, tuple))
+            and len(_target_modules) == 1
+            and _target_modules[0] == "all-linear"
+        ):
+            _target_modules = "all-linear"
+
         model = FastLanguageModel.get_peft_model(
             model,
             r=config.get("lora_r", 64),
-            target_modules=config.get("target_modules") or [
-                "q_proj", "k_proj", "v_proj", "o_proj",
-                "gate_proj", "up_proj", "down_proj",
-            ],
+            target_modules=_target_modules,
             lora_alpha=config.get("lora_alpha", 128),
             lora_dropout=0,  # Unsloth requires dropout=0
             bias="none",
