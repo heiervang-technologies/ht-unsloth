@@ -40,7 +40,11 @@ class Controller:
         self.queue = ComputeQueue(max_depth=cfg.max_queue_depth)
         self.train_engine: TrainEngine | None = None
         self.trajectory = TrajectoryLog(cfg.data_dir / "trajectory.jsonl")
-        self.snapshots = SnapshotManager(cfg.data_dir / "snapshots")
+        self.snapshots = SnapshotManager(
+            cfg.data_dir / "snapshots",
+            max_count=getattr(cfg, "snapshot_max_count", None),
+            protect=getattr(cfg, "snapshot_protect", None),
+        )
         self.metrics_logger: MetricsLogger = get_logger(LoggerConfig(
             backend=cfg.logger,
             project=cfg.logger_project,

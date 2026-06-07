@@ -20,9 +20,11 @@ log = logging.getLogger(__name__)
 
 
 class SnapshotManager:
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, max_count: int | None = None, protect: list[str] | None = None) -> None:
         self.root = Path(root)
         self.root.mkdir(parents=True, exist_ok=True)
+        self.max_count = max_count
+        self.protect = protect or ["baseline"]
 
     def _dir(self, name: str) -> Path:
         return self.root / name
@@ -53,7 +55,42 @@ class SnapshotManager:
         if sd:
             save_file(sd, str(d / "active_adapter.safetensors"))
         log.info("snapshot saved to %s", d)
+        
+        self._enforce_lru()
         return d
+
+    def _enforce_lru(self) -> None:
+        if self.max_count is None:
+            return
+            
+        snapshots = []
+        for p in self.root.iterdir():
+            if not p.is_dir():
+                continue
+            manifest_path = p / "manifest.json"
+            if not manifest_path.exists():
+                continue
+            
+            try:
+                manifest = json.loads(manifest_path.read_text())
+                snapshots.append((manifest.get("created_at", 0), p.name, p))
+            except json.JSONDecodeError:
+                continue
+
+        # Sort by created_at ascending (oldest first)
+        snapshots.sort()
+        
+        # Evict oldest unprotected until within bounds
+        evictable = [(t, name, p) for t, name, p in snapshots if name not in self.protect]
+        to_evict = len(snapshots) - self.max_count
+        
+        if to_evict <= 0:
+            return
+            
+        import shutil
+        for _, name, p in evictable[:to_evict]:
+            shutil.rmtree(p, ignore_errors=True)
+            log.info("evicted old snapshot %s (LRU bounds)", name)
 
     def load(self, name: str, state: ModelState) -> dict:
         d = self._dir(name)
@@ -73,5 +110,22 @@ class SnapshotManager:
                  manifest.get("residual_fingerprint"))
         return manifest
 
-    def list(self) -> list[str]:
-        return sorted(p.name for p in self.root.iterdir() if p.is_dir())
+    def list(self) -> list[dict]:
+        res = []
+        for p in sorted(self.root.iterdir()):
+            if p.is_dir():
+                manifest_path = p / "manifest.json"
+                if manifest_path.exists():
+                    try:
+                        manifest = json.loads(manifest_path.read_text())
+                    except json.JSONDecodeError:
+                        manifest = {}
+                else:
+                    manifest = {}
+                
+                res.append({
+                    "name": p.name,
+                    "created_at": manifest.get("created_at", 0),
+                    "protected": p.name in self.protect
+                })
+        return res

@@ -25,6 +25,12 @@ class ServeConfig:
     api_key: str | None = field(default_factory=lambda: __import__('os').environ.get('LILE_API_KEY'))
     auth_required_routes: list[str] = field(default_factory=lambda: ["/v1/train", "/v1/feedback", "/v1/state/*"])
 
+    # --- Disk bounds ---
+    trajectory_max_bytes: int | None = None
+    trajectory_rotate_keep: int = 5
+    snapshot_max_count: int | None = None
+    snapshot_protect: list[str] = field(default_factory=lambda: ["baseline"])
+
     # Budget passed to ``Controller.graceful_shutdown`` on FastAPI shutdown
     # (SIGINT/SIGTERM via uvicorn's default handler). The queue worker keeps
     # pulling tasks while the budget holds and cleanly resolves the rest

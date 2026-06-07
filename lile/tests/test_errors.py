@@ -50,6 +50,8 @@ def test_code_taxonomy_is_closed_set():
         "shutdown_dropped",
         "timeout",
         "internal",
+        "batch_too_large",
+        "unauthorized",
     }
     # Taxonomy must be at least this big. Adding new codes is fine; removing
     # is a breaking change for clients and requires an ADR.
@@ -64,6 +66,8 @@ def test_lile_error_subclasses_carry_code_and_status():
         ShuttingDownError,
         TimeoutError as LileTimeoutError,
         UnknownResponseIdError,
+        BatchTooLargeError,
+        UnauthorizedError,
     )
 
     assert InvalidInputError("x").code == "invalid_input"
@@ -76,8 +80,14 @@ def test_lile_error_subclasses_carry_code_and_status():
     assert NotFoundError("x").status_code == 404
 
     assert QueueFullError("x").code == "queue_full"
-    assert QueueFullError("x").status_code == 503
+    assert QueueFullError("x").status_code == 429
     assert QueueFullError("x").retryable is True
+
+    assert BatchTooLargeError("x").code == "batch_too_large"
+    assert BatchTooLargeError("x").status_code == 413
+
+    assert UnauthorizedError("x").code == "unauthorized"
+    assert UnauthorizedError("x").status_code == 401
 
     assert ShuttingDownError("x").code == "shutting_down"
     assert ShuttingDownError("x").status_code == 503
