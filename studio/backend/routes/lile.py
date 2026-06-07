@@ -146,7 +146,14 @@ _PROXY_TIMEOUT = httpx.Timeout(connect=5.0, read=None, write=30.0, pool=5.0)
 
 
 def _forward_headers(headers) -> dict:
-    return {k: v for k, v in headers.items() if k.lower() not in _HOP_BY_HOP}
+    forwarded = {k: v for k, v in headers.items() if k.lower() not in _HOP_BY_HOP}
+    
+    # Inject daemon API key if configured and not provided by the client
+    api_key = os.environ.get("LILE_API_KEY")
+    if api_key and "authorization" not in (k.lower() for k in forwarded.keys()):
+        forwarded["Authorization"] = f"Bearer {api_key}"
+        
+    return forwarded
 
 
 async def _proxy_stream(method: str, url: str, headers: dict, body: bytes):

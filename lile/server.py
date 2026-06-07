@@ -21,7 +21,7 @@ from .config import ServeConfig
 from .controller import Controller
 from .errors import NotFoundError
 from .metrics import MetricsMiddleware
-from .middleware import RequestIDMiddleware, current_request_id
+from .middleware import RequestIDMiddleware, AuthMiddleware, current_request_id
 from .server_errors import register_error_handlers
 
 log = logging.getLogger(__name__)
@@ -125,6 +125,7 @@ def create_app(cfg: ServeConfig | None = None) -> FastAPI:
     # the way in, first on the way out. We want MetricsMiddleware to see the
     # final response status, so it goes outside RequestIDMiddleware.
     app.add_middleware(MetricsMiddleware)
+    app.add_middleware(AuthMiddleware, api_key=cfg.api_key, auth_required_routes=cfg.auth_required_routes)
     app.add_middleware(RequestIDMiddleware)
     register_error_handlers(app)
 

@@ -76,3 +76,39 @@ class RequestIdLogFilter(logging.Filter):
         rid = _REQUEST_ID_CTX.get()
         record.request_id = rid if rid is not None else "-"
         return True
+
+
+class AuthMiddleware(BaseHTTPMiddleware):
+    def __init__(self, app: ASGIApp, api_key: str | None, auth_required_routes: list[str]) -> None:
+        super().__init__(app)
+        self.api_key = api_key
+        self.auth_required_routes = auth_required_routes
+
+    async def dispatch(self, request: Request, call_next) -> Response:
+        if self.api_key is None:
+            return await call_next(request)
+
+        path = request.url.path
+        requires_auth = False
+        for route in self.auth_required_routes:
+            if route.endswith("*") and path.startswith(route[:-1]):
+                requires_auth = True
+                break
+            elif path == route:
+                requires_auth = True
+                break
+
+        if not requires_auth:
+            return await call_next(request)
+
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            from .server_errors import _respond
+            return _respond(status_code=401, code="unauthorized", message="missing or invalid authorization header", retryable=False)
+
+        token = auth_header[7:]
+        if token != self.api_key:
+            from .server_errors import _respond
+            return _respond(status_code=401, code="unauthorized", message="invalid api key", retryable=False)
+
+        return await call_next(request)
