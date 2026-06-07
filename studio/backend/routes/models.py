@@ -12,7 +12,7 @@ import shutil
 import sys
 import uuid
 from pathlib import Path
-from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query
 from typing import List, Optional
 import structlog
 from loggers import get_logger
@@ -1563,9 +1563,22 @@ def _get_model_size_bytes(
 @router.get("/config/{model_name:path}")
 async def get_model_config(
     model_name: str,
-    hf_token: Optional[str] = Query(None),
+    hf_token_query: Optional[str] = Query(None, alias="hf_token"),
+    hf_token_header: Optional[str] = Header(None, alias="X-HF-Token"),
     current_subject: str = Depends(get_current_subject),
 ):
+    # Prefer the header — query-string tokens get logged to access logs,
+    # browser history, Referer, and any intermediate proxy. Keep Query
+    # as a soft fallback so we don't break any in-flight callers; log a
+    # warning loud enough to chase those down.
+    hf_token = hf_token_header or hf_token_query
+    if hf_token_query and not hf_token_header:
+        logger.warning(
+            "Caller passed hf_token as a query parameter to /api/models/config/%s — "
+            "the token is now in the access log. Switch the caller to the "
+            "X-HF-Token header and rotate the leaked token.",
+            model_name,
+        )
     """
     Get configuration for a specific model.
 
@@ -2096,9 +2109,18 @@ async def check_vision_model(
 @router.get("/check-embedding/{model_name:path}", response_model = EmbeddingCheckResponse)
 async def check_embedding_model(
     model_name: str,
-    hf_token: Optional[str] = Query(None),
+    hf_token_query: Optional[str] = Query(None, alias="hf_token"),
+    hf_token_header: Optional[str] = Header(None, alias="X-HF-Token"),
     current_subject: str = Depends(get_current_subject),
 ):
+    hf_token = hf_token_header or hf_token_query
+    if hf_token_query and not hf_token_header:
+        logger.warning(
+            "Caller passed hf_token as a query parameter to "
+            "/api/models/check-embedding/%s — token logged in access log. "
+            "Switch to X-HF-Token header and rotate the leaked token.",
+            model_name,
+        )
     """
     Check if a model is an embedding model.
 
@@ -2128,9 +2150,13 @@ async def get_gguf_variants(
     repo_id: str = Query(
         ..., description = "HuggingFace repo ID (e.g. 'unsloth/gemma-3-4b-it-GGUF')"
     ),
-    hf_token: Optional[str] = Query(
-        None, description = "HuggingFace token for private repos"
+    hf_token_query: Optional[str] = Query(
+        None, alias="hf_token",
+        description = "DEPRECATED: pass token via X-HF-Token header instead. "
+                      "Query-string tokens are logged to access logs / Referer / "
+                      "browser history.",
     ),
+    hf_token_header: Optional[str] = Header(None, alias="X-HF-Token"),
     current_subject: str = Depends(get_current_subject),
 ):
     """
@@ -2141,6 +2167,13 @@ async def get_gguf_variants(
     with file sizes, whether the model supports vision, and the recommended
     default variant.
     """
+    hf_token = hf_token_header or hf_token_query
+    if hf_token_query and not hf_token_header:
+        logger.warning(
+            "Caller passed hf_token as a query parameter to /api/models/gguf-variants?repo_id=%s — "
+            "token logged in access log. Switch to X-HF-Token header and rotate.",
+            repo_id,
+        )
     try:
         from utils.models.model_config import is_local_path, list_local_gguf_variants
 

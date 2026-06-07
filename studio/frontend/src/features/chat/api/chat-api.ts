@@ -570,8 +570,11 @@ export async function listGgufVariants(
   hfToken?: string,
 ): Promise<GgufVariantsResponse> {
   const params = new URLSearchParams({ repo_id: repoId });
-  if (hfToken) params.set("hf_token", hfToken);
-  const response = await authFetch(`/api/models/gguf-variants?${params}`);
+  // Token via header, not query — query-string tokens leak into
+  // access logs / Referer / browser history.
+  const init: RequestInit = {};
+  if (hfToken) init.headers = { "X-HF-Token": hfToken };
+  const response = await authFetch(`/api/models/gguf-variants?${params}`, init);
   return parseJsonOrThrow<GgufVariantsResponse>(response);
 }
 

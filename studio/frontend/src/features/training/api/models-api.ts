@@ -130,8 +130,12 @@ export async function getModelConfig(
   hfToken?: string,
 ): Promise<ModelConfigResponse> {
   const encoded = encodeURIComponent(modelName);
-  const params = hfToken ? `?hf_token=${encodeURIComponent(hfToken)}` : "";
-  const response = await authFetch(`/api/models/config/${encoded}${params}`, { signal });
+  // Token goes in the X-HF-Token header — query strings end up in the
+  // access log, browser history, and Referer headers (backend route
+  // logs a deprecation warning if the legacy hf_token=... query is used).
+  const init: RequestInit = { signal };
+  if (hfToken) init.headers = { "X-HF-Token": hfToken };
+  const response = await authFetch(`/api/models/config/${encoded}`, init);
   if (!response.ok) {
     throw new Error(`Failed to fetch model config (${response.status})`);
   }
