@@ -875,6 +875,31 @@ def detect_audio_type(model_name: str, hf_token: Optional[str] = None) -> Option
     return result
 
 
+def _check_token_patterns(tok_config: dict) -> Optional[str]:
+    """Two-pass audio_type detection over a tokenizer_config.json dict.
+
+    Pass 1 runs the 6 single-modality added-vocab patterns; pass 2 runs the
+    structural top-level-key patterns (Any-to-Any models like
+    gemma4_unified). Added-vocab wins when both could match — the patterns
+    in pass 1 are model-specific enough that a match there is the more
+    authoritative signal. Module-level (not nested) so unit tests can
+    import and exercise it directly.
+    """
+    # Pass 1: added_tokens_decoder patterns (6 single-modality audio archs).
+    added = tok_config.get("added_tokens_decoder", {})
+    if added:
+        token_contents = [v.get("content", "") for v in added.values()]
+        for audio_type, check_fn in _AUDIO_TOKEN_PATTERNS.items():
+            if check_fn(token_contents):
+                return audio_type
+    # Pass 2: structural config patterns (Any-to-Any models like gemma4_unified
+    # whose modality tokens live as top-level keys, not in added_tokens_decoder).
+    for audio_type, check_fn in _AUDIO_CONFIG_PATTERNS.items():
+        if check_fn(tok_config):
+            return audio_type
+    return None
+
+
 def _detect_audio_from_tokenizer(
     model_name: str, hf_token: Optional[str] = None
 ) -> Optional[str]:
@@ -883,21 +908,6 @@ def _detect_audio_from_tokenizer(
     First checks local HF cache, then fetches tokenizer_config.json from HuggingFace.
     Checks added_tokens_decoder for distinctive patterns.
     """
-
-    def _check_token_patterns(tok_config: dict) -> Optional[str]:
-        # Pass 1: added_tokens_decoder patterns (6 single-modality audio archs).
-        added = tok_config.get("added_tokens_decoder", {})
-        if added:
-            token_contents = [v.get("content", "") for v in added.values()]
-            for audio_type, check_fn in _AUDIO_TOKEN_PATTERNS.items():
-                if check_fn(token_contents):
-                    return audio_type
-        # Pass 2: structural config patterns (Any-to-Any models like gemma4_unified
-        # whose modality tokens live as top-level keys, not in added_tokens_decoder).
-        for audio_type, check_fn in _AUDIO_CONFIG_PATTERNS.items():
-            if check_fn(tok_config):
-                return audio_type
-        return None
 
     # 1) Check local HF cache first (works for gated/offline models)
     try:
