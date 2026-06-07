@@ -3,6 +3,40 @@
 
 import { create } from "zustand";
 import { toast } from "sonner";
+
+// Upstream-compat shim: localStorage keys + helpers that upstream's
+// chat-page.tsx imports from this module. HT's chat-runtime-store
+// pre-dates these additions; expose them to satisfy the imports.
+// Eventually HT's store should adopt the upstream key/setter convention
+// for tool toggles; until then, these are inert getters for compat only.
+export const CHAT_REASONING_ENABLED_KEY = "unsloth_chat_reasoning_enabled";
+export const CHAT_TOOLS_ENABLED_KEY = "unsloth_chat_tools_enabled";
+export const CHAT_CODE_TOOLS_ENABLED_KEY = "unsloth_chat_code_tools_enabled";
+export const CHAT_IMAGE_TOOLS_ENABLED_KEY = "unsloth_chat_image_tools_enabled";
+export const CHAT_WEB_FETCH_TOOLS_ENABLED_KEY =
+  "unsloth_chat_web_fetch_tools_enabled";
+
+export function loadOptionalBool(key: string): boolean | null {
+  if (typeof localStorage === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw === null) return null;
+    return raw === "true";
+  } catch {
+    return null;
+  }
+}
+
+export function resolveToolsEnabledOnLoad(supportsTools: boolean): {
+  toolsEnabled: boolean;
+  codeToolsEnabled: boolean;
+} {
+  if (!supportsTools) return { toolsEnabled: false, codeToolsEnabled: false };
+  return {
+    toolsEnabled: loadOptionalBool(CHAT_TOOLS_ENABLED_KEY) ?? true,
+    codeToolsEnabled: loadOptionalBool(CHAT_CODE_TOOLS_ENABLED_KEY) ?? true,
+  };
+}
 import {
   DEFAULT_INFERENCE_PARAMS,
   type ChatLoraSummary,

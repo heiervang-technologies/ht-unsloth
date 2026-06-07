@@ -35,6 +35,7 @@ export type TrainStepEvent = {
   batch_size: number;
   commit_token?: number;
   components?: Record<string, number | boolean>;
+  grad_norm_total?: number;
   ts?: number;
 };
 
