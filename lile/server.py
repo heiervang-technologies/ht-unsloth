@@ -97,6 +97,13 @@ class SnapshotRequest(BaseModel):
     name: str
 
 
+class ExportRequest(BaseModel):
+    name: str
+    format: str = "safetensors"
+    dtype: str = "bf16"
+    merge_mode: str = "fold_all"
+
+
 # ---------------------------------------------------------------------- app
 def create_app(cfg: ServeConfig | None = None) -> FastAPI:
     cfg = cfg or ServeConfig()
@@ -300,6 +307,15 @@ def create_app(cfg: ServeConfig | None = None) -> FastAPI:
     @app.post("/v1/state/snapshot/load")
     async def state_load(req: SnapshotRequest) -> dict[str, Any]:
         return await app.state.controller.request_snapshot_load(req.name)
+
+    @app.post("/v1/state/export")
+    async def state_export(req: ExportRequest) -> dict[str, Any]:
+        return await app.state.controller.request_export(
+            name=req.name,
+            format=req.format,
+            dtype=req.dtype,
+            merge_mode=req.merge_mode,
+        )
 
     @app.get("/v1/state/snapshots")
     async def state_list() -> dict[str, Any]:

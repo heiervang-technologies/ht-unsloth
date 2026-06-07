@@ -285,6 +285,17 @@ class Controller:
         elif kind == "reset_adapter":
             self.state.reset_active_adapter()
             return {"ok": True, "wall": time.time() - t0}
+        elif kind == "export":
+            from .export import export_model
+            name = payload["name"]
+            out_dir = self.cfg.data_dir / "exports" / name
+            export_model(
+                self.state,
+                out_dir,
+                dtype=payload.get("dtype", "bf16"),
+                merge_mode=payload.get("merge_mode", "fold_all")
+            )
+            return {"exported": name, "out_dir": str(out_dir), "wall": time.time() - t0}
         else:
             raise ValueError(f"unknown task kind {kind!r}")
 
@@ -618,3 +629,21 @@ class Controller:
         task = await self.queue.submit("snapshot_load", {"name": name})
         result = await self.queue.wait_for(task.token, timeout=300.0)
         return {"step_token": task.token, "result": result.result}
+
+    async def request_export(
+        self, name: str, format: str = "safetensors", dtype: str = "bf16", merge_mode: str = "fold_all"
+    ) -> dict[str, Any]:
+        payload = {
+            "name": name,
+            "format": format,
+            "dtype": dtype,
+            "merge_mode": merge_mode,
+        }
+        task = await self.queue.submit("export", payload)
+        # Don't block waiting for export unless caller polls for the token,
+        # but we wait enough to ensure task is accepted. Wait, issue says:
+        # "Issue a commit_token so clients can wait."
+        # If we wait_for here with a huge timeout it holds up the HTTP response.
+        # So we just return the token!
+        return {"commit_token": task.token, "status": "queued"}
+>>>>>>> cb8ea6bcd (feat: Implement layer-by-layer Safetensors export logic)
