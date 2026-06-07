@@ -21,6 +21,7 @@ import {
   hasClosedThinkTag,
   parseAssistantContent,
 } from "../utils/parse-assistant-content";
+import { getAuthToken } from "@/features/auth/session";
 
 /** Server-side usage data from llama-server (via stream_options.include_usage). */
 interface ServerUsage {
@@ -535,6 +536,21 @@ async function autoLoadSmallestModel(): Promise<{
 export function createOpenAIStreamAdapter(): ChatModelAdapter {
   return {
     async *run({ messages, abortSignal, unstable_threadId }) {
+      const cancelId = crypto.randomUUID?.() || Math.random().toString(36).slice(2);
+      const onAbortCancel = () => {
+        const token = getAuthToken();
+        fetch("/api/inference/cancel", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ cancel_id: cancelId }),
+          keepalive: true,
+        }).catch(console.error);
+      };
+      abortSignal.addEventListener("abort", onAbortCancel);
+
       let runtime = useChatRuntimeStore.getState();
       // Capture the thread ID once at the start so it stays stable even if
       // the user switches chats while waiting for model load / auto-load.
@@ -720,6 +736,7 @@ export function createOpenAIStreamAdapter(): ChatModelAdapter {
             presence_penalty: params.presencePenalty,
             image_base64: imageBase64,
             audio_base64: audioBase64,
+            cancel_id: cancelId,
             ...(useAdapter === undefined ? {} : { use_adapter: useAdapter }),
             ...(supportsReasoning ? { enable_thinking: reasoningEnabled } : {}),
             ...(supportsTools && (toolsEnabled || codeToolsEnabled)
@@ -978,6 +995,7 @@ export function createOpenAIStreamAdapter(): ChatModelAdapter {
           }
         }
         runtime.setThreadRunning(threadKey, false);
+        abortSignal.removeEventListener("abort", onAbortCancel);
       }
     },
   };

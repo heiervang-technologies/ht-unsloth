@@ -58,7 +58,8 @@ import {
   Trash2Icon,
   XIcon,
 } from "lucide-react";
-import { type FC, useCallback, useEffect, useRef, useState } from "react";
+import { type FC, useCallback, useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent, type CompositionEvent, type FormEvent } from "react";
+import { flushResourcesSync } from "@assistant-ui/tap";
 import { toast } from "sonner";
 import { deleteThreadMessage } from "@/features/chat/utils/delete-thread-message";
 import { useChatRuntimeStore } from "@/features/chat/stores/chat-runtime-store";
@@ -302,9 +303,138 @@ const PendingAudioChip: FC = () => {
   );
 };
 
-const Composer: FC = () => {
+function isNativeComposing(event: Event) {
+  return "isComposing" in event && (event as Event & { isComposing?: boolean }).isComposing === true;
+}
+
+const IME_STUCK_TIMEOUT_MS = 2500;
+
+function useImeComposerInputHandlers() {
+  const aui = useAui();
+  const composingRef = useRef(false);
+  const [isComposing, setIsComposing] = useState(false);
+  const stuckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearStuckTimer = useCallback(() => {
+    if (stuckTimerRef.current) {
+      clearTimeout(stuckTimerRef.current);
+      stuckTimerRef.current = null;
+    }
+  }, []);
+
+  const setCompositionState = useCallback(
+    (next: boolean) => {
+      composingRef.current = next;
+      setIsComposing(next);
+      clearStuckTimer();
+      if (next) {
+        stuckTimerRef.current = setTimeout(() => {
+          stuckTimerRef.current = null;
+          composingRef.current = false;
+          setIsComposing(false);
+        }, IME_STUCK_TIMEOUT_MS);
+      }
+    },
+    [clearStuckTimer],
+  );
+
+  const refreshStuckTimer = useCallback(() => {
+    if (!composingRef.current) {
+      return;
+    }
+    clearStuckTimer();
+    stuckTimerRef.current = setTimeout(() => {
+      stuckTimerRef.current = null;
+      composingRef.current = false;
+      setIsComposing(false);
+    }, IME_STUCK_TIMEOUT_MS);
+  }, [clearStuckTimer]);
+
+  useEffect(() => clearStuckTimer, [clearStuckTimer]);
+
+  const setComposerText = useCallback(
+    (value: string) => {
+      const composer = aui.composer();
+      if (!composer.getState().isEditing) {
+        return;
+      }
+      flushResourcesSync(() => {
+        composer.setText(value);
+      });
+    },
+    [aui],
+  );
+
+  const onCompositionStart = useCallback(() => {
+    setCompositionState(true);
+  }, [setCompositionState]);
+
+  const onCompositionUpdate = useCallback(() => {
+    refreshStuckTimer();
+  }, [refreshStuckTimer]);
+
+  const onCompositionEnd = useCallback(
+    (e: CompositionEvent<HTMLTextAreaElement>) => {
+      setCompositionState(false);
+      setComposerText(e.currentTarget.value);
+    },
+    [setComposerText, setCompositionState],
+  );
+
+  const onChange = useCallback(
+    (e: ChangeEvent<HTMLTextAreaElement>) => {
+      setCompositionState(isNativeComposing(e.nativeEvent));
+      setComposerText(e.target.value);
+    },
+    [setComposerText, setCompositionState],
+  );
+
+  const onKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.nativeEvent.isComposing || e.keyCode === 229) {
+        composingRef.current = true;
+        refreshStuckTimer();
+      }
+    },
+    [refreshStuckTimer],
+  );
+
+  return {
+    inputProps: {
+      onCompositionStart,
+      onCompositionUpdate,
+      onCompositionEnd,
+      onChange,
+      onKeyDown,
+    },
+    isComposing,
+    isComposingRef: composingRef,
+  };
+}
+
+const Composer: FC<{ disabled?: boolean }> = ({ disabled }) => {
+  const { inputProps, isComposing, isComposingRef } = useImeComposerInputHandlers();
+  const hasPendingAttachments = useAuiState(({ composer }) =>
+    composer.attachments.some(
+      (attachment) => attachment.status.type === "running",
+    ),
+  );
+
+  const handleSubmit = useCallback(
+    (event: FormEvent<HTMLFormElement>) => {
+      if (disabled || isComposingRef.current || hasPendingAttachments) {
+        event.preventDefault();
+      }
+    },
+    [disabled, hasPendingAttachments, isComposingRef],
+  );
+
   return (
-    <ComposerPrimitive.Root className="aui-composer-root relative flex w-full flex-col">
+    <ComposerPrimitive.Root
+      className="aui-composer-root relative flex w-full flex-col"
+      aria-disabled={disabled}
+      onSubmit={handleSubmit}
+    >
       <ComposerPrimitive.AttachmentDropzone className="aui-composer-attachment-dropzone chat-composer-surface flex w-full flex-col rounded-3xl bg-background px-1 pt-2 outline-none transition-shadow data-[dragging=true]:border-ring data-[dragging=true]:bg-accent/50">
         <ComposerAttachments />
         <PendingAudioChip />
@@ -314,10 +444,16 @@ const Composer: FC = () => {
           className="aui-composer-input mb-1 min-h-12 w-full resize-none overflow-y-auto bg-transparent pl-5 pr-4 pt-2 pb-3 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-0"
           minRows={1}
           maxRows={6}
-          autoFocus={true}
+          autoFocus={!disabled}
+          disabled={disabled}
           aria-label="Message input"
+          dir="auto"
+          {...inputProps}
         />
-        <ComposerAction />
+        <ComposerAction
+          disabled={disabled || isComposing || hasPendingAttachments}
+          blockSend={() => isComposingRef.current || hasPendingAttachments}
+        />
       </ComposerPrimitive.AttachmentDropzone>
     </ComposerPrimitive.Root>
   );
@@ -552,7 +688,10 @@ const ToolStatusDisplay: FC = () => {
   );
 };
 
-const ComposerAction: FC = () => {
+const ComposerAction: FC<{ disabled?: boolean; blockSend?: () => boolean }> = ({
+  disabled,
+  blockSend,
+}) => {
   return (
     <div className="aui-composer-action-wrapper relative mx-2 mb-2 flex items-center justify-between">
       <div className="flex items-center gap-1">
@@ -593,6 +732,12 @@ const ComposerAction: FC = () => {
               type="submit"
               variant="default"
               size="icon"
+              disabled={disabled}
+              onClick={(event) => {
+                if (blockSend?.()) {
+                  event.preventDefault();
+                }
+              }}
               className="aui-composer-send size-8 rounded-full"
               aria-label="Send message"
             >
@@ -869,6 +1014,7 @@ const UserActionBar: FC = () => {
 
 const EditComposer: FC = () => {
   const aui = useAui();
+  const { inputProps, isComposingRef } = useImeComposerInputHandlers();
   const resendAfterCancelRef = useRef(false);
 
   useAuiEvent("thread.runEnd", () => {
@@ -885,16 +1031,23 @@ const EditComposer: FC = () => {
         <ComposerPrimitive.Input
           className="aui-edit-composer-input min-h-14 w-full resize-none bg-transparent p-4 text-foreground text-sm outline-none"
           autoFocus={true}
+          dir="auto"
+          {...inputProps}
         />
         <div className="aui-edit-composer-footer mx-3 mb-3 flex items-center gap-2 self-end">
           <ComposerPrimitive.Cancel asChild={true}>
-            <Button variant="ghost" size="sm">
+            <Button type="button" variant="ghost" size="sm">
               Cancel
             </Button>
           </ComposerPrimitive.Cancel>
           <Button
+            type="button"
             size="sm"
-            onClick={() => {
+            onClick={(event) => {
+              if (isComposingRef.current) {
+                event.preventDefault();
+                return;
+              }
               const newText = aui.composer().getState().text;
               const originalText = aui.message().getCopyText();
 
