@@ -11,7 +11,7 @@ hydra-core
 hypothesis
 kgb
 parameterized
-pytest<9.0
+pytest>=9.0.3,<10  # HT bump: <9.0 cap raised to pick up 9.0.3 tmpdir-handling fix (GHSA medium)
 pytest-json-report
 pytest-rerunfailures==15.1
 pytest-xdist
