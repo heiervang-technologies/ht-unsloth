@@ -852,19 +852,57 @@ def LlamaDecoderLayer_fast_forward(
         hidden_states += residual
     else:
         residual = hidden_states
-        hidden_states = fast_rms_layernorm(self.input_layernorm, hidden_states)
-        hidden_states, self_attn_weights, present_key_value = self.self_attn(
-            hidden_states = hidden_states,
-            causal_mask = causal_mask,
-            attention_mask = attention_mask,
-            position_ids = position_ids,
-            past_key_value = past_key_value,
-            output_attentions = output_attentions,
-            use_cache = use_cache,
-            padding_mask = padding_mask,
-            position_embeddings = position_embeddings,
-            **kwargs,
-        )
+        
+        detach_attn = getattr(self, "unsloth_detach_attention", False)
+        
+        if detach_attn:
+            norm_requires_grad = getattr(self.input_layernorm.weight, "requires_grad", False)
+            if norm_requires_grad:
+                hidden_states = fast_rms_layernorm(self.input_layernorm, hidden_states)
+                with torch.no_grad():
+                    attn_out, self_attn_weights, present_key_value = self.self_attn(
+                        hidden_states = hidden_states,
+                        causal_mask = causal_mask,
+                        attention_mask = attention_mask,
+                        position_ids = position_ids,
+                        past_key_value = past_key_value,
+                        output_attentions = output_attentions,
+                        use_cache = use_cache,
+                        padding_mask = padding_mask,
+                        position_embeddings = position_embeddings,
+                        **kwargs,
+                    )
+                hidden_states = attn_out
+            else:
+                with torch.no_grad():
+                    hidden_states = fast_rms_layernorm(self.input_layernorm, hidden_states)
+                    hidden_states, self_attn_weights, present_key_value = self.self_attn(
+                        hidden_states = hidden_states,
+                        causal_mask = causal_mask,
+                        attention_mask = attention_mask,
+                        position_ids = position_ids,
+                        past_key_value = past_key_value,
+                        output_attentions = output_attentions,
+                        use_cache = use_cache,
+                        padding_mask = padding_mask,
+                        position_embeddings = position_embeddings,
+                        **kwargs,
+                    )
+        else:
+            hidden_states = fast_rms_layernorm(self.input_layernorm, hidden_states)
+            hidden_states, self_attn_weights, present_key_value = self.self_attn(
+                hidden_states = hidden_states,
+                causal_mask = causal_mask,
+                attention_mask = attention_mask,
+                position_ids = position_ids,
+                past_key_value = past_key_value,
+                output_attentions = output_attentions,
+                use_cache = use_cache,
+                padding_mask = padding_mask,
+                position_embeddings = position_embeddings,
+                **kwargs,
+            )
+            
         hidden_states = residual + hidden_states
 
         # Fully Connected
@@ -2860,6 +2898,7 @@ class FastLlamaModel:
         qat_scheme = None,
         target_parameters = None,  # For MoE expert layers (nn.Parameter)
         ensure_weight_tying = False,
+        detach_attention = "auto",
         **kwargs,
     ):
         if os.environ.get("UNSLOTH_USE_NEW_MODEL", "0") == "1":
@@ -2892,6 +2931,7 @@ class FastLlamaModel:
                 temporary_location = temporary_location,
                 target_parameters = target_parameters,
                 ensure_weight_tying = ensure_weight_tying,
+                detach_attention = detach_attention,
                 **kwargs,
             )
         if os.environ.get("UNSLOTH_ENABLE_FULL_FINETUNING", "0") == "1":
@@ -3187,6 +3227,16 @@ class FastLlamaModel:
                 _n = max(1, min(int(finetune_last_n_layers), _total_layers))
                 layers_to_transform = list(range(_total_layers - _n, _total_layers))
 
+        # Determine detach_attention
+        attn_modules = {"q_proj", "k_proj", "v_proj", "o_proj"}
+        has_attn = any(m in target_modules for m in attn_modules) if isinstance(target_modules, (list, tuple, set)) else True
+        if detach_attention == "auto":
+            detach_attention = not has_attn
+        elif detach_attention and has_attn:
+            import warnings
+            warnings.warn("Unsloth: detach_attention=True but attention LoRA adapters are present. This will break training. Setting detach_attention=False.")
+            detach_attention = False
+
         arguments = dict(
             r = r,
             lora_alpha = lora_alpha,
@@ -3343,6 +3393,15 @@ class FastLlamaModel:
             m.for_training = functools.partial(FastBaseModel.for_training, m)
             m.for_inference = functools.partial(FastBaseModel.for_inference, m)
             m = m.model
+            
+        if detach_attention:
+            _model = model
+            while hasattr(_model, "model") and not hasattr(_model, "layers"):
+                _model = _model.model
+            if hasattr(_model, "layers"):
+                for layer in _model.layers:
+                    layer.unsloth_detach_attention = True
+                    
         return model
 
     @staticmethod
