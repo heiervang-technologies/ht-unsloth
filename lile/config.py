@@ -19,6 +19,7 @@ class ServeConfig:
 
     data_dir: Path = field(default_factory=lambda: Path("./lile_data"))
     max_queue_depth: int = 64
+    max_samples_per_train_call: int = 256
 
     # Budget passed to ``Controller.graceful_shutdown`` on FastAPI shutdown
     # (SIGINT/SIGTERM via uvicorn's default handler). The queue worker keeps

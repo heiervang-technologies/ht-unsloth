@@ -48,15 +48,21 @@ def _respond(
     code: str,
     message: str,
     retryable: bool,
+    **kwargs: Any,
 ) -> JSONResponse:
     rid = _resolve_request_id()
     body = envelope_payload(
         code=code, message=message, retryable=retryable, request_id=rid,
     )
+    headers = {REQUEST_ID_HEADER: rid}
+    if kwargs.get("retry_after_ms"):
+        body["error"]["retry_after_ms"] = kwargs["retry_after_ms"]
+        # HTTP standard Retry-After is in seconds.
+        headers["Retry-After"] = str(max(1, int(kwargs["retry_after_ms"] / 1000)))
     return JSONResponse(
         status_code=status_code,
         content=body,
-        headers={REQUEST_ID_HEADER: rid},
+        headers=headers,
     )
 
 
@@ -76,11 +82,16 @@ def _format_validation_message(errors: list[dict[str, Any]]) -> str:
 def register_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(LileError)
     async def _lile_error_handler(_req: Request, exc: LileError) -> JSONResponse:
+        kwargs = {}
+        from .errors import QueueFullError
+        if isinstance(exc, QueueFullError):
+            kwargs["retry_after_ms"] = 500
         return _respond(
             status_code=exc.status_code,
             code=exc.code,
             message=str(exc) or exc.code,
             retryable=exc.retryable,
+            **kwargs,
         )
 
     @app.exception_handler(RequestValidationError)

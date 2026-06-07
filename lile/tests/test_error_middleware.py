@@ -161,12 +161,14 @@ def test_unknown_response_id_becomes_404_envelope():
     assert "r_missing" in err["message"]
 
 
-def test_queue_full_is_retryable_503():
+def test_queue_full_is_retryable_429():
     app = _build_app()
     with TestClient(app) as client:
         r = client.get("/boom-queue-full")
-    assert r.status_code == 503
-    _assert_envelope(r.json(), code="queue_full", retryable=True)
+    assert r.status_code == 429
+    err = _assert_envelope(r.json(), code="queue_full", retryable=True)
+    assert err.get("retry_after_ms") == 500
+    assert r.headers.get("Retry-After") == "1"
 
 
 def test_shutting_down_is_retryable_503():

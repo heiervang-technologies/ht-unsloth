@@ -19,8 +19,8 @@ from typing import Any
 # oldest entries. OrderedDict gives O(1) insertion, lookup, and eviction.
 _RESPONSE_INDEX_CAP = 4096
 
-from .commit_stream import StepBroadcaster
 from .config import ServeConfig
+from .step_stream import StepBroadcaster
 from .engine.replay import IdleReplayScheduler, ReplayPolicy
 from .engine.train import TrainEngine
 from .logging_backends import LoggerConfig, MetricsLogger, flatten_scalars, get_logger
@@ -436,25 +436,42 @@ class Controller:
         self._reject_if_shutting_down()
         batch_id = new_batch_id()
         samples = spec.get("samples", [])
+        
+        # Enforce batch size limit
+        max_samples = getattr(self.cfg, "max_samples_per_train_call", 256)
+        if len(samples) > max_samples:
+            from .errors import BatchTooLargeError
+            raise BatchTooLargeError(f"batch size {len(samples)} exceeds max_samples_per_train_call={max_samples}")
+
         chunk_size = spec.get("chunk_size", 2)  # small default for 0.6B; caller can bump
+        
+        # Enforce 0.75 depth warning
+        if self.queue._q.qsize() / max(1, self.queue._q.maxsize) > 0.75:
+            log.warning("compute queue depth high: %d/%d", self.queue._q.qsize(), self.queue._q.maxsize)
+            
         tasks = []
         for i in range(0, max(1, len(samples)), chunk_size):
             sub = {
                 **spec,
                 "samples": samples[i:i + chunk_size] if samples else samples,
             }
-            t = await self.queue.submit("train", sub, batch_id=batch_id)
+            t = await self.queue.try_submit("train", sub, batch_id=batch_id)
             tasks.append(t)
             if not samples:
                 break
         # The step_token is the last task's token.
         step_token = tasks[-1].token
-        return {
+        depth = self.queue._q.qsize()
+        cap = max(1, self.queue._q.maxsize)
+        resp = {
             "batch_id": batch_id,
             "step_token": step_token,
             "n_chunks": len(tasks),
-            "queue_depth": self.queue._q.qsize(),
+            "queue_depth": depth,
         }
+        if depth / cap >= 0.9:
+            resp["queue_pressure"] = "high"
+        return resp
 
     @staticmethod
     def feedback_to_batch(
