@@ -2,15 +2,23 @@
 // Copyright 2026-present the Unsloth AI Inc. team. All rights reserved. See /studio/LICENSE.AGPL-3.0
 
 export type ModelType = "vision" | "audio" | "embeddings" | "text";
-export type TrainingMethod = "qlora" | "lora" | "full" | "cpt" | "prompt-baking";
+
+// Two orthogonal axes — pre-2026-06-07 these were mashed into a single
+// `trainingMethod` enum (qlora|lora|full|cpt|prompt-baking). Now:
+//
+//   TrainingObjective — what loss/data: SFT (default), Continued Pretraining,
+//                       Prompt Baking (= context distillation).
+//   TrainingMethod    — how weights are stored/updated: QLoRA (4-bit),
+//                       LoRA (16-bit), Full fine-tune.
+//
+// Any objective × any method is valid (Prompt Baking + Full, CPT + LoRA, etc.).
+// `setTrainingObjective` in the store owns objective-specific side effects
+// (e.g. CPT forces datasetFormat=raw, prompt-baking opens its own panel).
+export type TrainingObjective = "sft" | "cpt" | "prompt-baking";
+export type TrainingMethod = "qlora" | "lora" | "full";
 
 export function isAdapterMethod(method: TrainingMethod): boolean {
-  return (
-    method === "lora" ||
-    method === "qlora" ||
-    method === "cpt" ||
-    method === "prompt-baking"
-  );
+  return method !== "full";
 }
 export type StepNumber = 1 | 2 | 3 | 4 | 5;
 export type DatasetSource = "huggingface" | "upload";

@@ -51,7 +51,7 @@ import {
   type TrainingMethod as VramTrainingMethod,
   buildModelVramMap,
 } from "@/lib/vram";
-import type { TrainingMethod } from "@/types/training";
+import type { TrainingMethod, TrainingObjective } from "@/types/training";
 import {
   ChipIcon,
   FolderSearchIcon,
@@ -96,6 +96,8 @@ export function ModelSection() {
     setSelectedModel,
     trainingMethod,
     setTrainingMethod,
+    trainingObjective,
+    setTrainingObjective,
     hfToken,
     setHfToken,
   } = useTrainingConfigStore(
@@ -106,6 +108,8 @@ export function ModelSection() {
         setSelectedModel,
         trainingMethod,
         setTrainingMethod,
+        trainingObjective,
+        setTrainingObjective,
         hfToken,
         setHfToken,
       }) => ({
@@ -114,6 +118,8 @@ export function ModelSection() {
         setSelectedModel,
         trainingMethod,
         setTrainingMethod,
+        trainingObjective,
+        setTrainingObjective,
         hfToken,
         setHfToken,
       }),
@@ -580,6 +586,68 @@ export function ModelSection() {
             className="flex min-w-0 flex-col gap-2"
           >
             <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+              Objective
+              <Tooltip>
+                <TooltipTrigger asChild={true}>
+                  <button
+                    type="button"
+                    className="text-foreground/70 hover:text-foreground"
+                  >
+                    <HugeiconsIcon
+                      icon={InformationCircleIcon}
+                      className="size-3"
+                    />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs">
+                  What you're training the model to do — pick a loss / data
+                  flavor. SFT = supervised on completions. CPT = continued
+                  pretraining on raw text. Prompt Baking = distil a system
+                  prompt into weights (context distillation) so the model
+                  exhibits the prompted behavior at zero inference-time
+                  cost.
+                </TooltipContent>
+              </Tooltip>
+            </span>
+            <Select
+              value={trainingObjective}
+              onValueChange={(v) => setTrainingObjective(v as TrainingObjective)}
+            >
+              <SelectTrigger className={DARK_TRIGGER}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent
+                position="popper"
+                className={`${DARK_CONTENT} w-[var(--radix-select-trigger-width)]`}
+              >
+                <SelectItem value="sft">
+                  <span className="flex items-center gap-2">
+                    <span className="size-2 shrink-0 rounded-full bg-sky-400" />
+                    SFT (supervised)
+                  </span>
+                </SelectItem>
+                <SelectItem value="cpt">
+                  <span className="flex items-center gap-2">
+                    <span
+                      className={`size-2 shrink-0 rounded-full ${METHOD_DOTS.cpt}`}
+                    />
+                    {t("studio.model.continuedPretraining")}
+                  </span>
+                </SelectItem>
+                <SelectItem value="prompt-baking">
+                  <span className="flex items-center gap-2">
+                    <span
+                      className={`size-2 shrink-0 rounded-full ${METHOD_DOTS["prompt-baking"]}`}
+                    />
+                    Prompt Baking
+                  </span>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex min-w-0 flex-col gap-2">
+            <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
               {t("studio.model.method")}
               <Tooltip>
                 <TooltipTrigger asChild={true}>
@@ -594,7 +662,10 @@ export function ModelSection() {
                   </button>
                 </TooltipTrigger>
                 <TooltipContent className="max-w-xs">
-                  {t("studio.model.methodTooltip")}{" "}
+                  How weights are stored / updated. QLoRA (4-bit) and LoRA
+                  (16-bit) train low-rank adapters; Full fine-tune updates
+                  every parameter. Independent of objective — any combo is
+                  valid.{" "}
                   <a
                     href="https://unsloth.ai/docs/get-started/fine-tuning-llms-guide/lora-hyperparameters-guide"
                     target="_blank"
@@ -639,22 +710,6 @@ export function ModelSection() {
                       className={`size-2 shrink-0 rounded-full ${METHOD_DOTS.full}`}
                     />
                     {t("studio.model.fullFineTune")}
-                  </span>
-                </SelectItem>
-                <SelectItem value="cpt">
-                  <span className="flex items-center gap-2">
-                    <span
-                      className={`size-2 shrink-0 rounded-full ${METHOD_DOTS.cpt}`}
-                    />
-                    {t("studio.model.continuedPretraining")}
-                  </span>
-                </SelectItem>
-                <SelectItem value="prompt-baking">
-                  <span className="flex items-center gap-2">
-                    <span
-                      className={`size-2 shrink-0 rounded-full ${METHOD_DOTS["prompt-baking"]}`}
-                    />
-                    Prompt Baking
                   </span>
                 </SelectItem>
               </SelectContent>
