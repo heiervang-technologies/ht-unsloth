@@ -202,7 +202,7 @@ export type ToolProfileConfig = {
   timeout_sec?: string;
 };
 
-export type LlmImageContextConfig = {
+export type LlmMediaContextConfig = {
   enabled: boolean;
   // biome-ignore lint/style/useNamingConvention: api schema
   column_name: string;
@@ -233,7 +233,9 @@ export type LlmConfig = {
   scores?: Score[];
   // ui-only, serialized into multi_modal_context for DataDesigner
   // biome-ignore lint/style/useNamingConvention: ui schema
-  image_context?: LlmImageContextConfig;
+  image_context?: LlmMediaContextConfig;
+  // biome-ignore lint/style/useNamingConvention: ui schema
+  audio_context?: LlmMediaContextConfig;
   // biome-ignore lint/style/useNamingConvention: api schema
   with_trace?: LlmTraceType;
   // biome-ignore lint/style/useNamingConvention: api schema

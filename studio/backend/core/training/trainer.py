@@ -560,8 +560,10 @@ class UnslothTrainer:
             clear_unsloth_compiled_cache(preserve_patterns = _preserve)
             # Detect audio model type dynamically (config.json + tokenizer)
             self._audio_type = detect_audio_type(model_name, hf_token)
+            is_trimodal_arch = (self._audio_type == "audio_vlm")
+
             # audio_vlm is detected as an audio_type now, handle it separately
-            if self._audio_type == "audio_vlm":
+            if is_trimodal_arch:
                 self.is_audio = False
                 self.is_audio_vlm = (
                     is_dataset_audio  # Only use audio VLM path if dataset has audio
@@ -574,13 +576,16 @@ class UnslothTrainer:
             if not self.is_audio and not self.is_audio_vlm:
                 self._cuda_audio_used = False
 
-            # VLM: vision model with image dataset (mutually exclusive with audio paths)
-            vision = (
-                is_vision_model(model_name, hf_token = hf_token)
-                if not self.is_audio
-                else False
-            )
-            self.is_vlm = not self.is_audio_vlm and vision and is_dataset_image
+            # VLM: vision model with image dataset
+            vision = is_vision_model(model_name, hf_token = hf_token)
+            if is_trimodal_arch:
+                # Trimodal models can do both audio and vision simultaneously
+                self.is_vlm = vision and is_dataset_image
+            else:
+                # Legacy mutually exclusive logic
+                if self.is_audio:
+                    vision = False
+                self.is_vlm = not self.is_audio_vlm and vision and is_dataset_image
             self.model_name = model_name
             self.max_seq_length = max_seq_length
 

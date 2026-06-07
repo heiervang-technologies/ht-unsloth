@@ -60,17 +60,30 @@ export function parseLlm(
     // biome-ignore lint/style/useNamingConvention: api schema
     column_name: "",
   };
+  let audioContext: LlmConfig["audio_context"] = {
+    enabled: false,
+    // biome-ignore lint/style/useNamingConvention: api schema
+    column_name: "",
+  };
   if (Array.isArray(column.multi_modal_context)) {
-    const first = column.multi_modal_context.find((entry) => isRecord(entry));
-    if (first && isRecord(first)) {
-      const modality = readString(first.modality);
-      const columnName = readString(first.column_name) ?? "";
-      if (modality === "image" && columnName) {
-        imageContext = {
-          enabled: true,
-          // biome-ignore lint/style/useNamingConvention: api schema
-          column_name: columnName,
-        };
+    for (const entry of column.multi_modal_context) {
+      if (!isRecord(entry)) continue;
+      const modality = readString(entry.modality);
+      const columnName = readString(entry.column_name) ?? "";
+      if (columnName) {
+        if (modality === "image") {
+          imageContext = {
+            enabled: true,
+            // biome-ignore lint/style/useNamingConvention: api schema
+            column_name: columnName,
+          };
+        } else if (modality === "audio") {
+          audioContext = {
+            enabled: true,
+            // biome-ignore lint/style/useNamingConvention: api schema
+            column_name: columnName,
+          };
+        }
       }
     }
   }
@@ -103,5 +116,7 @@ export function parseLlm(
     scores: llmType === "judge" ? scores : undefined,
     // biome-ignore lint/style/useNamingConvention: ui schema
     image_context: imageContext,
+    // biome-ignore lint/style/useNamingConvention: ui schema
+    audio_context: audioContext,
   };
 }

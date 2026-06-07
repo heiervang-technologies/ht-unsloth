@@ -187,6 +187,11 @@ export function getConfigErrors(config: NodeConfig | null): string[] {
         errors.push("Image context column is required.");
       }
     }
+    if (config.audio_context?.enabled) {
+      if (!config.audio_context.column_name.trim()) {
+        errors.push("Audio context column is required.");
+      }
+    }
     if (
       config.with_trace &&
       !TRACE_MODES.has(config.with_trace)
