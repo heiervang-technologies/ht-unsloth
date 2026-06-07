@@ -58,6 +58,14 @@ import {
   SlidersHorizontalIcon,
   Wrench01Icon,
 } from "@hugeicons/core-free-icons";
+
+export function InfoHint({ children }: { children: React.ReactNode }) {
+  return (
+    <div title={typeof children === "string" ? children : "Info"}>
+      <HugeiconsIcon icon={AiBrain01Icon} className="h-4 w-4 text-muted-foreground opacity-50" />
+    </div>
+  );
+}
 import { HugeiconsIcon } from "@hugeicons/react";
 import { AnimatePresence, motion } from "motion/react";
 import type { ReactNode } from "react";

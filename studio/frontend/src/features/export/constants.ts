@@ -74,8 +74,6 @@ export const METHOD_LABELS: Record<TrainingMethod, string> = {
   qlora: "QLoRA",
   lora: "LoRA",
   full: "Full Fine-tune",
-  cpt: "Continued Pretraining",
-  "prompt-baking": "Prompt Baking",
 };
 
 export const GUIDE_STEPS = [
