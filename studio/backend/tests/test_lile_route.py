@@ -30,7 +30,7 @@ def test_status_returns_health_when_daemon_reachable(client, monkeypatch, respx_
     monkeypatch.setenv("LILE_HOST", "127.0.0.1")
     monkeypatch.setenv("LILE_PORT", "59999")
     body = {"ok": True, "model": "qwen3-0.6b", "queue_depth": 0,
-            "commit_cursor": 7, "merges": 2}
+            "step_cursor": 7, "merges": 2}
     respx_mock.get("http://127.0.0.1:59999/health").respond(200, json=body)
     r = client.get("/api/lile/capsule/status")
     assert r.status_code == 200
@@ -71,7 +71,7 @@ def test_start_spawns_subprocess_when_absent(client, monkeypatch, respx_mock):
     monkeypatch.setattr(lile_mod.subprocess, "Popen", FakePopen)
     async def fake_probe():
         return {"ok": True, "model": "qwen3", "queue_depth": 0,
-                "commit_cursor": 0, "merges": 0}
+                "step_cursor": 0, "merges": 0}
     monkeypatch.setattr(lile_mod, "_probe_health", fake_probe)
 
     r = client.post("/api/lile/capsule/start",

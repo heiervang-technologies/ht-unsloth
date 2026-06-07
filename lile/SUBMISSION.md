@@ -8,7 +8,7 @@ A production-clean local-LLM training-plus-inference daemon. Core invariant from
 
 ## What's novel vs. existing unsloth/TRL
 
-1. **The commit-cursor invariant is shipped as a typed guarantee, not a best-effort.** `/v1/chat/completions` accepts `after_commit_token: int`. Inference dispatch blocks on that token's completion event before the forward pass runs. This is the difference between "training might be reflected" and "training is reflected by contract." `test_controller_commit_cursor_e2e` and the HTTP smoke both verify this on a real model; `test_concurrent_load.py` then pins the invariant under 10 concurrent `/v1/chat` calls and 10 interleaved `/v1/train` calls.
+1. **The commit-cursor invariant is shipped as a typed guarantee, not a best-effort.** `/v1/chat/completions` accepts `after_step_token: int`. Inference dispatch blocks on that token's completion event before the forward pass runs. This is the difference between "training might be reflected" and "training is reflected by contract." `test_controller_step_cursor_e2e` and the HTTP smoke both verify this on a real model; `test_concurrent_load.py` then pins the invariant under 10 concurrent `/v1/chat` calls and 10 interleaved `/v1/train` calls.
 
 2. **The 4-bit merge gotcha (§6) is resolved the safe way, *and* applied live.** `merged_deltas` lives in bf16 on CPU; at merge time a GPU mirror of each layer's delta is pinned to the corresponding `base_layer.weight` via a sidecar `_residual_delta` attribute, and a module-level monkey-patch of `unsloth.kernels.utils.matmul_lora` adds `F.linear(X, delta)` to every QKV/O/gate/up/down forward. Never requantized into NF4. This closes the "residual is bookkeeping only" gap that naive `register_forward_hook` strategies fall into under Unsloth's fast path (which bypasses both `LoraLayer.forward` and `base_layer.forward` on Qwen3). A fallback `forward_hook` on `base_layer` covers the PEFT-standard path used by `disable_adapter()` during the KL anchor. `test_residual_live_path.py` verifies the merged-adapter forward stays within 0.05 nats of the trained-adapter forward (trained -8.111 → merged -8.159 vs. base -94.571).
 
@@ -79,7 +79,7 @@ Full reviews (scoring, what I'd replace, what they got right that I missed) live
 | SFT smoke loss drop | 3.12 → 2.23 (4 steps) | `smoke_objectives.py` |
 | E2E training loss drop | **5.50 → 1.82** (10 steps, Qwen3-0.6B, lr=1e-4) | `test_merge_and_e2e.py` |
 | Merge idempotence fingerprint | `d18aef2fc380ccb1…` identical across null second merge | ^ |
-| Commit-cursor through HTTP | cursor=1 after `/v1/train` + `/v1/chat` with `after_commit_token` | `smoke_server.py` |
+| Commit-cursor through HTTP | cursor=1 after `/v1/train` + `/v1/chat` with `after_step_token` | `smoke_server.py` |
 | Queue cursor invariants | strict monotone; `wait_for` blocks then releases; FIFO; no deadlock on concurrent submit+wait | `test_queue_cursor.py` |
 | Snapshot residual round-trip | save → zero → restore byte-exact | `test_trajectory_snapshot.py` |
 | **CCPD v2 backward** | 196 LoRA params with non-zero grad; τ-spread skip fires on flat scores; r_c moves after 3 AdamW steps; production `TrainEngine` path works post-`for_training` | `test_ccpd_e2e.py` (5 assertions) |

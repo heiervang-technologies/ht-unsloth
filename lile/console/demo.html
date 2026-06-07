@@ -286,14 +286,14 @@
 
     <div class="tab" data-tab="docs">
       <h3 style="margin-top:0">What the endpoints do</h3>
-      <p><b>chat</b> — POST <code>/v1/chat/completions</code>. OpenAI-shaped. Extra <code>lile.*</code> block carries response_id and commit_cursor. Set <code>after_commit_token</code> to block generation until a specific training commit has landed.</p>
+      <p><b>chat</b> — POST <code>/v1/chat/completions</code>. OpenAI-shaped. Extra <code>lile.*</code> block carries response_id and step_cursor. Set <code>after_step_token</code> to block generation until a specific training commit has landed.</p>
       <p><b>feedback</b> — POST <code>/v1/feedback</code>. <span class="pill kto">binary</span> thumbs up/down → KTO. <span class="pill coh">nl_critique</span> → CoH with only a critique. <span class="pill coh">nl_critique_with_rewrite</span> → CoH with critique + better_response.</p>
       <p><b>objectives at a glance</b>:
         <span class="pill sft">sft</span> / <span class="pill ntp">ntp</span> / <span class="pill coh">coh</span> are <b>Razin-safe</b> (pure likelihood-up — see <code>lile/GLOSSARY.md</code>).
         <span class="pill kto">kto</span> / <span class="pill">hinge</span> / <span class="pill">ccpd_v2</span> are preference-style and can exhibit likelihood displacement under adversarial pairs.
       </p>
       <p><b>Chat SFT vs NTP</b> — Chat SFT wraps (prior turns, target) through the tokenizer's chat template and gradients only the assistant target. NTP tokenizes the raw text with no template and gradients every token. Use NTP for imprinting a passage/style; use Chat SFT for teaching a response to a message.</p>
-      <p><b>train</b> — POST <code>/v1/train</code>. Submits a batch of samples for one objective. Returns <code>commit_token</code> you can wait for.</p>
+      <p><b>train</b> — POST <code>/v1/train</code>. Submits a batch of samples for one objective. Returns <code>step_token</code> you can wait for.</p>
       <p><b>merge</b> — POST <code>/v1/state/merge</code>. Folds the active LoRA adapter into the residual Δ and resets the adapter. Frees the adapter for new gradients without losing prior updates.</p>
       <p><b>snapshot</b> — POST <code>/v1/state/snapshot/save|load</code>, GET <code>/v1/state/snapshots</code>. Persists or restores the residual + adapter + trajectory.</p>
       <p><b>trajectory</b> — GET <code>/v1/state/trajectory/tail?n=...</code>. Canonical append-only log of every committed train step, merge, and feedback event.</p>
@@ -343,7 +343,7 @@ async function pollHealth() {
     const h = await api("/health");
     $("#st-model").textContent = h.model;
     $("#st-queue").textContent = h.queue_depth;
-    $("#st-commit").textContent = h.commit_cursor;
+    $("#st-commit").textContent = h.step_cursor;
     $("#st-merges").textContent = h.merges;
     $("#st-ping").textContent = "online"; $("#st-ping").style.color = "var(--ok)";
   } catch (e) {
@@ -441,7 +441,7 @@ async function runGeneration(userTurnIdx) {
     max_tokens: parseInt($("#opt-maxtok").value, 10),
   };
   if ($("#opt-wait").checked && lastCommitToken != null) {
-    body.after_commit_token = lastCommitToken;
+    body.after_step_token = lastCommitToken;
   }
   if ($("#opt-think").checked) {
     body.enable_thinking = true;
@@ -460,7 +460,7 @@ async function runGeneration(userTurnIdx) {
       const el = addMsg("assistant", resp, {
         rid: j.lile.response_id,
         latency: j.lile.latency_s,
-        commit: j.lile.commit_cursor,
+        commit: j.lile.step_cursor,
         historyIdx: userTurnIdx,
       });
       if (reasoning) updateMsgReasoning(el, reasoning);
@@ -524,7 +524,7 @@ async function runGeneration(userTurnIdx) {
           continue;
         }
         if (lile.response_id) rid = lile.response_id;
-        if (lile.commit_cursor != null) commit = lile.commit_cursor;
+        if (lile.step_cursor != null) commit = lile.step_cursor;
         const d = ev.choices?.[0]?.delta || {};
         if (d.reasoning_content) {
           reasoningFull += d.reasoning_content;
@@ -596,10 +596,10 @@ async function sendBinary(rid, value, metaEl) {
   try {
     const j = await api("/v1/feedback", { method: "POST",
       body: { response_id: rid, kind: "binary", value, weight: 3.0 } });
-    lastCommitToken = j.commit_token;
+    lastCommitToken = j.step_token;
     const tag = document.createElement("span");
     tag.className = "pill kto";
-    tag.textContent = `→ kto ${value} · commit ${j.commit_token}`;
+    tag.textContent = `→ kto ${value} · commit ${j.step_token}`;
     metaEl.appendChild(tag);
     refreshTraj();
   } catch (e) { alert("feedback failed: " + e.message); }
@@ -635,8 +635,8 @@ $("#fb-submit").onclick = async () => {
   }
   try {
     const j = await api("/v1/feedback", { method: "POST", body });
-    lastCommitToken = j.commit_token;
-    $("#fb-status").textContent = "submitted · commit_token " + j.commit_token;
+    lastCommitToken = j.step_token;
+    $("#fb-status").textContent = "submitted · step_token " + j.step_token;
     $("#fb-status").className = "status-line ok";
     setTimeout(() => $("#fb-modal").classList.remove("open"), 700);
     refreshTraj();
@@ -744,9 +744,9 @@ $("#btn-chat-sft").onclick = async () => {
   try {
     const j = await api("/v1/train", { method: "POST",
       body: { objective, samples: [sample] } });
-    lastCommitToken = j.commit_token;
+    lastCommitToken = j.step_token;
     setStatus("#chat-sft-status",
-      `queued · ${objective} · commit_token ${j.commit_token}`, "ok");
+      `queued · ${objective} · step_token ${j.step_token}`, "ok");
     refreshTraj();
   } catch (e) { setStatus("#chat-sft-status", "error: " + e.message, "err"); }
 };
@@ -759,9 +759,9 @@ $("#btn-ntp").onclick = async () => {
   try {
     const j = await api("/v1/train", { method: "POST",
       body: { objective: "ntp", samples: [{ text }] } });
-    lastCommitToken = j.commit_token;
+    lastCommitToken = j.step_token;
     setStatus("#ntp-status",
-      `queued · ntp · commit_token ${j.commit_token}`, "ok");
+      `queued · ntp · step_token ${j.step_token}`, "ok");
     refreshTraj();
   } catch (e) {
     const msg = /unknown objective/i.test(e.message)
@@ -789,8 +789,8 @@ function fbPayloadFromTraj(ev) {
 async function replayPayload(p, statusSel) {
   try {
     const j = await api("/v1/feedback", { method: "POST", body: p });
-    lastCommitToken = j.commit_token;
-    setStatus(statusSel, `reinforced ${p.kind} · commit ${j.commit_token}`, "ok");
+    lastCommitToken = j.step_token;
+    setStatus(statusSel, `reinforced ${p.kind} · commit ${j.step_token}`, "ok");
     refreshTraj();
   } catch (e) {
     setStatus(statusSel, "error: " + e.message, "err");
@@ -856,8 +856,8 @@ $("#btn-train").onclick = async () => {
   $("#tr-status").textContent = "submitting…"; $("#tr-status").className = "status-line";
   try {
     const j = await api("/v1/train", { method: "POST", body });
-    lastCommitToken = j.commit_token;
-    $("#tr-status").textContent = `queued ${j.n_chunks} chunk(s) · commit_token ${j.commit_token}`;
+    lastCommitToken = j.step_token;
+    $("#tr-status").textContent = `queued ${j.n_chunks} chunk(s) · step_token ${j.step_token}`;
     $("#tr-status").className = "status-line ok";
     $("#tr-result").textContent = JSON.stringify(j, null, 2);
     $("#tr-result").style.display = "";
@@ -893,7 +893,7 @@ async function listSnapshots() {
       const load = document.createElement("button"); load.textContent = "Load"; load.className = "warn";
       load.onclick = async () => {
         try { const r = await api("/v1/state/snapshot/load", { method: "POST", body: { name } });
-          $("#snap-status").textContent = `loaded ${name} · commit ${r.commit_token}`;
+          $("#snap-status").textContent = `loaded ${name} · commit ${r.step_token}`;
           $("#snap-status").className = "status-line ok"; refreshTraj();
         } catch (e) { $("#snap-status").textContent = "load failed: " + e.message;
           $("#snap-status").className = "status-line err"; }
@@ -907,7 +907,7 @@ $("#btn-snap-save").onclick = async () => {
   const name = $("#snap-name").value.trim(); if (!name) return;
   try {
     const j = await api("/v1/state/snapshot/save", { method: "POST", body: { name } });
-    $("#snap-status").textContent = `saved ${name} · commit ${j.commit_token}`;
+    $("#snap-status").textContent = `saved ${name} · commit ${j.step_token}`;
     $("#snap-status").className = "status-line ok";
     listSnapshots(); refreshTraj();
   } catch (e) {
@@ -957,8 +957,8 @@ async function refreshTraj() {
             btn.disabled = true; btn.textContent = "replaying…";
             try {
               const resp = await api("/v1/feedback", { method: "POST", body: payload });
-              lastCommitToken = resp.commit_token;
-              btn.textContent = `↻ commit ${resp.commit_token}`;
+              lastCommitToken = resp.step_token;
+              btn.textContent = `↻ commit ${resp.step_token}`;
               btn.className = "mini";
               setTimeout(refreshTraj, 300);
             } catch (err) {

@@ -55,7 +55,7 @@ class _FakeController:
 
     async def submit_train(self, spec):
         self.submitted.append(spec)
-        return {"commit_token": len(self.submitted) - 1}
+        return {"step_token": len(self.submitted) - 1}
 
 
 def _write_feedback(log: TrajectoryLog, *, kind: str, prompt: str,

@@ -4,7 +4,7 @@ Fires N interleaved /v1/chat and /v1/feedback calls against the in-memory
 Controller and asserts the commit-cursor invariant holds under contention:
 
   - The cursor is strictly monotone across the whole run.
-  - Every chat that carried an `after_commit_token` saw a cursor ≥ its token
+  - Every chat that carried an `after_step_token` saw a cursor ≥ its token
     when it returned.
   - No deadlocks: the whole run completes within a wall-time bound.
   - The trajectory log contains every train_step and every inference event.
@@ -33,7 +33,7 @@ async def _chat(ctl: Controller, i: int, token: int | None) -> tuple[int, int, f
     result = await ctl.generate(
         [{"role": "user", "content": f"Fact #{i}:"}],
         max_new_tokens=6, temperature=0.3,
-        after_commit_token=token,
+        after_step_token=token,
     )
     # Return the cursor at the moment the call completed.
     cursor = ctl.queue.committed
@@ -51,7 +51,7 @@ async def _train(ctl: Controller, i: int) -> int:
         ],
     }
     submit = await ctl.submit_train(spec)
-    return submit["commit_token"]
+    return submit["step_token"]
 
 
 async def main_async() -> int:
@@ -76,7 +76,7 @@ async def main_async() -> int:
             tok = await _train(ctl, i)
             train_tokens.append(tok)
 
-        # Fire chats. Some carry an after_commit_token, some don't.
+        # Fire chats. Some carry an after_step_token, some don't.
         chat_tasks: list[asyncio.Task] = []
         for j in range(n_chats):
             tok = train_tokens[j % n_trains] if j % 2 == 0 else None
@@ -102,7 +102,7 @@ async def main_async() -> int:
         assert all_tokens == list(range(all_tokens[0], all_tokens[-1] + 1)), \
             f"non-contiguous tokens: {all_tokens}"
 
-        # 2) Every chat with after_commit_token got a cursor >= that token.
+        # 2) Every chat with after_step_token got a cursor >= that token.
         for j, cursor, latency in chat_results:
             if j % 2 == 0:
                 want = train_tokens[j % n_trains]

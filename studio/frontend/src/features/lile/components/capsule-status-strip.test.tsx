@@ -25,7 +25,7 @@ describe("CapsuleStatusStrip", () => {
         ok: true,
         model: "qwen3-0.6b",
         queue_depth: 3,
-        commit_cursor: 77,
+        step_cursor: 77,
         merges: 2,
       },
       url: "http://127.0.0.1:8765",

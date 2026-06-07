@@ -20,7 +20,7 @@ export function CapsuleStatusStrip() {
       <Badge variant="default">online</Badge>
       <span className="font-mono">{h.model}</span>
       <span>queue {h.queue_depth}</span>
-      <span>commit {h.commit_cursor}</span>
+      <span>commit {h.step_cursor}</span>
       <span>merges {h.merges}</span>
       {status.externally_managed && <Badge variant="outline">external</Badge>}
     </div>

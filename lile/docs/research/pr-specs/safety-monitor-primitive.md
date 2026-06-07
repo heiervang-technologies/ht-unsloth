@@ -6,7 +6,7 @@
 **Priority:** P1 — cheap, high-value, composes with SSE + any SFT-family objective
 **Task:** #20
 **Depends on:** nothing
-**Composes-with:** /v1/commits/stream (#18), kl_anchor target-position scope (#15)
+**Composes-with:** /v1/steps/stream (#18), kl_anchor target-position scope (#15)
 
 ---
 
@@ -122,7 +122,7 @@ Treat `M_p(η)` as a **lower-bound heuristic on displacement** under AdamW, not 
 
 When `alarm_count >= alarm_threshold`, the engine:
 - Logs a `safety_monitor.alarm` record (stderr, log file, `/v1/state/stats`).
-- Emits a `safety_alarm` SSE event on `/v1/commits/stream` (when #18 lands — threaded along the commit event for that step).
+- Emits a `safety_alarm` SSE event on `/v1/steps/stream` (when #18 lands — threaded along the commit event for that step).
 - Does **not** block the step. The primitive is observational.
 
 A future track can layer a `safety_gate` primitive that *does* block on watchlist hits; that's a different primitive and not scope for this PR.
@@ -171,7 +171,7 @@ For a batch of B samples and vocabulary V=32000, that's ~32000*B FP32 ops + B * 
 
 Single PR: new `lile/objectives/safety.py` + registry entry + `test_safety_monitor.py` + one smoke_objectives step. No route changes. No schema migration.
 
-Once /v1/commits/stream (#18) lands, a small follow-up wires the alarm into the SSE event payload as `safety_alarm`: takes ~10 LOC in the Controller commit hook.
+Once /v1/steps/stream (#18) lands, a small follow-up wires the alarm into the SSE event payload as `safety_alarm`: takes ~10 LOC in the Controller commit hook.
 
 ## Downstream uses
 

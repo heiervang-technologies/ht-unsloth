@@ -40,7 +40,7 @@ describe("lile-capsule-store", () => {
     const s = useLileCapsuleStore.getState();
     s.setStatus({ running: true, externally_managed: false,
                   health: { ok: true, model: "m", queue_depth: 0,
-                            commit_cursor: 42, merges: 0 },
+                            step_cursor: 42, merges: 0 },
                   url: "http://x" });
     expect(useLileCapsuleStore.getState().lastCommitToken).toBe(42);
   });

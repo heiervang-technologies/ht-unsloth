@@ -704,7 +704,7 @@ export function createOpenAIStreamAdapter(): ChatModelAdapter {
         const {
           lileMode,
           lileBlockOnLastCommit,
-          lileLastCommit,
+          lileLastStep,
         } = runtime;
         const stream = streamChatCompletions(
           {
@@ -740,8 +740,8 @@ export function createOpenAIStreamAdapter(): ChatModelAdapter {
               : {}),
             // Lile gating: include last commit token when the user has
             // asked us to block until the capsule has integrated it.
-            ...(lileMode && lileBlockOnLastCommit && lileLastCommit
-              ? { after_commit_token: lileLastCommit }
+            ...(lileMode && lileBlockOnLastCommit && lileLastStep
+              ? { after_step_token: lileLastStep }
               : {}),
           },
           abortSignal,
@@ -901,11 +901,11 @@ export function createOpenAIStreamAdapter(): ChatModelAdapter {
         );
 
         // Lile: propagate new commit cursor into the runtime store so
-        // subsequent sends can gate on `after_commit_token`.
-        if (lileMeta && typeof lileMeta.commit_cursor === "number") {
+        // subsequent sends can gate on `after_step_token`.
+        if (lileMeta && typeof lileMeta.step_cursor === "number") {
           useChatRuntimeStore
             .getState()
-            .setLileLastCommit(lileMeta.commit_cursor);
+            .setLileLastStep(lileMeta.step_cursor);
         }
 
         yield {
@@ -931,7 +931,7 @@ export function createOpenAIStreamAdapter(): ChatModelAdapter {
                 ? {
                     lile: {
                       response_id: lileMeta.response_id,
-                      commit_cursor: lileMeta.commit_cursor,
+                      step_cursor: lileMeta.step_cursor,
                       latency_s: lileMeta.latency_s,
                     },
                   }

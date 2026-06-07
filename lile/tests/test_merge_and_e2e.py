@@ -6,7 +6,7 @@ Tests:
   2. Merge correctness — LoRA-on output ≈ base + residual output after merge
      (within bf16 numerical tolerance on greedy next-token logits).
   3. Commit-cursor end-to-end — submit train, then submit infer with
-     after_commit_token; verify logprob on the training prompt moved.
+     after_step_token; verify logprob on the training prompt moved.
 
 Run with: python -m lile.tests.test_merge_and_e2e
 """
@@ -100,8 +100,8 @@ def test_end_to_end_training_moves_logprob():
     print("[e2e] training visibly moved policy OK")
 
 
-async def test_controller_commit_cursor_e2e():
-    """Submit a train request, then a generate with after_commit_token, via
+async def test_controller_step_cursor_e2e():
+    """Submit a train request, then a generate with after_step_token, via
     the Controller. The generate must block until training commits, and the
     response must reflect the trained content.
     """
@@ -129,15 +129,15 @@ async def test_controller_commit_cursor_e2e():
             ],
         }
         submit = await ctl.submit_train(spec)
-        token = submit["commit_token"]
-        print(f"[ctrl] submitted train, commit_token={token}, chunks={submit['n_chunks']}")
+        token = submit["step_token"]
+        print(f"[ctrl] submitted train, step_token={token}, chunks={submit['n_chunks']}")
 
-        # Generate with after_commit_token — this must block until commit.
+        # Generate with after_step_token — this must block until commit.
         t_before = time.time()
         result = await ctl.generate(
             [{"role": "user", "content": "The color of the sky is"}],
             max_new_tokens=8, temperature=0.1,
-            after_commit_token=token,
+            after_step_token=token,
         )
         gen_wall = time.time() - t_before
         print(f"[ctrl] generate after commit: {gen_wall:.2f}s; cursor={ctl.queue.committed}")
@@ -151,7 +151,7 @@ async def test_controller_commit_cursor_e2e():
 def main() -> int:
     test_merge_determinism()
     test_end_to_end_training_moves_logprob()
-    asyncio.run(test_controller_commit_cursor_e2e())
+    asyncio.run(test_controller_step_cursor_e2e())
     print("[test_merge_and_e2e] ALL OK")
     return 0
 

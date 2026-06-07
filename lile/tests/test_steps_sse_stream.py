@@ -1,4 +1,4 @@
-"""/v1/commits/stream — SSE primitive tests.
+"""/v1/steps/stream — SSE primitive tests.
 
 Covers the 5 test obligations from
 ``lile/docs/research/pr-specs/commits-sse-stream.md``:
@@ -15,9 +15,9 @@ Covers the 5 test obligations from
    reached ``N`` (verified at the broadcaster layer since the stream
    handler is a 1:1 passthrough).
 
-torch-free: imports ``lile.commit_stream`` only, then builds a minimal
+torch-free: imports ``lile.step_stream`` only, then builds a minimal
 FastAPI app inline that mounts the same stream-handler logic the real
-``/v1/commits/stream`` route uses in ``lile/server.py``.
+``/v1/steps/stream`` route uses in ``lile/server.py``.
 """
 from __future__ import annotations
 
@@ -31,14 +31,14 @@ from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
 from fastapi.testclient import TestClient
 
-from lile.commit_stream import CommitBroadcaster, _iso_now_ms
+from lile.step_stream import StepBroadcaster, _iso_now_ms
 
 pytestmark = pytest.mark.cpu_only
 
 
 # --- helpers -----------------------------------------------------------------
 
-def _make_app(broadcaster: CommitBroadcaster, *, keepalive_s: float = 15.0) -> FastAPI:
+def _make_app(broadcaster: StepBroadcaster, *, keepalive_s: float = 15.0) -> FastAPI:
     """Mount the same stream-handler logic that ``lile.server`` exposes.
 
     Parameterised by keepalive interval so the keepalive test can drop it
@@ -46,7 +46,7 @@ def _make_app(broadcaster: CommitBroadcaster, *, keepalive_s: float = 15.0) -> F
     """
     app = FastAPI()
 
-    @app.get("/v1/commits/stream")
+    @app.get("/v1/steps/stream")
     async def stream():
         sub = broadcaster.subscribe()
 
@@ -64,6 +64,12 @@ def _make_app(broadcaster: CommitBroadcaster, *, keepalive_s: float = 15.0) -> F
                             f"data: {json.dumps({'reason': 'daemon_stop'})}\n\n"
                         )
                         return
+                    if event.get("_budget_exhausted"):
+                        yield (
+                            "event: budget_exhausted\n"
+                            f"data: {json.dumps(event['_budget_exhausted'])}\n\n"
+                        )
+                        continue
                     yield f"event: commit\ndata: {json.dumps(event)}\n\n"
             finally:
                 broadcaster.unsubscribe(sub)
@@ -74,29 +80,29 @@ def _make_app(broadcaster: CommitBroadcaster, *, keepalive_s: float = 15.0) -> F
 
 
 def _parse_commit_events(raw: str) -> list[dict[str, Any]]:
-    """Pull every ``event: commit`` payload out of an SSE chunk.
-
-    SSE frames here look like:
-        event: commit\n
-        data: {...json...}\n
-        \n
-    We match the event tag, then the subsequent data line on the next line.
-    """
+    """Pull every ``event: commit`` payload out of an SSE chunk."""
     events: list[dict[str, Any]] = []
-    # Match 'event: commit' followed on the next line by 'data: <json>'.
     for match in re.finditer(r"event:\s*commit\s*\n\s*data:\s*(.+)", raw):
         events.append(json.loads(match.group(1)))
     return events
 
 
-def _emit_burst(b: CommitBroadcaster, k: int) -> None:
+def _parse_budget_events(raw: str) -> list[dict[str, Any]]:
+    """Pull every ``event: budget_exhausted`` payload out of an SSE chunk."""
+    events: list[dict[str, Any]] = []
+    for match in re.finditer(r"event:\s*budget_exhausted\s*\n\s*data:\s*(.+)", raw):
+        events.append(json.loads(match.group(1)))
+    return events
+
+
+def _emit_burst(b: StepBroadcaster, k: int) -> None:
     """Drive K commit events through the broadcaster, cursor=1..K.
 
     Called from inside an async context (the loop runs the broadcaster
     synchronously, same as the real queue worker does in ``_handle_task``).
     """
     for cursor in range(1, k + 1):
-        b.broadcast_commit(
+        b.broadcast_kept(
             cursor=cursor,
             objective="sft",
             loss=0.5 - cursor * 0.001,
@@ -110,7 +116,7 @@ def _emit_burst(b: CommitBroadcaster, k: int) -> None:
 def test_ordering_two_clients_see_1_to_k_in_order() -> None:
     """Obligation 1. Burst of K commits ⇒ both clients see cursor 1..K,
     strict order, no duplicates, no gaps."""
-    b = CommitBroadcaster()
+    b = StepBroadcaster()
 
     async def run() -> tuple[list[int], list[int]]:
         sub_a = b.subscribe()
@@ -140,7 +146,7 @@ def test_ordering_two_clients_see_1_to_k_in_order() -> None:
 def test_drop_on_full_slow_client_loses_events_fast_client_does_not() -> None:
     """Obligation 2. A slow consumer's bounded queue fills; drop counter
     surfaces; training-side (== broadcaster) never raises or blocks."""
-    b = CommitBroadcaster()
+    b = StepBroadcaster()
 
     async def run() -> tuple[list[int], int, int]:
         fast = b.subscribe(maxsize=1024)
@@ -173,7 +179,7 @@ def test_keepalive_fires_when_stream_idle() -> None:
     Drives the generator directly (bypasses TestClient) so we can advance
     the asyncio clock without waiting real seconds.
     """
-    b = CommitBroadcaster()
+    b = StepBroadcaster()
 
     async def run() -> list[str]:
         # Subscribe + run the same generator logic with a tiny interval.
@@ -206,7 +212,7 @@ def test_keepalive_fires_when_stream_idle() -> None:
 def test_shutdown_emits_event_and_closes_cleanly() -> None:
     """Obligation 4. After ``broadcast_shutdown`` the stream yields one
     ``event: shutdown`` frame, then the generator returns."""
-    b = CommitBroadcaster()
+    b = StepBroadcaster()
     app = _make_app(b, keepalive_s=60.0)
 
     frames: list[str] = []
@@ -230,7 +236,7 @@ def test_shutdown_emits_event_and_closes_cleanly() -> None:
 
         task = asyncio.create_task(gen())
         # Flush one real event first, then the shutdown sentinel.
-        b.broadcast_commit(
+        b.broadcast_kept(
             cursor=1, objective="sft", loss=0.1, components={}, batch_size=1,
         )
         b.broadcast_shutdown()
@@ -249,10 +255,10 @@ def test_event_cursor_never_exceeds_last_broadcast_call() -> None:
     """Obligation 5. The broadcaster carries the cursor value that was
     passed in; no silent re-numbering. This is the floor the real
     ``Controller._handle_task`` relies on: if the queue's finally block has
-    not yet run, ``broadcast_commit`` must still stamp the token that
+    not yet run, ``broadcast_kept`` must still stamp the token that
     *will* commit — and nothing more.
     """
-    b = CommitBroadcaster()
+    b = StepBroadcaster()
 
     async def run() -> tuple[list[int], int]:
         sub = b.subscribe()
@@ -260,9 +266,9 @@ def test_event_cursor_never_exceeds_last_broadcast_call() -> None:
         highest_broadcast = 0
         for cursor in range(1, 11):
             # In real life this is what `_handle_task` does: call
-            # `broadcast_commit(cursor=task.token, ...)`. The queue's
+            # `broadcast_kept(cursor=task.token, ...)`. The queue's
             # finally then advances `_completed_token` to `task.token`.
-            b.broadcast_commit(
+            b.broadcast_kept(
                 cursor=cursor, objective="sft", loss=0.0,
                 components={}, batch_size=1,
             )
@@ -295,7 +301,7 @@ def test_iso_now_ms_shape() -> None:
 # --- disabled config short-circuits broadcast -------------------------------
 
 def test_disabled_broadcaster_does_not_enqueue() -> None:
-    b = CommitBroadcaster(enabled=False)
+    b = StepBroadcaster(enabled=False)
 
     async def run() -> int:
         sub = b.subscribe()
@@ -303,3 +309,78 @@ def test_disabled_broadcaster_does_not_enqueue() -> None:
         return sub.qsize()
 
     assert asyncio.run(run()) == 0
+
+
+# --- budget exhausted --------------------------------------------------------
+
+def test_budget_exhausted_single_event_on_crossing() -> None:
+    b = StepBroadcaster()
+    async def run():
+        sub = b.subscribe()
+        b.broadcast_budget_exhausted(cursor=1, phi_obs=0.3, k_session=0.27, k_warn=0.135, last_safe_cursor=None)
+        b.broadcast_budget_exhausted(cursor=2, phi_obs=0.4, k_session=0.27, k_warn=0.135, last_safe_cursor=None)
+        b.broadcast_shutdown()
+        out = []
+        while True:
+            ev = await sub.get()
+            if ev.get('_shutdown'): break
+            out.append(ev)
+        return out
+    seen = asyncio.run(run())
+    assert len(seen) == 1
+    assert seen[0]['_budget_exhausted']['cursor'] == 1
+
+def test_budget_exhausted_rearm_after_clear() -> None:
+    b = StepBroadcaster()
+    async def run():
+        sub = b.subscribe()
+        b.broadcast_budget_exhausted(cursor=1, phi_obs=0.3, k_session=0.27, k_warn=0.135, last_safe_cursor=None)
+        b.clear_budget_exhausted()
+        b.broadcast_budget_exhausted(cursor=2, phi_obs=0.4, k_session=0.27, k_warn=0.135, last_safe_cursor=None)
+        b.broadcast_shutdown()
+        out = []
+        while True:
+            ev = await sub.get()
+            if ev.get('_shutdown'): break
+            out.append(ev)
+        return out
+    seen = asyncio.run(run())
+    assert len(seen) == 2
+    assert seen[0]['_budget_exhausted']['cursor'] == 1
+    assert seen[1]['_budget_exhausted']['cursor'] == 2
+
+def test_budget_exhausted_payload_shape() -> None:
+    b = StepBroadcaster()
+    async def run():
+        sub = b.subscribe()
+        b.broadcast_budget_exhausted(cursor=1, phi_obs=0.3, k_session=0.27, k_warn=0.135, last_safe_cursor=0)
+        b.broadcast_shutdown()
+        ev = await sub.get()
+        return ev['_budget_exhausted']
+    payload = asyncio.run(run())
+    assert payload['cursor'] == 1
+    assert 'ts' in payload
+    assert payload['phi_obs'] == 0.3
+    assert payload['k_session'] == 0.27
+    assert payload['k_warn'] == 0.135
+    assert payload['last_safe_cursor'] == 0
+    assert payload['reason'] == 'tier_5_refuse'
+
+def test_budget_exhausted_drop_on_full() -> None:
+    b = StepBroadcaster()
+    fast = b.subscribe(maxsize=10)
+    slow = b.subscribe(maxsize=1)
+    b.broadcast_kept(cursor=1, objective='sft', loss=0.5, components={}, batch_size=1)
+    b.broadcast_budget_exhausted(cursor=2, phi_obs=0.3, k_session=0.27, k_warn=0.135, last_safe_cursor=None)
+    assert b.drops == 1
+
+def test_budget_exhausted_shutdown_beats() -> None:
+    b = StepBroadcaster()
+    app = _make_app(b)
+    with TestClient(app) as client:
+        b.broadcast_budget_exhausted(cursor=1, phi_obs=0.3, k_session=0.27, k_warn=0.135, last_safe_cursor=None)
+        b.broadcast_shutdown()
+        res = client.get('/v1/steps/stream')
+        lines = res.text.strip().split('\n\n')
+        assert 'event: shutdown' in lines[-1]
+        assert 'event: budget_exhausted' in lines[-2]

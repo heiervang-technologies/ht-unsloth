@@ -47,7 +47,7 @@ uv run python -m lile.teach.eval \
 
 - `--limit 250` for research iteration; full eval when promoting a PR.
 - `--endpoint` points at whatever is serving the OpenAI API. No lile-specific deps.
-- Output: a single JSON with `{run_id, timestamp, endpoint, model, commit_cursor_before, commit_cursor_after, tasks: {...}, raw: {...}}`. `commit_cursor_*` pulled from `/health` so the result is tied to a specific training state.
+- Output: a single JSON with `{run_id, timestamp, endpoint, model, step_cursor_before, step_cursor_after, tasks: {...}, raw: {...}}`. `step_cursor_*` pulled from `/health` so the result is tied to a specific training state.
 
 ## Dependencies
 
@@ -114,7 +114,7 @@ Beyond the research doc: once the harness exists as a CLI, wrap it for Studio. T
 | Physics | TBD — curated subset of MMLU-physics / OpenBookQA-physics (100) | acc |
 | Factuality | TBD — TriviaQA (100) | exact_match |
 
-Chart type: one line per dimension, x-axis = commit_cursor (or wall time), y-axis = score. A horizontal dashed line per dimension at the cold-model baseline so drift is visible. Hover on a point → the snapshot id + feedback events between that point and the previous run.
+Chart type: one line per dimension, x-axis = step_cursor (or wall time), y-axis = score. A horizontal dashed line per dimension at the cold-model baseline so drift is visible. Hover on a point → the snapshot id + feedback events between that point and the previous run.
 
 **Scheduling.** Two modes:
 

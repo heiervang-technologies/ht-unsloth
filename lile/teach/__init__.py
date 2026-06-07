@@ -208,9 +208,9 @@ def teach_entity(
     for step in range(1, max_iters + 1):
         # ---------- a. train one step
         tr = client.train("weighted_sft", samples)
-        commit_token = tr.get("commit_token")
-        if commit_token is not None:
-            client.wait_for(int(commit_token), timeout=120.0)
+        step_token = tr.get("step_token")
+        if step_token is not None:
+            client.wait_for(int(step_token), timeout=120.0)
         # ---------- b. merge
         client.merge()
 

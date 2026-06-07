@@ -98,7 +98,7 @@ def test_graceful_drain_drops_unpulled_tasks_on_deadline():
 
 
 def test_dropped_task_waiter_resolves_instead_of_hanging():
-    """A client holding a commit_token gets a deterministic resolution, not
+    """A client holding a step_token gets a deterministic resolution, not
     a timeout 60s later. ``wait_for`` returns a task carrying
     ``ShutdownDroppedError``, not an ``asyncio.TimeoutError``."""
     async def main():

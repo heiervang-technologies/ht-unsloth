@@ -2,7 +2,7 @@
 
 The invariant from LIVELEARN §3.4:
 
-  Any inference request that arrives *after* the server returned a commit_token
+  Any inference request that arrives *after* the server returned a step_token
   for a training request must see that training reflected in the model.
 
 Implementation: monotonic integer cursor, single writer (the training worker),
@@ -36,7 +36,7 @@ class QueueTask:
     result: Any = None
 
     # Opaque batch_id lets callers group tasks for a single /v1/train call and
-    # get ONE commit_token that covers all sub-batches.
+    # get ONE step_token that covers all sub-batches.
     batch_id: str = ""
 
 
