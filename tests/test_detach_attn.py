@@ -71,6 +71,36 @@ def test_cpu_detach_attention_correctness():
     # The self-attention should get NO gradients in detached mode
     assert q_proj_grad_detached is None
 
+def test_get_peft_model_sets_detach_attention():
+    from unsloth import FastLanguageModel
+    max_seq_length = 2048
+    dtype = None
+    load_in_4bit = False
+
+    model, tokenizer = FastLanguageModel.from_pretrained(
+        model_name="hf-internal-testing/tiny-random-LlamaForCausalLM",
+        max_seq_length=max_seq_length,
+        dtype=dtype,
+        load_in_4bit=load_in_4bit,
+    )
+
+    model = FastLanguageModel.get_peft_model(
+        model,
+        r=16,
+        target_modules=["q_proj", "v_proj"],
+        lora_alpha=16,
+        lora_dropout=0,
+        bias="none",
+        use_gradient_checkpointing="unsloth",
+        random_state=3407,
+        use_rslora=False,
+        loftq_config=None,
+        detach_attention=True,
+    )
+
+    assert getattr(model.model.model.layers[0].self_attn, "_unsloth_detach_attn", False) == True
+
 if __name__ == "__main__":
     test_cpu_detach_attention_correctness()
+    test_get_peft_model_sets_detach_attention()
     print("SUCCESS")

@@ -3405,7 +3405,7 @@ class FastLlamaModel:
                 _model = _model.model
             if hasattr(_model, "layers"):
                 for layer in _model.layers:
-                    layer.unsloth_detach_attention = True
+                    layer.self_attn._unsloth_detach_attn = True
                     
         return model
 
