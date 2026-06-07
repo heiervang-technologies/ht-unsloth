@@ -111,13 +111,13 @@ class ServeConfig:
     per_objective_optim: bool = False
     per_objective_lr: dict[str, float] = field(default_factory=dict)
 
-    # --- /v1/commits/stream SSE -------------------------------------------
+    # --- /v1/steps/stream SSE -------------------------------------------
     # Per-commit event stream, one event per successful train-task cursor
     # advance. See ``lile/docs/research/pr-specs/commits-sse-stream.md``.
     # When false the subscriber set short-circuits and the training path
     # pays zero cost. Clients filter on the consumer side — no server-side
     # filter expressions (would drift toward per-workflow state).
-    commits_sse_enabled: bool = True
+    steps_sse_enabled: bool = True
 
     # --- safety_monitor daemon-global watchlist ---------------------------
     # Three-tier union at step time: this daemon-global floor

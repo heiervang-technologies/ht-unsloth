@@ -1,7 +1,7 @@
 """HTTP smoke test for the lile FastAPI server.
 
 Spawns the server in-process on an ephemeral port, POSTs /v1/train and
-/v1/chat/completions with after_commit_token, and verifies the commit-cursor
+/v1/chat/completions with after_step_token, and verifies the commit-cursor
 invariant holds over HTTP (not just over the in-process Controller).
 
 Run with: python -m lile.tests.smoke_server
@@ -79,20 +79,20 @@ def main() -> int:
             ],
         })
         assert train_r.status_code == 200, train_r.text
-        token = train_r.json()["commit_token"]
-        print(f"[smoke_server] train submitted, commit_token={token}")
+        token = train_r.json()["step_token"]
+        print(f"[smoke_server] train submitted, step_token={token}")
 
-        # Chat with after_commit_token — must block until training commits.
+        # Chat with after_step_token — must block until training commits.
         chat_r = c.post("/v1/chat/completions", json={
             "messages": [{"role": "user", "content": "The zebra's favorite color is"}],
             "max_tokens": 8,
             "temperature": 0.1,
-            "after_commit_token": token,
+            "after_step_token": token,
         })
         assert chat_r.status_code == 200, chat_r.text
         body = chat_r.json()
         reply = body["choices"][0]["message"]["content"]
-        cursor = body["lile"]["commit_cursor"]
+        cursor = body["lile"]["step_cursor"]
         print(f"[smoke_server] chat reply={reply!r} (cursor={cursor})")
         assert cursor >= token, f"chat ran before commit: cursor={cursor}, token={token}"
 

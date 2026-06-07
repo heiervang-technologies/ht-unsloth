@@ -12,7 +12,7 @@ Pipeline:
      for the commit token so we observe loss per step.
   6. After all train samples commit, capture a **post-training** student
      generation for each eval prompt.
-  7. Emit `results.json` summarizing commit_cursor delta, train losses, and
+  7. Emit `results.json` summarizing step_cursor delta, train losses, and
      pre/post student answers for eval prompts.
 
 Usage:
@@ -119,7 +119,7 @@ def train_one(client: httpx.Client, daemon: str, prompt: str, response: str,
     r = client.post(f"{daemon}/v1/train", json=payload, timeout=timeout)
     r.raise_for_status()
     submit = r.json()
-    token = submit.get("commit_token", submit.get("token"))
+    token = submit.get("step_token", submit.get("token"))
     if token is None:
         raise RuntimeError(f"no commit token in /v1/train response: {submit}")
 

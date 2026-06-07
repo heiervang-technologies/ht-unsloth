@@ -16,7 +16,7 @@ function isTrainStep(e: TrajectoryEvent): e is TrainStepEvent {
 }
 
 function stepOf(e: TrainStepEvent, fallbackIndex: number): number {
-  return typeof e.commit_token === "number" ? e.commit_token : fallbackIndex;
+  return typeof e.step_token === "number" ? e.step_token : fallbackIndex;
 }
 
 function numericComponent(

@@ -314,7 +314,7 @@ export interface StreamChatCompletionsOptions {
    * When true, route the request through the Lile capsule proxy at
    * `/api/lile/v1/chat/completions` instead of the default llama-server
    * endpoint. The caller is responsible for populating any lile-specific
-   * body fields (e.g. `after_commit_token`).
+   * body fields (e.g. `after_step_token`).
    */
   lileMode?: boolean;
 }

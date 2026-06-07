@@ -5,7 +5,7 @@ Covers `lile/metrics.py`:
 - Counters (requests_total, train_steps_total, feedback_events_total,
   queue_dropped_total, replay_enqueued_total).
 - Histograms (step_latency_ms, generate_latency_ms, objective_loss).
-- Lazy gauges (queue_depth, commit_cursor, merges_applied, trajectory_bytes,
+- Lazy gauges (queue_depth, step_cursor, merges_applied, trajectory_bytes,
   snapshots_bytes, snapshots_count, shutting_down) sampled from a bound
   Controller-shaped object at scrape time.
 - `render_prometheus()` returns valid OpenMetrics/Prometheus text exposition
@@ -171,7 +171,7 @@ def test_gauge_collector_samples_live_state(tmp_path):
     text = metrics.render_prometheus().decode("utf-8")
 
     assert _sample_value(text, "lile_queue_depth") == 3.0
-    assert _sample_value(text, "lile_commit_cursor") == 42.0
+    assert _sample_value(text, "lile_step_cursor") == 42.0
     assert _sample_value(text, "lile_merges_applied") == 7.0
     assert _sample_value(text, "lile_trajectory_bytes") == 1024.0
     assert _sample_value(text, "lile_snapshots_count") == 2.0

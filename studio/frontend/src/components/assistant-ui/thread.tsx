@@ -740,7 +740,7 @@ function isLileResponseMeta(value: unknown): value is LileResponseMeta {
   const v = value as Record<string, unknown>;
   return (
     typeof v.response_id === "string" &&
-    typeof v.commit_cursor === "number" &&
+    typeof v.step_cursor === "number" &&
     (v.latency_s === undefined || typeof v.latency_s === "number")
   );
 }
@@ -764,7 +764,7 @@ const LileActionsSlot: FC = () => {
   return (
     <LileMessageActions
       responseId={lile.response_id}
-      commitCursor={lile.commit_cursor}
+      stepCursor={lile.step_cursor}
       latencyS={lile.latency_s}
       assistantText={assistantText}
     />

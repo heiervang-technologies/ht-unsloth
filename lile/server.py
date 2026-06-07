@@ -47,9 +47,9 @@ class ChatRequest(BaseModel):
     temperature: float = 0.7
     top_p: float = 0.95
     stream: bool = False
-    after_commit_token: int | None = Field(
+    after_step_token: int | None = Field(
         default=None,
-        description="If provided, block until this training commit_token is reflected.",
+        description="If provided, block until this training step_token is reflected.",
     )
     # Reasoning controls.  ``enable_thinking`` is forwarded to
     # ``apply_chat_template`` when the tokenizer supports the kwarg
@@ -144,7 +144,7 @@ def create_app(cfg: ServeConfig | None = None) -> FastAPI:
             "ok": True,
             "model": cfg.model,
             "queue_depth": c.queue._q.qsize(),
-            "commit_cursor": c.queue.committed,
+            "step_cursor": c.queue.committed,
             "merges": c.state.merges_applied if c.state else 0,
             "commit_sse_subscribers": c.commits.subscriber_count,
             "commit_sse_drops": c.commits.drops,
@@ -166,7 +166,7 @@ def create_app(cfg: ServeConfig | None = None) -> FastAPI:
                         max_new_tokens=req.max_tokens or 256,
                         temperature=req.temperature,
                         top_p=req.top_p,
-                        after_commit_token=req.after_commit_token,
+                        after_step_token=req.after_step_token,
                         enable_thinking=req.enable_thinking,
                         parse_reasoning=req.parse_reasoning,
                     ):
@@ -196,7 +196,7 @@ def create_app(cfg: ServeConfig | None = None) -> FastAPI:
                                 "model": cfg.model,
                                 "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
                                 "lile": {"latency_s": time.time() - t0,
-                                         "commit_cursor": ev["commit_cursor"],
+                                         "step_cursor": ev["step_cursor"],
                                          "response_id": ev["response_id"]},
                             }
                             yield f"data: {json.dumps(payload)}\n\n"
@@ -249,7 +249,7 @@ def create_app(cfg: ServeConfig | None = None) -> FastAPI:
             max_new_tokens=req.max_tokens or 256,
             temperature=req.temperature,
             top_p=req.top_p,
-            after_commit_token=req.after_commit_token,
+            after_step_token=req.after_step_token,
             enable_thinking=req.enable_thinking,
             parse_reasoning=req.parse_reasoning,
         )
@@ -269,7 +269,7 @@ def create_app(cfg: ServeConfig | None = None) -> FastAPI:
                 "message": message,
             }],
             "lile": {"latency_s": latency,
-                     "commit_cursor": c.queue.committed,
+                     "step_cursor": c.queue.committed,
                      "response_id": result["response_id"]},
         }
 
@@ -312,9 +312,20 @@ def create_app(cfg: ServeConfig | None = None) -> FastAPI:
             return {"events": traj.tail(n)}
         return traj.tail_structured(n=n, since_offset=since_offset)
 
-    # --------------------------------------------------------------- commits SSE
+    # --------------------------------------------------------------- commits SSE alias
     @app.get("/v1/commits/stream")
-    async def commits_stream():
+    async def commits_stream_alias():
+        """Alias shim: returns 410 Gone with Location: /v1/steps/stream."""
+        from starlette.responses import PlainTextResponse
+        return PlainTextResponse(
+            "Gone. Use /v1/steps/stream instead.",
+            status_code=410,
+            headers={"Location": "/v1/steps/stream"}
+        )
+
+    # --------------------------------------------------------------- steps SSE
+    @app.get("/v1/steps/stream")
+    async def steps_stream():
         """Per-commit event stream; see docs/research/pr-specs/commits-sse-stream.md.
 
         One ``event: commit`` per successful train-task cursor advance.
@@ -322,7 +333,7 @@ def create_app(cfg: ServeConfig | None = None) -> FastAPI:
         ``event: shutdown`` on daemon stop, then stream closes.
         """
         c: Controller = app.state.controller
-        if not cfg.commits_sse_enabled:
+        if not cfg.steps_sse_enabled:
             # Return an empty stream that closes immediately rather than 404 —
             # callers can tell the feature is off but the route itself is
             # stable.
@@ -349,6 +360,12 @@ def create_app(cfg: ServeConfig | None = None) -> FastAPI:
                             f"data: {json.dumps({'reason': 'daemon_stop'})}\n\n"
                         )
                         return
+                    if event.get("_budget_exhausted"):
+                        yield (
+                            "event: budget_exhausted\n"
+                            f"data: {json.dumps(event['_budget_exhausted'])}\n\n"
+                        )
+                        continue
                     yield f"event: commit\ndata: {json.dumps(event)}\n\n"
             finally:
                 c.commits.unsubscribe(sub)

@@ -51,7 +51,7 @@
 <body>
 <main>
   <h1>lile — daemon dashboard</h1>
-  <div class=small>Live view over <code>/health</code>, <code>/v1/state/snapshots</code>, <code>/v1/state/trajectory/tail</code>, <code>/v1/commits/stream</code>.</div>
+  <div class=small>Live view over <code>/health</code>, <code>/v1/state/snapshots</code>, <code>/v1/state/trajectory/tail</code>, <code>/v1/steps/stream</code>.</div>
 
   <div class=controls>
     <span class=dot id=dot></span>
@@ -70,7 +70,7 @@
 
   <h2>snapshots</h2>
   <pre id=snapshots>—</pre>
-  <div class=small>A snapshot bakes N commits into the LoRA state. After <code>/v1/state/snapshot/load</code>, <code>commit_cursor</code> counts only <b>new</b> activity — the prior commits live in the snapshot artifact, not the running session.</div>
+  <div class=small>A snapshot bakes N commits into the LoRA state. After <code>/v1/state/snapshot/load</code>, <code>step_cursor</code> counts only <b>new</b> activity — the prior commits live in the snapshot artifact, not the running session.</div>
 
   <h2>trajectory (last 20 events)</h2>
   <div id=trajectory><div class=small>—</div></div>
@@ -101,7 +101,7 @@
     const b = baseUrl();
     try {
       const h = await fetch(b + '/health').then(r => r.json());
-      $('cursor').textContent = h.commit_cursor ?? '—';
+      $('cursor').textContent = h.step_cursor ?? '—';
       $('queue').textContent  = h.queue_depth  ?? '—';
       $('merges').textContent = h.merges       ?? '—';
       $('model').textContent  = h.model        ?? '—';
@@ -142,7 +142,7 @@
     if (es) { try { es.close(); } catch {} }
     const b = baseUrl();
     try {
-      es = new EventSource(b + '/v1/commits/stream');
+      es = new EventSource(b + '/v1/steps/stream');
     } catch (e) {
       setStatus(false, 'stream failed: ' + e.message);
       return;

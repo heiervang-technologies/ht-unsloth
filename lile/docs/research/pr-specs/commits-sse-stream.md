@@ -1,4 +1,4 @@
-# /v1/commits/stream — SSE Primitive Spec
+# /v1/steps/stream — SSE Primitive Spec
 
 **Author:** claude-opus (live-learn-architect)
 **Date:** 2026-04-18
@@ -24,7 +24,7 @@ Three concrete use cases converge on the same missing signal: a **per-commit eve
 ### Route
 
 ```
-GET /v1/commits/stream  →  Content-Type: text/event-stream
+GET /v1/steps/stream  →  Content-Type: text/event-stream
 ```
 
 No parameters. No replay buffer. Clients connect, receive all subsequent commit events in order, and handle their own backfill via `/v1/state/stats` or `/v1/state/snapshot` if they need history.
@@ -100,7 +100,7 @@ for q in list(self._commit_subscribers):
 # routes/stream.py (new file)
 from fastapi.responses import StreamingResponse
 
-@app.get("/v1/commits/stream")
+@app.get("/v1/steps/stream")
 async def commits_stream(request: Request):
     queue: asyncio.Queue[dict] = asyncio.Queue(maxsize=256)
     controller._commit_subscribers.add(queue)
@@ -150,7 +150,7 @@ Controller stop path enqueues `{"_shutdown": True}` on every subscriber queue be
 ## Rollout
 
 - Ship as a new route in a `lile/routes/stream.py`. No changes to existing routes, zero back-compat risk.
-- Flag: `cfg.commits_sse_enabled` (default `True`). A disabled config short-circuits the subscriber set so the training path pays zero cost.
+- Flag: `cfg.steps_sse_enabled` (default `True`). A disabled config short-circuits the subscriber set so the training path pays zero cost.
 - Docs: add to `openapi.md` and link from `PLAN.md` §3.4 observability.
 
 ## Tracking

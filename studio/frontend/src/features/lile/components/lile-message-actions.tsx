@@ -13,14 +13,14 @@ type ButtonStatus = "idle" | "pending" | "ok" | "err";
 
 export interface LileMessageActionsProps {
   responseId: string;
-  commitCursor: number;
+  stepCursor: number;
   latencyS?: number;
   assistantText?: string;
 }
 
 export function LileMessageActions({
   responseId,
-  commitCursor,
+  stepCursor,
   latencyS,
   assistantText,
 }: LileMessageActionsProps): ReactElement {
@@ -167,7 +167,7 @@ export function LileMessageActions({
         </Button>
 
         <span className="text-xs text-muted-foreground ml-1 select-none">
-          commit={commitCursor}
+          commit={stepCursor}
           {latencyS != null && ` · ${latencyS.toFixed(2)}s`}
         </span>
       </div>

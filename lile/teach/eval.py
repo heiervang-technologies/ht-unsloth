@@ -4,7 +4,7 @@ CLI entry point for the harness specified in
 `lile/docs/research/eval-harness.md`. Hits the OpenAI-compatible endpoint
 of a running lile daemon (or any server that speaks /v1/chat/completions)
 and runs four verifiable tasks whose results are tied to the daemon's
-`commit_cursor` for A/B reproducibility.
+`step_cursor` for A/B reproducibility.
 
     uv run python -m lile.teach.eval \\
         --endpoint http://127.0.0.1:8768/v1 \\
@@ -64,21 +64,21 @@ class RunResult:
     timestamp: str
     endpoint: str
     model: str
-    commit_cursor_before: int | None
-    commit_cursor_after: int | None
+    step_cursor_before: int | None
+    step_cursor_after: int | None
     tasks: list[TaskResult] = field(default_factory=list)
 
 
 # ----------------------------------------------------------------- daemon probe
-def _get_commit_cursor(endpoint: str) -> int | None:
-    """GET {endpoint_root}/health → commit_cursor, or None if endpoint does not expose it."""
+def _get_step_cursor(endpoint: str) -> int | None:
+    """GET {endpoint_root}/health → step_cursor, or None if endpoint does not expose it."""
     root = endpoint.rstrip("/")
     if root.endswith("/v1"):
         root = root[:-3]
     try:
         with urllib.request.urlopen(root + "/health", timeout=5.0) as r:
             body = json.loads(r.read().decode("utf-8"))
-        return int(body.get("commit_cursor")) if "commit_cursor" in body else None
+        return int(body.get("step_cursor")) if "step_cursor" in body else None
     except (urllib.error.URLError, ValueError, TimeoutError):
         return None
 
@@ -158,7 +158,7 @@ def run(endpoint: str, model: str, tasks: list[str], code_tasks: list[str],
         limit: int, batch_size: int) -> RunResult:
     run_id = f"eval-{uuid.uuid4().hex[:8]}"
     ts = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    cursor_before = _get_commit_cursor(endpoint)
+    cursor_before = _get_step_cursor(endpoint)
 
     results: list[TaskResult] = []
     for task in tasks:
@@ -173,10 +173,10 @@ def run(endpoint: str, model: str, tasks: list[str], code_tasks: list[str],
         print(f"[eval] {task} (n={limit})", file=sys.stderr)
         results.append(_run_evalplus(task, endpoint, model, limit))
 
-    cursor_after = _get_commit_cursor(endpoint)
+    cursor_after = _get_step_cursor(endpoint)
     return RunResult(
         run_id=run_id, timestamp=ts, endpoint=endpoint, model=model,
-        commit_cursor_before=cursor_before, commit_cursor_after=cursor_after,
+        step_cursor_before=cursor_before, step_cursor_after=cursor_after,
         tasks=results,
     )
 
@@ -192,8 +192,8 @@ def _emit(result: RunResult, out: Path | None) -> None:
         "timestamp": result.timestamp,
         "endpoint": result.endpoint,
         "model": result.model,
-        "commit_cursor_before": result.commit_cursor_before,
-        "commit_cursor_after": result.commit_cursor_after,
+        "step_cursor_before": result.step_cursor_before,
+        "step_cursor_after": result.step_cursor_after,
         "tasks": [{
             "task": t.task, "metric": t.metric, "value": _jsonable_value(t.value),
             "n": t.n, "wall_clock_s": round(t.wall_clock_s, 2),

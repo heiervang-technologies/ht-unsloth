@@ -178,7 +178,7 @@ export interface OpenAIChatCompletionsRequest {
    * commit cursor is known, the adapter threads it through so the
    * capsule replies only after it has integrated that commit.
    */
-  after_commit_token?: number | null;
+  after_step_token?: number | null;
 }
 
 /**
@@ -191,7 +191,7 @@ export interface OpenAIChatCompletionsRequest {
  */
 export interface LileResponseMeta {
   response_id: string;
-  commit_cursor: number;
+  step_cursor: number;
   latency_s?: number;
 }
 

@@ -1,6 +1,6 @@
 """Invariant test: compute queue commit cursor ordering.
 
-The contract from LIVELEARN §3.4: any task whose commit_token was *returned*
+The contract from LIVELEARN §3.4: any task whose step_token was *returned*
 to a caller is guaranteed to have completed before any later submitted task
 is reflected to a reader. We verify this via a fuzzy concurrent submit/wait
 pattern — including a test that would fail under reordering.
@@ -53,7 +53,7 @@ async def _scenario_monotonic_cursor() -> None:
 async def _scenario_wait_blocks_correctly() -> None:
     """wait_for(T) must block until the cursor passes T — even if later tasks
     haven't been submitted yet. This is the load-bearing property: inference
-    after seeing commit_token T must see T reflected.
+    after seeing step_token T must see T reflected.
     """
     q = ComputeQueue(max_depth=10)
     results_order: list[str] = []

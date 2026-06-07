@@ -36,9 +36,9 @@ Rationale: the brief says "depth in one dimension beats breadth in all." A produ
 
 **Residual application mechanism.** PEFT's standard LoraLayer.forward and base_layer.forward are both bypassed by Unsloth's fast path on Qwen3 — `register_forward_hook` on either silently never fires. The only place to intercept is the single funnel `unsloth.kernels.utils.matmul_lora` that every QKV/MLP projection calls. `state.py` installs a module-level monkey-patch at import: the patched kernel checks for `W._residual_delta` (a bf16 GPU tensor attached to the Parameter) and adds `F.linear(X, delta)` to the output. Binding-by-attribute is preferred over a module-level `id(W) -> delta` dict because it survives Unsloth's mode flips (`for_training` / `for_inference` both keep `id(W)` stable) and has no cleanup burden. A `base_layer.register_forward_hook` backstop is also registered so PEFT's standard path (used under `disable_adapter()` for the KL anchor) applies the same residual. `test_residual_live_path.py` verifies both paths end in a forward that stays within 0.05 nats of the trained-adapter forward after merge.
 
-## Commit cursor
+## Step cursor
 
-**Monotonic integer, single writer, checked by inference dispatch.** Every `/v1/train` request is chunked into queue tasks; the final task of the batch returns the commit_token to the caller. Inference requests take a snapshot of the cursor on arrival; if the current request's cursor is behind their snapshot, they block on the corresponding training task's completion event. This is the "POST a batch, next inference sees it" promise as a straightforward semaphore, not a race-prone best-effort.
+**Monotonic integer, single writer, checked by inference dispatch.** Every `/v1/train` request is chunked into queue tasks; the final task of the batch returns the step_token to the caller. Inference requests take a snapshot of the cursor on arrival; if the current request's cursor is behind their snapshot, they block on the corresponding training task's completion event. This is the "POST a batch, next inference sees it" promise as a straightforward semaphore, not a race-prone best-effort.
 
 Test obligation: a concurrent train+infer invariant test that would fail under reordering.
 
@@ -87,18 +87,18 @@ All tail tokens with prior mass strictly below `M_p(η)` grow under one SFT-fami
 
 **Concrete consequence for unlike.** With a positive teacher (`good_token_id` set), the positive side of the objective is exactly one SFT step at target=good. If `p_bad < M_p(η)` computed at target=good, the positive teacher **pushes `p_bad` UP** — opposing unlike's push-down. At small η the positive-teacher side can outweigh the push-down and the net effect is increased `p_bad`. This is why a naive `lr=1e-5` default is a known-unsafe regime for unlike — not a caution, a named failure mode.
 
-**Instrumentation.** `safety_monitor` (task #20) computes `M_p(η)` and the grower-set intersection with a watchlist per step. Pairs with `/v1/commits/stream` (#18) so alarms are a live signal, not a post-hoc log grep. Observational only; a future `safety_gate` primitive can add blocking if operational experience warrants.
+**Instrumentation.** `safety_monitor` (task #20) computes `M_p(η)` and the grower-set intersection with a watchlist per step. Pairs with `/v1/steps/stream` (#18) so alarms are a live signal, not a post-hoc log grep. Observational only; a future `safety_gate` primitive can add blocking if operational experience warrants.
 
 **Documentation pins.** This section is the first of three; the others are the aggregate-safe vs pointwise-safe columns in GLOSSARY.md and the docstring warning in `lile/objectives/unlike.py`. Treat them as a trio — changes to one should be reflected in the other two.
 
 ## Testable invariants
 
-1. **Commit cursor ordering**: train(batch) → commit_token; subsequent infer sees the loss step reflected in log-probs on the training prompt.
+1. **Step cursor ordering**: train(batch) → step_token; subsequent infer sees the loss step reflected in log-probs on the training prompt.
 2. **Merge determinism**: merge(active_lora) then merge(zero_lora) leaves weights byte-equal to the first-merge result (idempotent null merge).
 3. **Snapshot round-trip**: save → reset → restore → state bytes identical to pre-save for merged_deltas and active_adapter.
 4. **Objective composition**: two-objective batch loss equals manual weighted sum of separately-computed losses (modulo BF16 rounding tolerance).
 5. **4-bit merge correctness**: forward pass after merge within 1e-3 relative of forward pass before merge on the same input (dequant-merge path preserves semantics).
-6. **Concurrent-load safety**: N concurrent `/v1/chat` + M interleaved `/v1/train` hold the commit-cursor invariant, every `after_commit_token` chat sees the cursor advanced past its token, no deadlocks, trajectory contains every event. Pinned in `test_concurrent_load.py`.
+6. **Concurrent-load safety**: N concurrent `/v1/chat` + M interleaved `/v1/train` hold the commit-cursor invariant, every `after_step_token` chat sees the cursor advanced past its token, no deadlocks, trajectory contains every event. Pinned in `test_concurrent_load.py`.
 7. **Residual applied live at forward time**: after `merge_active_into_residual()` zeroes the active adapter, a forward on the training prompt stays within 0.05 nats of the pre-merge trained-adapter forward (vs. an ~86-nat gap if the residual weren't applied). Pinned in `test_residual_live_path.py`.
 8. **T3.1 mask geometry**: `span_prefix` on SFT samples produces labels where every prompt + span_prefix token is `-100` and every regenerated-suffix token carries its own id. Supervision count matches the standalone suffix token count within ±3 (chat-template end-of-turn markers). Pinned in `test_span_prefix.py`.
 9. **T4.1 idle replay**: the scheduler never submits while `ComputeQueue.is_idle_for(threshold)` returns false; after `max_replays_per_record` submissions a given trajectory offset is excluded from future picks; with a 10× half-life gap the weighted-choice lands on the newer record in 50/50 trials; `feedback_to_batch` routes all four feedback kinds (binary, rewrite, nl_critique, nl_critique_with_rewrite) and returns `None` (not raises) on under-specified records. Pinned in `test_replay.py`.

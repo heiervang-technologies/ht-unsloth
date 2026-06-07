@@ -85,14 +85,14 @@ class TrajectoryLog:
         })
 
     def log_train(self, batch_id: str, objective: str, loss: float,
-                  batch_size: int, commit_token: int,
+                  batch_size: int, step_token: int,
                   components: dict[str, Any] | None = None) -> int:
         data: dict[str, Any] = {
             "batch_id": batch_id,
             "objective": objective,
             "loss": float(loss),
             "batch_size": int(batch_size),
-            "commit_token": int(commit_token),
+            "step_token": int(step_token),
         }
         if components:
             serialized: dict[str, Any] = {}

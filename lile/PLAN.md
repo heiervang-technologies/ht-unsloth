@@ -117,7 +117,7 @@ Semantics: per-sample objectives define per-sample loss terms; batch objectives 
 
 Large batches exceed our memory-per-step budget. The daemon doesn't reject them — it chunks them and **enqueues** them onto a compute buffer. Training steps drain the queue asynchronously between inference requests (or on dedicated GPU if you run 2× 3090s in split mode).
 
-Key property: **a batch committed to the queue is guaranteed to be reflected in the model before any POST'd inference request that arrives after the training request's `commit_token` was returned.** This is the "POST a batch, next inference sees it" promise. Implementation: inference requests check the queue's commit cursor before dispatch.
+Key property: **a batch committed to the queue is guaranteed to be reflected in the model before any POST'd inference request that arrives after the training request's `step_token` was returned.** This is the "POST a batch, next inference sees it" promise. Implementation: inference requests check the queue's commit cursor before dispatch.
 
 ---
 

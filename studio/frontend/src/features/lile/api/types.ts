@@ -5,7 +5,7 @@ export type HealthReport = {
   ok: boolean;
   model: string;
   queue_depth: number;
-  commit_cursor: number;
+  step_cursor: number;
   merges: number;
 };
 
@@ -21,7 +21,7 @@ export type TrainStepEvent = {
   objective: string;
   loss: number;
   batch_size: number;
-  commit_token?: number;
+  step_token?: number;
   components?: Record<string, number | boolean>;
   ts?: number;
 };
@@ -44,7 +44,7 @@ export type TrajectoryTail =
 
 export type ChatLileBlock = {
   response_id: string;
-  commit_cursor: number;
+  step_cursor: number;
   latency_s: number;
 };
 

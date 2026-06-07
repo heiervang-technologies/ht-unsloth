@@ -31,7 +31,7 @@ export const useLileCapsuleStore = create<State>((set) => ({
     set(() => ({
       status: s,
       lastCommitToken:
-        s && s.running ? s.health.commit_cursor : null,
+        s && s.running ? s.health.step_cursor : null,
     })),
 
   mergeTail: (t) =>

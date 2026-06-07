@@ -19,7 +19,7 @@ from typing import Any
 # oldest entries. OrderedDict gives O(1) insertion, lookup, and eviction.
 _RESPONSE_INDEX_CAP = 4096
 
-from .commit_stream import CommitBroadcaster
+from .commit_stream import StepBroadcaster
 from .config import ServeConfig
 from .engine.replay import IdleReplayScheduler, ReplayPolicy
 from .engine.train import TrainEngine
@@ -72,10 +72,10 @@ class Controller:
         # ``graceful_shutdown`` only.
         self._shutting_down: bool = False
 
-        # /v1/commits/stream SSE fan-out. Torchless-importable broadcaster —
+        # /v1/steps/stream SSE fan-out. Torchless-importable broadcaster —
         # see ``lile/commit_stream.py`` for the bounded-queue + drop-on-full
         # semantics. Slow clients never back-pressure training.
-        self.commits = CommitBroadcaster(enabled=cfg.commits_sse_enabled)
+        self.commits = StepBroadcaster(enabled=cfg.steps_sse_enabled)
 
     # ------------------------------------------------------------------ lifecycle
     async def start(self) -> None:
@@ -192,6 +192,19 @@ class Controller:
             objective = payload.get("objective", "") or "unknown"
             try:
                 result = self.train_engine.step(payload)
+            except ValueError as exc:
+                self.trajectory.log_event("train_refused", {
+                    "batch_id": task.batch_id,
+                    "objective": objective,
+                    "step_token": task.token,
+                    "reason": str(exc),
+                })
+                self.commits.broadcast_discarded(
+                    cursor=task.token,
+                    reason="refused",
+                    details={"message": str(exc)},
+                )
+                raise
             except BaseException as exc:
                 # Log a visible error event so UIs reading the trajectory tail
                 # can surface the failure; the queue worker still records
@@ -199,10 +212,15 @@ class Controller:
                 self.trajectory.log_event("train_error", {
                     "batch_id": task.batch_id,
                     "objective": objective,
-                    "commit_token": task.token,
+                    "step_token": task.token,
                     "error_type": type(exc).__name__,
                     "error": str(exc),
                 })
+                self.commits.broadcast_discarded(
+                    cursor=task.token,
+                    reason="error",
+                    details={"error_type": type(exc).__name__, "error": str(exc)},
+                )
                 raise
             components = result.get("components")
             wall = time.time() - t0
@@ -212,7 +230,7 @@ class Controller:
                 objective=objective,
                 loss=result.get("loss") or 0.0,
                 batch_size=len(payload.get("samples", [])),
-                commit_token=task.token,
+                step_token=task.token,
                 components=components,
             )
             # Prometheus counters + latency/loss histograms.
@@ -229,13 +247,13 @@ class Controller:
             scalars = flatten_scalars(components or {})
             if scalars:
                 self.metrics_logger.log_metrics(scalars, step=task.token)
-            # /v1/commits/stream broadcast. Runs synchronously here (the queue
+            # /v1/steps/stream broadcast. Runs synchronously here (the queue
             # worker runs on the event loop and `_handle_task` is sync), so
             # `put_nowait` only *schedules* SSE wakeups — the queue's finally
             # block still advances `_completed_token` before any subscriber
             # coroutine resumes. That's what preserves the spec's "cursor=N in
             # the event ⇒ /v1/state/stats reports committed >= N" invariant.
-            self.commits.broadcast_commit(
+            self.commits.broadcast_kept(
                 cursor=task.token,
                 objective=objective,
                 loss=float(result.get("loss") or 0.0),
@@ -271,8 +289,8 @@ class Controller:
         """Wait until the queue has drained all committed-before-this-request
         training, then generate. This is the 'POST a batch, next inference
         sees it' guarantee from the caller's viewpoint: callers may pass
-        `after_commit_token` to block on that specific training."""
-        wait_for = kwargs.pop("after_commit_token", None)
+        `after_step_token` to block on that specific training."""
+        wait_for = kwargs.pop("after_step_token", None)
         if wait_for is not None:
             try:
                 await self.queue.wait_for(int(wait_for), timeout=60.0)
@@ -314,13 +332,13 @@ class Controller:
     async def stream_generate(self, messages: list[dict[str, str]],
                               **kwargs: Any):
         """Async generator yielding {delta, response_id} chunks, then a final
-        {final: True, response_id, full, commit_cursor} event.
+        {final: True, response_id, full, step_cursor} event.
 
         Runs the generator thread-side (see engine.generate_chat_stream) and
         shuttles chunks through an asyncio.Queue so the FastAPI event loop
         stays responsive.
         """
-        wait_for = kwargs.pop("after_commit_token", None)
+        wait_for = kwargs.pop("after_step_token", None)
         if wait_for is not None:
             try:
                 await self.queue.wait_for(int(wait_for), timeout=60.0)
@@ -394,7 +412,7 @@ class Controller:
         )
         self._remember_response(rid, messages, full_text)
         yield {"final": True, "response_id": rid, "full": full_text,
-               "commit_cursor": self.queue.committed}
+               "step_cursor": self.queue.committed}
 
     def _remember_response(self, rid: str, messages: list[dict[str, str]],
                            response_text: str) -> None:
@@ -414,7 +432,7 @@ class Controller:
             )
 
     async def submit_train(self, spec: dict[str, Any]) -> dict[str, Any]:
-        """Chunk a train batch into queue tasks and return the final commit_token."""
+        """Chunk a train batch into queue tasks and return the final step_token."""
         self._reject_if_shutting_down()
         batch_id = new_batch_id()
         samples = spec.get("samples", [])
@@ -429,11 +447,11 @@ class Controller:
             tasks.append(t)
             if not samples:
                 break
-        # The commit_token is the last task's token.
-        commit_token = tasks[-1].token
+        # The step_token is the last task's token.
+        step_token = tasks[-1].token
         return {
             "batch_id": batch_id,
-            "commit_token": commit_token,
+            "step_token": step_token,
             "n_chunks": len(tasks),
             "queue_depth": self.queue._q.qsize(),
         }
@@ -566,16 +584,16 @@ class Controller:
         self._reject_if_shutting_down()
         task = await self.queue.submit("merge", {})
         result = await self.queue.wait_for(task.token, timeout=300.0)
-        return {"commit_token": task.token, "result": result.result, "error": str(result.error) if result.error else None}
+        return {"step_token": task.token, "result": result.result, "error": str(result.error) if result.error else None}
 
     async def request_snapshot_save(self, name: str) -> dict[str, Any]:
         self._reject_if_shutting_down()
         task = await self.queue.submit("snapshot_save", {"name": name})
         result = await self.queue.wait_for(task.token, timeout=300.0)
-        return {"commit_token": task.token, "result": result.result}
+        return {"step_token": task.token, "result": result.result}
 
     async def request_snapshot_load(self, name: str) -> dict[str, Any]:
         self._reject_if_shutting_down()
         task = await self.queue.submit("snapshot_load", {"name": name})
         result = await self.queue.wait_for(task.token, timeout=300.0)
-        return {"commit_token": task.token, "result": result.result}
+        return {"step_token": task.token, "result": result.result}

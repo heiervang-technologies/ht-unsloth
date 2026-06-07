@@ -89,14 +89,14 @@ def test_run_evalplus_returns_stub_when_dep_missing(monkeypatch: pytest.MonkeyPa
 
 # ----------------------------------------------------------------- unknown task
 def test_run_rejects_unknown_lm_task(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(eval_mod, "_get_commit_cursor", lambda _endpoint: None)
+    monkeypatch.setattr(eval_mod, "_get_step_cursor", lambda _endpoint: None)
     with pytest.raises(SystemExit):
         run("http://127.0.0.1:8768/v1", "fake-model",
             tasks=["not_a_task"], code_tasks=[], limit=1, batch_size=1)
 
 
 def test_run_rejects_unknown_code_task(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(eval_mod, "_get_commit_cursor", lambda _endpoint: None)
+    monkeypatch.setattr(eval_mod, "_get_step_cursor", lambda _endpoint: None)
     with pytest.raises(SystemExit):
         run("http://127.0.0.1:8768/v1", "fake-model",
             tasks=[], code_tasks=["not_a_task"], limit=1, batch_size=1)
@@ -107,7 +107,7 @@ def test_run_emits_stable_json_shape(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _force_missing(monkeypatch, "lm_eval", "evalplus")
-    monkeypatch.setattr(eval_mod, "_get_commit_cursor", lambda _endpoint: 42)
+    monkeypatch.setattr(eval_mod, "_get_step_cursor", lambda _endpoint: 42)
 
     result = run(
         endpoint="http://127.0.0.1:8768/v1",
@@ -118,8 +118,8 @@ def test_run_emits_stable_json_shape(
         batch_size=4,
     )
     assert isinstance(result, RunResult)
-    assert result.commit_cursor_before == 42
-    assert result.commit_cursor_after == 42
+    assert result.step_cursor_before == 42
+    assert result.step_cursor_after == 42
     assert len(result.tasks) == 3
     assert all(t.stub for t in result.tasks)
 
@@ -132,7 +132,7 @@ def test_run_emits_stable_json_shape(
     assert "NaN" not in raw
     payload = json.loads(raw)
     assert {"run_id", "timestamp", "endpoint", "model",
-            "commit_cursor_before", "commit_cursor_after", "tasks"} <= payload.keys()
+            "step_cursor_before", "step_cursor_after", "tasks"} <= payload.keys()
     task_keys = {"task", "metric", "value", "n", "wall_clock_s", "stub", "raw"}
     for t in payload["tasks"]:
         assert task_keys <= t.keys()
@@ -141,7 +141,7 @@ def test_run_emits_stable_json_shape(
 
 
 # ----------------------------------------------------------------- commit cursor probe
-def test_get_commit_cursor_handles_unreachable_endpoint() -> None:
+def test_get_step_cursor_handles_unreachable_endpoint() -> None:
     # Unroutable port on loopback; probe must return None, not raise.
-    cursor = eval_mod._get_commit_cursor("http://127.0.0.1:1/v1")
+    cursor = eval_mod._get_step_cursor("http://127.0.0.1:1/v1")
     assert cursor is None

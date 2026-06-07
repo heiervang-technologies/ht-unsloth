@@ -178,7 +178,7 @@ Non-pure-unlike calls (with `good_token_id` set) are SFT-family dominant and not
 
 **Primitive shape (draft):**
 ```
-GET /v1/commits/stream  → text/event-stream
+GET /v1/steps/stream  → text/event-stream
   each event:
   data: {"cursor": N, "ts": ..., "objective": "...", "loss": ..., "components": {...}}
 ```
@@ -216,7 +216,7 @@ After the decisions above, the primitive set for the near-term is:
 - `/v1/train` with `objective ∈ {sft, weighted_sft, kto, coh, hinge, cppo, ccpd_v2, ntp, unlike}` + `batch_objectives` composition (kl_anchor extended with `scope="target_position"` + `exclude_token_ids`).
 - `/v1/chat/completions` (existing).
 - `/v1/state/snapshot/{save,load}` (existing).
-- `/v1/commits/stream` (new, priority-1).
+- `/v1/steps/stream` (new, priority-1).
 
 **What's not in the primitive set (intentional):** dataset iterators, epoch management, curriculum, RLAIF loop state, scaling-curve orchestration, any tutor model. All userland, all shipping as scripts in `lile/teach/`.
 

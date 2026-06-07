@@ -187,10 +187,10 @@ type ChatRuntimeStore = {
   modelLoading: boolean;
   lileMode: boolean;
   lileBlockOnLastCommit: boolean;
-  lileLastCommit: number | null;
+  lileLastStep: number | null;
   setLileMode: (v: boolean) => void;
   setLileBlockOnLastCommit: (v: boolean) => void;
-  setLileLastCommit: (v: number | null) => void;
+  setLileLastStep: (v: number | null) => void;
   setModelLoading: (loading: boolean) => void;
   setModelRequiresTrustRemoteCode: (required: boolean) => void;
   setParams: (params: InferenceParams) => void;
@@ -260,7 +260,7 @@ export const useChatRuntimeStore = create<ChatRuntimeStore>((set) => ({
   modelLoading: false,
   lileMode: loadBool(LILE_MODE_KEY, false),
   lileBlockOnLastCommit: loadBool(LILE_BLOCK_KEY, false),
-  lileLastCommit: null,
+  lileLastStep: null,
   setLileMode: (v) =>
     set(() => {
       saveBool(LILE_MODE_KEY, v);
@@ -271,7 +271,7 @@ export const useChatRuntimeStore = create<ChatRuntimeStore>((set) => ({
       saveBool(LILE_BLOCK_KEY, v);
       return { lileBlockOnLastCommit: v };
     }),
-  setLileLastCommit: (v) => set({ lileLastCommit: v }),
+  setLileLastStep: (v) => set({ lileLastStep: v }),
   setModelLoading: (loading) => set({ modelLoading: loading }),
   setModelRequiresTrustRemoteCode: (modelRequiresTrustRemoteCode) =>
     set({ modelRequiresTrustRemoteCode }),

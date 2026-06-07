@@ -135,7 +135,7 @@ class _ControllerGaugeCollector(Collector):
 
         # Queue depth.
         queue_depth = 0.0
-        commit_cursor = 0.0
+        step_cursor = 0.0
         merges = 0.0
         traj_bytes = 0.0
         snap_count = 0.0
@@ -149,7 +149,7 @@ class _ControllerGaugeCollector(Collector):
             except Exception:  # pragma: no cover — scrape must never crash
                 pass
             try:
-                commit_cursor = float(getattr(c.queue, "committed", 0))
+                step_cursor = float(getattr(c.queue, "committed", 0))
             except Exception:  # pragma: no cover
                 pass
             try:
@@ -195,9 +195,9 @@ class _ControllerGaugeCollector(Collector):
             value=queue_depth,
         )
         yield GaugeMetricFamily(
-            "lile_commit_cursor",
+            "lile_step_cursor",
             "Monotone commit cursor (last committed task token).",
-            value=commit_cursor,
+            value=step_cursor,
         )
         yield GaugeMetricFamily(
             "lile_merges_applied",

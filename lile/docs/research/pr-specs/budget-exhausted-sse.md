@@ -24,13 +24,13 @@ A silent refuse is the wrong UX:
 - An RLAIF loop mid-training wouldn't know whether to retry, widen K, or load an earlier snapshot.
 - The daemon-internal replay scheduler (IdleReplayScheduler) can tick the trajectory over `K_session` between user touches — the user needs the signal live, not on next-request.
 
-Cleanest shape: a `budget_exhausted` event on the existing `/v1/commits/stream` SSE channel. Subscribers already get commit events; they should get this one on the same pipe with zero new infrastructure.
+Cleanest shape: a `budget_exhausted` event on the existing `/v1/steps/stream` SSE channel. Subscribers already get commit events; they should get this one on the same pipe with zero new infrastructure.
 
 ## Contract
 
 ### Event shape
 
-Piggybacks on `lile/commit_stream.py::CommitBroadcaster`. Adds one new broadcast method + one new consumer branch.
+Piggybacks on `lile/commit_stream.py::StepBroadcaster`. Adds one new broadcast method + one new consumer branch.
 
 ```
 event: budget_exhausted
@@ -70,7 +70,7 @@ Consumers that don't know about the event type should ignore it per SSE spec (un
 ### `commit_stream.py` additions
 
 ```python
-class CommitBroadcaster:
+class StepBroadcaster:
     def __init__(self, *, enabled: bool = True) -> None:
         # existing state ...
         self._exhausted: bool = False
@@ -104,7 +104,7 @@ class CommitBroadcaster:
 
 ### `server.py` consumer branch
 
-In the `/v1/commits/stream` generator, after the existing `_shutdown` check:
+In the `/v1/steps/stream` generator, after the existing `_shutdown` check:
 
 ```python
 if event.get("_budget_exhausted"):
@@ -118,7 +118,7 @@ if event.get("_budget_exhausted"):
 ### `controller.py` wire-through
 
 - `Controller` holds the `Φ_obs` accumulator (feeds from unlike-trajectory-bound per Cleo §3).
-- On every unlike commit, after `broadcast_commit`, check threshold and fire `broadcast_budget_exhausted` if crossed.
+- On every unlike commit, after `broadcast_kept`, check threshold and fire `broadcast_budget_exhausted` if crossed.
 - On successful `snapshot_load` with post-load `Φ_obs < K_warn`, call `clear_budget_exhausted`.
 
 Tracking `Φ_obs` itself is Tier 5's scope, not this spec. This spec is **only** the plumbing.
