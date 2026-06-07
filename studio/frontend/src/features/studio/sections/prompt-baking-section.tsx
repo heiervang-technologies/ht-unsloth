@@ -6,10 +6,52 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { authFetch } from "@/features/auth";
 import { useTrainingConfigStore } from "@/features/training";
 import { InformationCircleIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { useEffect, useState } from "react";
 import type { ReactElement, ReactNode } from "react";
+
+// Debounced exact-token count from the backend tokenizer cache.
+// Falls back silently to the chars/4 heuristic if the model has no
+// tokenizer yet (e.g. selectedModel is null, gated, or just renamed
+// out of HF). Cached server-side per process so steady state is ~0ms.
+function useExactTokenCount(
+  text: string,
+  model: string | null,
+  hfToken: string,
+): { tokens: number | null; loading: boolean } {
+  const [tokens, setTokens] = useState<number | null>(null);
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    if (!model || !text) {
+      setTokens(null);
+      return;
+    }
+    const handle = setTimeout(() => {
+      setLoading(true);
+      void authFetch("/api/train/count-tokens", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text,
+          model,
+          hf_token: hfToken.trim() || null,
+        }),
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (data && typeof data.tokens === "number") setTokens(data.tokens);
+          else setTokens(null);
+        })
+        .catch(() => setTokens(null))
+        .finally(() => setLoading(false));
+    }, 400);
+    return () => clearTimeout(handle);
+  }, [text, model, hfToken]);
+  return { tokens, loading };
+}
 
 function Row({
   label,
@@ -48,6 +90,11 @@ function Row({
 
 export function PromptBakingSection(): ReactElement {
   const store = useTrainingConfigStore();
+  const { tokens: exactTokens, loading: tokensLoading } = useExactTokenCount(
+    store.bakingSystemPrompt,
+    store.selectedModel,
+    store.hfToken,
+  );
 
   return (
     <div className="flex flex-col gap-4 pt-1 animate-in fade-in-0 slide-in-from-bottom-1 duration-200">
@@ -78,11 +125,41 @@ export function PromptBakingSection(): ReactElement {
           onChange={(e) => store.setBakingSystemPrompt(e.target.value)}
           className="w-full resize-none rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-primary/30 placeholder:text-muted-foreground/50"
         />
-        {!store.bakingSystemPrompt.trim() && (
-          <p className="text-[10px] text-destructive">
-            System prompt is required for prompt baking.
-          </p>
-        )}
+        <div className="flex items-center justify-between text-[10px]">
+          {!store.bakingSystemPrompt.trim() ? (
+            <span className="text-destructive">
+              System prompt is required for prompt baking.
+            </span>
+          ) : (
+            <span className="text-muted-foreground/70">
+              Per-trajectory cost: {store.bakingTrajectoryLength}
+              {" tok × "}
+              {store.bakingNumTrajectories}
+              {" = "}
+              {store.bakingTrajectoryLength * store.bakingNumTrajectories}
+              {" tok / step"}
+            </span>
+          )}
+          <span
+            className="text-muted-foreground/70 tabular-nums"
+            title={
+              exactTokens != null
+                ? `Exact count from ${store.selectedModel}'s tokenizer.`
+                : "Estimate uses chars/4. Pick a model to get the exact tokenizer count."
+            }
+          >
+            {exactTokens != null ? (
+              <>
+                {exactTokens} tokens
+                {tokensLoading ? " …" : ""}
+              </>
+            ) : (
+              <>≈ {Math.ceil(store.bakingSystemPrompt.length / 4)} tokens</>
+            )}
+            {" · "}
+            {store.bakingSystemPrompt.length} chars
+          </span>
+        </div>
       </div>
 
       {/* Prefill mode toggle */}
