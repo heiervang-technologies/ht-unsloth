@@ -72,7 +72,7 @@ jobs:
           pip install \
             python-multipart aiofiles sqlalchemy cryptography \
             pyyaml jinja2 mammoth unpdf requests \
-            'numpy<3' pytest pytest-asyncio httpx
+            'numpy<3' pytest pytest-asyncio httpx respx
           # Torch CPU + transformers are required by a chunk of the backend test
           # suite (gpu_selection, kv_cache_estimation, utils). CPU-only torch
           # keeps the install ~250 MB / ~1 min on a clean runner.
