@@ -192,7 +192,6 @@ MODEL_NAME_MAPPING = {
     "unsloth_gemma-4-12B-it.yaml": [
         "unsloth/gemma-4-12B-it",
         "google/gemma-4-12B-it",
-        "unsloth/gemma-4-12B-it-unsloth-bnb-4bit",
     ],
     "unsloth_gemma-4-E2B-it.yaml": [
         "unsloth/gemma-4-E2B-it",
@@ -213,7 +212,6 @@ MODEL_NAME_MAPPING = {
     "unsloth_gemma-4-12B.yaml": [
         "unsloth/gemma-4-12B",
         "google/gemma-4-12B",
-        "unsloth/gemma-4-12B-unsloth-bnb-4bit",
     ],
     "unsloth_gemma-4-E2B.yaml": [
         "unsloth/gemma-4-E2B",

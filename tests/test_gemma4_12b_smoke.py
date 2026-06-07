@@ -34,6 +34,12 @@ import os
 import sys
 from typing import Any
 
+# Unsloth's auto-compile triggers FailOnRecompileLimitHit on Gemma 4 12B's
+# gemma4_unified arch under a tiny SFT loop (the recompile threshold is hit
+# before step 1 finishes). The fused-LoRA kernel still applies; only the
+# auto-compiled forward is disabled. Set before any unsloth import.
+os.environ.setdefault("UNSLOTH_COMPILE_DISABLE", "1")
+
 
 def smoke_text() -> None:
     """Load Gemma 4 12B-it in 4bit, attach a LoRA, run two SFT train steps."""
@@ -42,7 +48,9 @@ def smoke_text() -> None:
     from unsloth import FastLanguageModel
     from datasets import Dataset
 
-    model_name = "unsloth/gemma-4-12B-it-unsloth-bnb-4bit"
+    # The -unsloth-bnb-4bit quant repo hasn't been published yet (2026-06-07);
+    # use the bf16 reup + on-the-fly bitsandbytes quant via load_in_4bit=True.
+    model_name = "unsloth/gemma-4-12B-it"
     print(f"\n[smoke] loading {model_name} in 4bit ...")
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=model_name,
@@ -108,7 +116,9 @@ def smoke_vision() -> None:
     import unsloth
     from unsloth import FastVisionModel
 
-    model_name = "unsloth/gemma-4-12B-it-unsloth-bnb-4bit"
+    # The -unsloth-bnb-4bit quant repo hasn't been published yet (2026-06-07);
+    # use the bf16 reup + on-the-fly bitsandbytes quant via load_in_4bit=True.
+    model_name = "unsloth/gemma-4-12B-it"
     print(f"\n[smoke] loading {model_name} via FastVisionModel ...")
     model, processor = FastVisionModel.from_pretrained(
         model_name=model_name,
