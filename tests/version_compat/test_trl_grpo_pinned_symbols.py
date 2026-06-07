@@ -549,14 +549,40 @@ def test_trl_grpo_source_inference_mode_unwrap(tag: str):
 # -------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("tag", TRL_TAGS)
+@pytest.mark.parametrize(
+    "tag",
+    [
+        pytest.param(
+            t,
+            marks=pytest.mark.xfail(
+                strict=False,
+                reason=(
+                    "TRL main is allowed to drift past our v0.24.0 pyproject cap. "
+                    "When the symbol comes back, this xfail flips to XPASS and we "
+                    "notice; when it stays gone, no CI noise. The unsloth rewrite "
+                    "at unsloth/models/rl_replacements.py:kto_trainer_get_batch_logps "
+                    "no-ops harmlessly if the source method is absent."
+                ),
+            ),
+        )
+        if t == "main"
+        else t
+        for t in TRL_TAGS
+    ],
+)
 def test_trl_kto_get_batch_logps_signature(tag: str):
     """TRL 0.27+ moved KTOTrainer to trl.experimental.kto and the
     canonical kto_trainer.py shrank to a thin re-export wrapper. The
     real `get_batch_logps` lives at trl/experimental/kto/kto_trainer.py.
     Unsloth's MRO walk in models/rl.py:592-708 already follows
     trl.experimental.* parents, so either path is fine — we just
-    require the symbol to exist SOMEWHERE."""
+    require the symbol to exist SOMEWHERE.
+
+    `main` is marked xfail(strict=False): we ship pinned at v0.24.0, the
+    matrix's job is to flag regressions before we bump that cap, not to
+    police what TRL tip-of-tree does on any given day. If TRL stably
+    moves the symbol again we'll catch it the moment a new tagged
+    release reproduces the behavior."""
     candidates = [
         "trl/trainer/kto_trainer.py",
         "trl/experimental/kto/kto_trainer.py",
@@ -570,7 +596,8 @@ def test_trl_kto_get_batch_logps_signature(tag: str):
             return
     pytest.fail(
         f"{tag}: KTOTrainer.get_batch_logps not found in any of {candidates}; "
-        f"unsloth/models/rl_replacements.py:1675 rewrite silently skipped"
+        f"unsloth/models/rl_replacements.py:kto_trainer_get_batch_logps "
+        f"rewrite silently skipped"
     )
 
 
