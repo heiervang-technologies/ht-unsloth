@@ -14,6 +14,12 @@ export default defineConfig({
   },
   server: {
     host: "0.0.0.0",
+    // Pinned off 5173 so heierchat's desktop launcher
+    // (tauri-plugin-localhost hardcodes :5173) doesn't AddrInUse-panic
+    // when our Vite dev server is up. strictPort=true to fail loudly
+    // if 5174 itself gets taken, instead of silently drifting upward.
+    port: 5174,
+    strictPort: true,
     allowedHosts: true,
     proxy: {
       "/api": {
