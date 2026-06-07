@@ -65,6 +65,25 @@ class TrainingStopRequest(PydanticBaseModel):
     save: bool = True
 
 
+class CountTokensRequest(PydanticBaseModel):
+    text: str
+    model: str
+    hf_token: Optional[str] = None
+
+
+class CountTokensResponse(PydanticBaseModel):
+    tokens: int
+    chars: int
+    model: str
+    cached: bool = False
+
+
+# Per-process tokenizer cache. Keyed by model name. Lazy-loaded on first
+# call; AutoTokenizer.from_pretrained takes 1–3s the first time per model
+# and ~0ms thereafter.
+_TOKENIZER_CACHE: Dict[str, Any] = {}
+
+
 router = APIRouter()
 logger = get_logger(__name__)
 
@@ -90,6 +109,55 @@ def _validate_local_dataset_paths(
             detail = f"{label} not found: {missing_detail}",
         )
     return validated
+
+
+@router.post("/count-tokens", response_model=CountTokensResponse)
+async def count_tokens(
+    body: CountTokensRequest,
+    current_subject: str = Depends(get_current_subject),
+):
+    """Tokenize `text` with `model`'s tokenizer and return the count.
+
+    Used by the Prompt Baking UI to show an exact token preview for the
+    system prompt. Tokenizers are cached per-process per-model so steady
+    state is essentially free.
+    """
+    if not body.model:
+        raise HTTPException(status_code=400, detail="model is required")
+    cached = body.model in _TOKENIZER_CACHE
+    if not cached:
+        try:
+            from transformers import AutoTokenizer
+        except ImportError as exc:
+            raise HTTPException(
+                status_code=500,
+                detail=f"transformers not available: {exc}",
+            )
+        try:
+            kwargs: Dict[str, Any] = {"trust_remote_code": False}
+            if body.hf_token:
+                kwargs["token"] = body.hf_token
+            _TOKENIZER_CACHE[body.model] = AutoTokenizer.from_pretrained(
+                body.model, **kwargs
+            )
+        except Exception as exc:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Failed to load tokenizer for {body.model}: {exc}",
+            )
+    tok = _TOKENIZER_CACHE[body.model]
+    try:
+        # add_special_tokens=False — the user types just the system prompt
+        # body; bos/eos would only inflate the count by ~2 and confuse.
+        ids = tok.encode(body.text, add_special_tokens=False)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Tokenization failed: {exc}")
+    return CountTokensResponse(
+        tokens=len(ids),
+        chars=len(body.text),
+        model=body.model,
+        cached=cached,
+    )
 
 
 @router.get("/hardware")
