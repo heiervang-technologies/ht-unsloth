@@ -147,21 +147,113 @@ def smoke_vision() -> None:
     print("[smoke] PASS — vision-mode load + LoRA attach + GC enable succeeded.")
 
 
+def smoke_trimodal() -> None:
+    """CPU-side smoke for the tri-modal processor contract.
+
+    Does NOT load the 12B model — exercises Gemma4UnifiedProcessor only,
+    asserting that a multi-modal apply_chat_template call interleaves
+    audio + image + text tokens into one input_ids tensor. Light: runs
+    in ~1s on CPU, allocates a 64×64 black image and 1 second of silence.
+
+    What this proves:
+        - Gemma4UnifiedProcessor (the tri-modal entry point) is loadable.
+        - Per-modality processors (image_processor / feature_extractor /
+          video_processor) are wired.
+        - The chat-template message schema with mixed content types
+          actually expands to a batch with audio_token_id + image_token_id
+          present in input_ids — i.e. the processor doesn't silently
+          drop a modality.
+
+    What this does NOT prove:
+        - Training works (no model load, no forward, no backward).
+        - That HT's audio collator handles gemma4_unified — covered by
+          a separate trainer-side test once that branch lands.
+    """
+    import numpy as np
+    from PIL import Image
+    from transformers import AutoProcessor
+
+    model_name = "unsloth/gemma-4-12B-it"
+    print(f"\n[smoke] loading AutoProcessor for {model_name} ...")
+    proc = AutoProcessor.from_pretrained(model_name)
+    print(f"[smoke] processor class = {type(proc).__name__}")
+    assert type(proc).__name__ == "Gemma4UnifiedProcessor", (
+        f"expected Gemma4UnifiedProcessor, got {type(proc).__name__} — "
+        "the gemma4_unified arch routing in transformers may have changed"
+    )
+
+    # Per-modality processor presence is the structural test that gates whether
+    # tri-modal even makes sense to attempt downstream.
+    for sub in ("image_processor", "feature_extractor", "video_processor", "tokenizer"):
+        assert hasattr(proc, sub), f"processor missing {sub!r}"
+    print("[smoke] processor exposes image_processor + feature_extractor + "
+          "video_processor + tokenizer — tri-modal API surface intact.")
+
+    image = Image.fromarray(np.zeros((64, 64, 3), dtype=np.uint8))
+    audio = np.zeros(16000, dtype=np.float32)  # 1 second @ 16kHz
+
+    messages = [{
+        "role": "user",
+        "content": [
+            {"type": "image", "image": image},
+            {"type": "audio", "audio": audio},
+            {"type": "text", "text": "Describe what you see and hear."},
+        ],
+    }]
+    print("[smoke] applying tri-modal chat template ...")
+    inputs = proc.apply_chat_template(
+        messages,
+        add_generation_prompt=True,
+        tokenize=True,
+        return_dict=True,
+        return_tensors="pt",
+    )
+    print(f"[smoke] processor produced keys: {sorted(inputs.keys())}")
+
+    # The strongest contract: audio_token_id and image_token_id must both
+    # appear in input_ids. If either is missing the processor silently
+    # dropped a modality and downstream training would never see it.
+    input_ids = inputs["input_ids"]
+    audio_id = proc.tokenizer.convert_tokens_to_ids(proc.audio_token)
+    image_id = proc.tokenizer.convert_tokens_to_ids(proc.image_token)
+    n_audio = (input_ids == audio_id).sum().item()
+    n_image = (input_ids == image_id).sum().item()
+    print(f"[smoke] audio_token count in batch: {n_audio}, image_token count: {n_image}")
+    assert n_audio > 0, "no audio tokens in input_ids — audio modality was dropped"
+    assert n_image > 0, "no image tokens in input_ids — image modality was dropped"
+
+    # Modality payload tensors must be present alongside input_ids.
+    assert any(k for k in inputs if "pixel" in k or "image" in k), (
+        f"no pixel/image payload in processor output: {sorted(inputs.keys())}"
+    )
+    assert any(k for k in inputs if "audio" in k or "input_features" in k), (
+        f"no audio payload in processor output: {sorted(inputs.keys())}"
+    )
+    print("[smoke] PASS — tri-modal processor contract holds "
+          "(text + image + audio in one batch).")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--mode",
-        choices=["text", "vision"],
+        choices=["text", "vision", "trimodal"],
         default="text",
-        help="text = SFT smoke; vision = FastVisionModel load + LoRA attach smoke",
+        help=(
+            "text = SFT smoke (GPU); "
+            "vision = FastVisionModel load + LoRA attach smoke (GPU); "
+            "trimodal = Gemma4UnifiedProcessor contract smoke (CPU-only)"
+        ),
     )
     args = parser.parse_args()
 
     try:
         if args.mode == "text":
             smoke_text()
-        else:
+        elif args.mode == "vision":
             smoke_vision()
+        else:
+            smoke_trimodal()
     except ImportError as exc:
         print(f"\n[smoke] FAIL (missing dep): {exc}", file=sys.stderr)
         return 1

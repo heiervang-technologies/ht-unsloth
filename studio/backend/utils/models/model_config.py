@@ -835,6 +835,23 @@ _AUDIO_TOKEN_PATTERNS = {
     ),
 }
 
+# Structural patterns matched against the *full* tokenizer_config.json dict,
+# not just the added_tokens_decoder list. Used for Any-to-Any models whose
+# modality tokens are declared as top-level keys (audio_token, image_token,
+# video_token, etc.) instead of being added vocab. Currently:
+#   - "audio_vlm" alias for gemma4_unified, matched by processor_class —
+#     the only Gemma 4 variant whose processor handles audio at all
+#     (Gemma4UnifiedProcessor exposes feature_extractor for audio,
+#     image_processor for images/video frames, video_processor for video).
+# Probed AFTER _AUDIO_TOKEN_PATTERNS so an explicit added-vocab match still
+# wins; this is the fallback for architectures that don't bake audio
+# tokens into added_tokens_decoder.
+_AUDIO_CONFIG_PATTERNS = {
+    "audio_vlm": lambda tok_config: (
+        tok_config.get("processor_class") == "Gemma4UnifiedProcessor"
+    ),
+}
+
 
 def detect_audio_type(model_name: str, hf_token: Optional[str] = None) -> Optional[str]:
     """
@@ -866,12 +883,17 @@ def _detect_audio_from_tokenizer(
     """
 
     def _check_token_patterns(tok_config: dict) -> Optional[str]:
+        # Pass 1: added_tokens_decoder patterns (6 single-modality audio archs).
         added = tok_config.get("added_tokens_decoder", {})
-        if not added:
-            return None
-        token_contents = [v.get("content", "") for v in added.values()]
-        for audio_type, check_fn in _AUDIO_TOKEN_PATTERNS.items():
-            if check_fn(token_contents):
+        if added:
+            token_contents = [v.get("content", "") for v in added.values()]
+            for audio_type, check_fn in _AUDIO_TOKEN_PATTERNS.items():
+                if check_fn(token_contents):
+                    return audio_type
+        # Pass 2: structural config patterns (Any-to-Any models like gemma4_unified
+        # whose modality tokens live as top-level keys, not in added_tokens_decoder).
+        for audio_type, check_fn in _AUDIO_CONFIG_PATTERNS.items():
+            if check_fn(tok_config):
                 return audio_type
         return None
 
