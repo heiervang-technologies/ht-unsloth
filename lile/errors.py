@@ -30,6 +30,7 @@ ERROR_CODES: frozenset[str] = frozenset({
     "timeout",
     "internal",
     "batch_too_large",
+    "unauthorized",
 })
 
 
@@ -72,6 +73,12 @@ class NotFoundError(LileError):
 class BatchTooLargeError(LileError):
     code = "batch_too_large"
     status_code = 413
+    retryable = False
+
+
+class UnauthorizedError(LileError):
+    code = "unauthorized"
+    status_code = 401
     retryable = False
 
 
