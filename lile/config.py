@@ -21,6 +21,12 @@ class ServeConfig:
     max_queue_depth: int = 64
     max_samples_per_train_call: int = 256
 
+    # --- Disk bounds ---
+    trajectory_max_bytes: int | None = None
+    trajectory_rotate_keep: int = 5
+    snapshot_max_count: int | None = None
+    snapshot_protect: list[str] = field(default_factory=lambda: ["baseline"])
+
     # Budget passed to ``Controller.graceful_shutdown`` on FastAPI shutdown
     # (SIGINT/SIGTERM via uvicorn's default handler). The queue worker keeps
     # pulling tasks while the budget holds and cleanly resolves the rest

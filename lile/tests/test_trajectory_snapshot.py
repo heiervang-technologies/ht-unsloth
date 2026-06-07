@@ -102,7 +102,7 @@ def test_snapshot_list_and_names():
         state = _make_fake_state()
         mgr.save("alpha", state)
         mgr.save("beta", state)
-        assert mgr.list() == ["alpha", "beta"]
+        assert [s["name"] for s in mgr.list()] == ["alpha", "beta"]
     print("[test_snapshot] list OK")
 
 
