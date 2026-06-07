@@ -4,6 +4,70 @@ All notable changes in the HT fork (relative to upstream unsloth) are documented
 
 ## Unreleased
 
+### Gemma 4 12B "Unified" — Any-to-Any (2026-06-07)
+
+Google released `google/gemma-4-12B-it` and `google/gemma-4-12B` on
+2026-06-04: encoder-free `gemma4_unified` architecture, 11.95B params,
+48 layers, 256K context, native text + image + audio + video. Upstream
+unsloth's mapper had not yet caught up; this fork adds the wiring so
+Studio can train + serve the 12B variant **today** instead of waiting
+on the upstream sweep.
+
+Registries touched:
+- `unsloth/models/mapper.py` — `__INT_TO_FLOAT_MAPPER` gets two new
+  rows (`gemma-4-12B-it-unsloth-bnb-4bit` and the base variant); the
+  `_add_with_lower` propagation populates `INT_TO_FLOAT_MAPPER`,
+  `FLOAT_TO_INT_MAPPER`, and `MAP_TO_UNSLOTH_16bit` automatically.
+- `unsloth/ollama_template_mappers.py` — adds 12B variants to the
+  `gemma4` tuple so the existing `gemma-4` Ollama / chat template
+  (`<|turn>`-style) applies cleanly.
+- `studio/backend/utils/models/model_config.py` — new yaml keys
+  (`unsloth_gemma-4-12B-it.yaml`, `unsloth_gemma-4-12B.yaml`) plus the
+  HF-name aliases that look them up.
+- `studio/backend/utils/datasets/model_mappings.py` — 12B added to the
+  `gemma-4` chat-template bucket. (Not in `gemma-4-thinking`: the 12B
+  Unified is general Any-to-Any, not the 26B/31B reasoning lineage.)
+- `studio/backend/core/inference/defaults.py` — 12B-it added to both
+  GGUF and standard chat lists.
+- `studio/frontend/src/config/training.ts` — 12B-it slotted into
+  `PRIORITY_TRAINING_MODELS` between E4B-it and 31B-it.
+- New: `studio/backend/assets/configs/model_defaults/gemma/unsloth_gemma-4-12B-it.yaml`
+  and `unsloth_gemma-4-12B.yaml` — mirror the 26B-A4B-it defaults
+  (LoRA r=8 / α=8, all-linear targets, `train_on_completions=true`,
+  `gradient_checkpointing="unsloth"`).
+
+`pyproject.toml` transformers pin raised from `<=5.5.0` to `<5.12` —
+upstream issue #5985. The `gemma4_unified` arch needs ≥ 5.5.0 (already
+the `SUPPORTS_GEMMA4` floor in `unsloth/models/loader.py:80`); we cap
+at `<5.12` so 5.11.x can be smoke-tested before letting majors bump
+blindly.
+
+Training paths:
+- **P1 — text data SFT**: routes through `FastLanguageModel.from_pretrained`
+  → existing gemma4 dispatch (`unsloth/models/loader.py:1180`) sets
+  `UNSLOTH_DISABLE_STATIC_GENERATION=1` + `UNSLOTH_HIGH_PRECISION_LAYERNORM=1`
+  and proceeds. No 12B-specific patches needed; the fused-LoRA kernel
+  `unsloth/kernels/utils.py:matmul_lora` is unchanged and pinned by
+  `tests/test_matmul_lora_contract.py`.
+- **P2 — multimodal (vision) SFT**: routes through `FastVisionModel` →
+  the existing gemma4 vision branch in `unsloth/models/vision.py`
+  already includes the two HT-pinned patches: (a) PEFT
+  `Gemma4ClippableLinear` ⇒ inner `.linear` LoRA injection
+  (`vision.py:1475`), and (b) forced `use_reentrant=True` for
+  gradient checkpointing on `gemma3n` / `gemma4` model types
+  (`vision.py:1621`) — otherwise AOT autograd backward fails on
+  variable-length audio/image tensors. Vision-model detection is
+  generic (`AutoConfig.vision_config` / `image_token_index`
+  presence), so 12B is auto-classified without per-model
+  hardcoding.
+
+Note on upstream #6028: FastVisionModel's *inference-time* spatial
+projection collapses y-coordinates to the bottom of the image for
+Gemma 4 (12B + others). This is a forward-pass projection bug, not
+a backward-pass one — training loss still flows; the trained model
+will inherit whatever the projection produces. Once #6028 lands
+upstream, both training and inference benefit without HT-side work.
+
 ## 2026-06-01
 
 ### Caught up with upstream/main (`e3b52eb98`)

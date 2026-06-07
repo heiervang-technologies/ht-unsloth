@@ -84,7 +84,10 @@ huggingfacenotorch = [
     "huggingface_hub>=0.34.0",
     "hf_transfer",
     "diffusers",
-    "transformers>=4.51.3,!=4.52.0,!=4.52.1,!=4.52.2,!=4.52.3,!=4.53.0,!=4.54.0,!=4.55.0,!=4.55.1,!=4.57.0,!=4.57.4,!=4.57.5,!=5.0.0,!=5.1.0,<=5.5.0",
+    # HT fork: cap raised from upstream's <=5.5.0 to <5.12 so the gemma4_unified
+    # Any-to-Any architecture (Gemma 4 12B, released 2026-06-04) can load.
+    # Upstream issue #5985. Hold the cap at <5.12 until 5.11.x is smoke-tested.
+    "transformers>=4.51.3,!=4.52.0,!=4.52.1,!=4.52.2,!=4.52.3,!=4.53.0,!=4.54.0,!=4.55.0,!=4.55.1,!=4.57.0,!=4.57.4,!=4.57.5,!=5.0.0,!=5.1.0,<5.12",
     "trl>=0.18.2,!=0.19.0,<=0.24.0",
     "sentence-transformers",
 ]
@@ -583,7 +586,10 @@ colab-new = [
     "unsloth_zoo>=2026.5.5",
     "packaging",
     "tyro",
-    "transformers>=4.51.3,!=4.52.0,!=4.52.1,!=4.52.2,!=4.52.3,!=4.53.0,!=4.54.0,!=4.55.0,!=4.55.1,!=4.57.0,!=4.57.4,!=4.57.5,!=5.0.0,!=5.1.0,<=5.5.0",
+    # HT fork: cap raised from upstream's <=5.5.0 to <5.12 so the gemma4_unified
+    # Any-to-Any architecture (Gemma 4 12B, released 2026-06-04) can load.
+    # Upstream issue #5985. Hold the cap at <5.12 until 5.11.x is smoke-tested.
+    "transformers>=4.51.3,!=4.52.0,!=4.52.1,!=4.52.2,!=4.52.3,!=4.53.0,!=4.54.0,!=4.55.0,!=4.55.1,!=4.57.0,!=4.57.4,!=4.57.5,!=5.0.0,!=5.1.0,<5.12",
     "datasets>=3.4.1,!=4.0.*,!=4.1.0,<4.4.0",
     "sentencepiece>=0.2.0",
     "tqdm",
