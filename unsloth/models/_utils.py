@@ -3267,6 +3267,26 @@ def _resolve_moe_parameter_name(model, default_name: str, alternate_name: str) -
     return default_name
 
 
+def is_mlp_only_lora(target_modules) -> bool:
+    """
+    Returns True if target_modules is a non-empty subset of MLP projections,
+    meaning no attention layers are targeted.
+    """
+    if not target_modules:
+        return False
+    
+    if isinstance(target_modules, str):
+        target_modules = [target_modules]
+        
+    allowed_mlp_modules = {"gate_proj", "up_proj", "down_proj"}
+    
+    for module in target_modules:
+        if not any(module == allowed or module.endswith("." + allowed) for allowed in allowed_mlp_modules):
+            return False
+            
+    return len(target_modules) > 0
+
+
 def get_moe_target_parameters(model, target_modules = None) -> Optional[List[str]]:
     """
     Get the target_parameters for MoE expert layers if applicable.

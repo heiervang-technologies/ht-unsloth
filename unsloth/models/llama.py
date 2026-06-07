@@ -829,18 +829,34 @@ def LlamaDecoderLayer_fast_forward(
         hidden_states = fast_rms_layernorm_inference(
             self.input_layernorm, hidden_states
         )
-        hidden_states, self_attn_weights, present_key_value = self.self_attn(
-            hidden_states = hidden_states,
-            causal_mask = causal_mask,
-            attention_mask = attention_mask,
-            position_ids = position_ids,
-            past_key_value = past_key_value,
-            output_attentions = output_attentions,
-            use_cache = use_cache,
-            padding_mask = padding_mask,
-            position_embeddings = position_embeddings,
-            **kwargs,
-        )
+        detach_attn = getattr(self.self_attn, "_unsloth_detach_attn", False)
+        if detach_attn:
+            with torch.no_grad():
+                hidden_states, self_attn_weights, present_key_value = self.self_attn(
+                    hidden_states = hidden_states,
+                    causal_mask = causal_mask,
+                    attention_mask = attention_mask,
+                    position_ids = position_ids,
+                    past_key_value = past_key_value,
+                    output_attentions = output_attentions,
+                    use_cache = use_cache,
+                    padding_mask = padding_mask,
+                    position_embeddings = position_embeddings,
+                    **kwargs,
+                )
+        else:
+            hidden_states, self_attn_weights, present_key_value = self.self_attn(
+                hidden_states = hidden_states,
+                causal_mask = causal_mask,
+                attention_mask = attention_mask,
+                position_ids = position_ids,
+                past_key_value = past_key_value,
+                output_attentions = output_attentions,
+                use_cache = use_cache,
+                padding_mask = padding_mask,
+                position_embeddings = position_embeddings,
+                **kwargs,
+            )
         hidden_states += residual
 
         # Fully Connected
@@ -852,44 +868,24 @@ def LlamaDecoderLayer_fast_forward(
         hidden_states += residual
     else:
         residual = hidden_states
+        hidden_states = fast_rms_layernorm(self.input_layernorm, hidden_states)
         
-        detach_attn = getattr(self, "unsloth_detach_attention", False)
-        
+        detach_attn = getattr(self.self_attn, "_unsloth_detach_attn", False)
         if detach_attn:
-            norm_requires_grad = getattr(self.input_layernorm.weight, "requires_grad", False)
-            if norm_requires_grad:
-                hidden_states = fast_rms_layernorm(self.input_layernorm, hidden_states)
-                with torch.no_grad():
-                    attn_out, self_attn_weights, present_key_value = self.self_attn(
-                        hidden_states = hidden_states,
-                        causal_mask = causal_mask,
-                        attention_mask = attention_mask,
-                        position_ids = position_ids,
-                        past_key_value = past_key_value,
-                        output_attentions = output_attentions,
-                        use_cache = use_cache,
-                        padding_mask = padding_mask,
-                        position_embeddings = position_embeddings,
-                        **kwargs,
-                    )
-                hidden_states = attn_out
-            else:
-                with torch.no_grad():
-                    hidden_states = fast_rms_layernorm(self.input_layernorm, hidden_states)
-                    hidden_states, self_attn_weights, present_key_value = self.self_attn(
-                        hidden_states = hidden_states,
-                        causal_mask = causal_mask,
-                        attention_mask = attention_mask,
-                        position_ids = position_ids,
-                        past_key_value = past_key_value,
-                        output_attentions = output_attentions,
-                        use_cache = use_cache,
-                        padding_mask = padding_mask,
-                        position_embeddings = position_embeddings,
-                        **kwargs,
-                    )
+            with torch.no_grad():
+                hidden_states, self_attn_weights, present_key_value = self.self_attn(
+                    hidden_states = hidden_states,
+                    causal_mask = causal_mask,
+                    attention_mask = attention_mask,
+                    position_ids = position_ids,
+                    past_key_value = past_key_value,
+                    output_attentions = output_attentions,
+                    use_cache = use_cache,
+                    padding_mask = padding_mask,
+                    position_embeddings = position_embeddings,
+                    **kwargs,
+                )
         else:
-            hidden_states = fast_rms_layernorm(self.input_layernorm, hidden_states)
             hidden_states, self_attn_weights, present_key_value = self.self_attn(
                 hidden_states = hidden_states,
                 causal_mask = causal_mask,
@@ -3290,6 +3286,15 @@ class FastLlamaModel:
         model = _get_peft_model(model, lora_config)
         # Fix LoraConfig.auto_mapping is None
         fix_lora_auto_mapping(model)
+
+        from ._utils import is_mlp_only_lora
+        if is_mlp_only_lora(lora_config.target_modules):
+            try:
+                for layer in model.base_model.model.model.layers:
+                    if hasattr(layer, "self_attn"):
+                        layer.self_attn._unsloth_detach_attn = True
+            except AttributeError:
+                pass
 
         # Apply QAT + LoRA if specified
         if qat_scheme is not None:
