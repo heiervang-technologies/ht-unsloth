@@ -812,6 +812,10 @@ export function SharedComposer({
       refreshStuckImeTimer();
       return;
     }
+    if (composingRef.current) {
+      refreshStuckImeTimer();
+      return;
+    }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       if (!busy) {
