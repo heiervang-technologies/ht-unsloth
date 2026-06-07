@@ -43,6 +43,15 @@ export interface CompareHandle {
 const IMAGE_ACCEPT = "image/jpeg,image/png,image/webp,image/gif";
 const MAX_IMAGE_SIZE = 20 * 1024 * 1024;
 
+function isNativeComposing(event: Event) {
+  return "isComposing" in event && (event as InputEvent).isComposing === true;
+}
+
+// Mirrors the threshold in thread.tsx — see the comment there. Chrome on
+// Windows-over-WSL (issue #5546) never fires `compositionend` after the
+// IME commit, so the compose flag would otherwise stay true forever.
+const IME_STUCK_TIMEOUT_MS = 2500;
+
 function fileToBase64DataURL(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -232,6 +241,38 @@ export function SharedComposer({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
+
+  const composingRef = useRef(false);
+  const stuckImeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearStuckImeTimer = useCallback(() => {
+    if (stuckImeTimerRef.current) {
+      clearTimeout(stuckImeTimerRef.current);
+      stuckImeTimerRef.current = null;
+    }
+  }, []);
+
+  const refreshStuckImeTimer = useCallback(() => {
+    clearStuckImeTimer();
+    stuckImeTimerRef.current = setTimeout(() => {
+      stuckImeTimerRef.current = null;
+      composingRef.current = false;
+    }, IME_STUCK_TIMEOUT_MS);
+  }, [clearStuckImeTimer]);
+
+  const setCompositionState = useCallback(
+    (isComp: boolean) => {
+      composingRef.current = isComp;
+      if (isComp) {
+        refreshStuckImeTimer();
+      } else {
+        clearStuckImeTimer();
+      }
+    },
+    [clearStuckImeTimer, refreshStuckImeTimer],
+  );
+
+  useEffect(() => clearStuckImeTimer, [clearStuckImeTimer]);
 
   const activeModel = useChatRuntimeStore((s) => {
     const checkpoint = s.params.checkpoint;
@@ -443,6 +484,16 @@ export function SharedComposer({
   const busy = running || comparing;
 
   function onKeyDown(e: KeyboardEvent) {
+    if (e.nativeEvent.isComposing || e.keyCode === 229) {
+      composingRef.current = true;
+      refreshStuckImeTimer();
+      return;
+    }
+    if (composingRef.current) {
+      refreshStuckImeTimer();
+      return;
+    }
+
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       if (!busy) {
@@ -495,11 +546,25 @@ export function SharedComposer({
       <textarea
         ref={textareaRef}
         value={text}
-        onChange={(e) => setText(e.target.value)}
+        onChange={(e) => {
+          setCompositionState(isNativeComposing(e.nativeEvent));
+          setText(e.target.value);
+        }}
+        onCompositionStart={() => {
+          setCompositionState(true);
+        }}
+        onCompositionUpdate={() => {
+          refreshStuckImeTimer();
+        }}
+        onCompositionEnd={(e) => {
+          setCompositionState(false);
+          setText(e.currentTarget.value);
+        }}
         onKeyDown={onKeyDown}
         placeholder="Send to both models..."
         className="mb-1 max-h-32 min-h-14 w-full resize-none bg-transparent pl-5 pr-4 pt-2 pb-3 text-sm outline-none placeholder:text-muted-foreground"
         rows={1}
+        dir="auto"
       />
       <div className="relative mx-2 mb-2 flex items-center justify-between">
         <div className="flex items-center gap-1">
