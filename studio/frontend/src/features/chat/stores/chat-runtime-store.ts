@@ -253,6 +253,10 @@ type ChatRuntimeStore = {
   setPendingAudio: (base64: string, name: string) => void;
   clearPendingAudio: () => void;
   setContextUsage: (usage: ChatRuntimeStore["contextUsage"]) => void;
+  // Upstream-compat shim: chat-page.tsx calls this on mount to rehydrate
+  // any localStorage-persisted toggles. HT's store loads each value at
+  // create-time via loadBool/loadString, so there's nothing to do at runtime.
+  hydratePersistedSettings: () => void;
 };
 
 export const useChatRuntimeStore = create<ChatRuntimeStore>((set) => ({
@@ -409,4 +413,6 @@ export const useChatRuntimeStore = create<ChatRuntimeStore>((set) => ({
   clearPendingAudio: () =>
     set({ pendingAudioBase64: null, pendingAudioName: null }),
   setContextUsage: (contextUsage) => set({ contextUsage }),
+  // HT compat: no-op — store fields are seeded from localStorage at create-time.
+  hydratePersistedSettings: () => undefined,
 }));
