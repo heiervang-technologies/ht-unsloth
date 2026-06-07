@@ -838,17 +838,19 @@ _AUDIO_TOKEN_PATTERNS = {
 # Structural patterns matched against the *full* tokenizer_config.json dict,
 # not just the added_tokens_decoder list. Used for Any-to-Any models whose
 # modality tokens are declared as top-level keys (audio_token, image_token,
-# video_token, etc.) instead of being added vocab. Currently:
-#   - "audio_vlm" alias for gemma4_unified, matched by processor_class —
-#     the only Gemma 4 variant whose processor handles audio at all
-#     (Gemma4UnifiedProcessor exposes feature_extractor for audio,
-#     image_processor for images/video frames, video_processor for video).
+# boa_token, etc.) instead of being added vocab.
+#
+# Duck-typed on capability ("does this tokenizer declare an audio entry-point")
+# rather than coupled to a concrete processor_class string — class names get
+# renamed during the first weeks of upstream HF integration; the structural
+# config keys are stickier.
+#
 # Probed AFTER _AUDIO_TOKEN_PATTERNS so an explicit added-vocab match still
-# wins; this is the fallback for architectures that don't bake audio
-# tokens into added_tokens_decoder.
+# wins (Whisper, CSM, BiCodec, DAC, SNAC, Gemma 3N never reach this fallback
+# because their added_tokens_decoder patterns short-circuit first).
 _AUDIO_CONFIG_PATTERNS = {
     "audio_vlm": lambda tok_config: (
-        tok_config.get("processor_class") == "Gemma4UnifiedProcessor"
+        "audio_token" in tok_config or "boa_token" in tok_config
     ),
 }
 

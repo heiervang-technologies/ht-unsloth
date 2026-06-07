@@ -191,13 +191,14 @@ def smoke_trimodal() -> None:
 
     image = Image.fromarray(np.zeros((64, 64, 3), dtype=np.uint8))
     audio = np.zeros(16000, dtype=np.float32)  # 1 second @ 16kHz
+    text_probe = "Describe what you see and hear."
 
     messages = [{
         "role": "user",
         "content": [
             {"type": "image", "image": image},
             {"type": "audio", "audio": audio},
-            {"type": "text", "text": "Describe what you see and hear."},
+            {"type": "text", "text": text_probe},
         ],
     }]
     print("[smoke] applying tri-modal chat template ...")
@@ -210,27 +211,42 @@ def smoke_trimodal() -> None:
     )
     print(f"[smoke] processor produced keys: {sorted(inputs.keys())}")
 
-    # The strongest contract: audio_token_id and image_token_id must both
-    # appear in input_ids. If either is missing the processor silently
-    # dropped a modality and downstream training would never see it.
+    # Contract A: every modality must survive into input_ids. Audio + image
+    # are pinned by their dedicated token ids; text is pinned by checking
+    # that at least one tokenized substring of the probe appears in the
+    # decoded batch (substring rather than full-equality because the chat
+    # template inserts BOS/role markers around it).
     input_ids = inputs["input_ids"]
     audio_id = proc.tokenizer.convert_tokens_to_ids(proc.audio_token)
     image_id = proc.tokenizer.convert_tokens_to_ids(proc.image_token)
     n_audio = (input_ids == audio_id).sum().item()
     n_image = (input_ids == image_id).sum().item()
-    print(f"[smoke] audio_token count in batch: {n_audio}, image_token count: {n_image}")
+    decoded = proc.tokenizer.decode(input_ids[0], skip_special_tokens=False)
+    n_text = decoded.count("Describe") + decoded.count("see and hear")
+    print(f"[smoke] audio_token count: {n_audio}, image_token count: {n_image}, "
+          f"text-probe hits: {n_text}")
     assert n_audio > 0, "no audio tokens in input_ids — audio modality was dropped"
     assert n_image > 0, "no image tokens in input_ids — image modality was dropped"
+    assert n_text > 0, (
+        f"text probe {text_probe!r} not in decoded batch — text modality was dropped. "
+        f"Decoded: {decoded[:200]!r}"
+    )
 
-    # Modality payload tensors must be present alongside input_ids.
-    assert any(k for k in inputs if "pixel" in k or "image" in k), (
-        f"no pixel/image payload in processor output: {sorted(inputs.keys())}"
-    )
-    assert any(k for k in inputs if "audio" in k or "input_features" in k), (
-        f"no audio payload in processor output: {sorted(inputs.keys())}"
-    )
+    # Contract B: payload tensors present AND populated. The "key exists but
+    # tensor is empty" case is a real silent-drop mode for processors that
+    # fall back when a modality is mis-formatted.
+    pixel_keys = [k for k in inputs if "pixel" in k or "image" in k]
+    audio_keys = [k for k in inputs if "audio" in k or "input_features" in k]
+    assert pixel_keys, f"no pixel/image payload key in processor output: {sorted(inputs.keys())}"
+    assert audio_keys, f"no audio payload key in processor output: {sorted(inputs.keys())}"
+    for k in pixel_keys + audio_keys:
+        tensor = inputs[k]
+        if hasattr(tensor, "numel"):
+            n = tensor.numel()
+            assert n > 0, f"payload {k!r} is an empty tensor (shape={tuple(tensor.shape)})"
+            print(f"[smoke]   {k}: shape={tuple(tensor.shape)}, numel={n}")
     print("[smoke] PASS — tri-modal processor contract holds "
-          "(text + image + audio in one batch).")
+          "(text + image + audio survive into batch with populated payloads).")
 
 
 def main() -> int:
