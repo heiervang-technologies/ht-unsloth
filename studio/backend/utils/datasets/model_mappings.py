@@ -222,6 +222,9 @@ TEMPLATE_TO_MODEL_MAPPER = {
         "google/gemma-4-E4B-it",
         "unsloth/gemma-4-E2B-it-unsloth-bnb-4bit",
         "unsloth/gemma-4-E4B-it-unsloth-bnb-4bit",
+        "unsloth/gemma-4-12B-it",
+        "google/gemma-4-12B-it",
+        "unsloth/gemma-4-12B-it-unsloth-bnb-4bit",
     ),
     "gemma-4-thinking": (
         "unsloth/gemma-4-26B-A4B-it",

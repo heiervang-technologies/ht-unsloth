@@ -1992,6 +1992,12 @@ OLLAMA_TEMPLATE_TO_MODEL_MAPPER = {
         "unsloth/gemma-4-26B-A4B-it",
         "google/gemma-4-26B-A4B-it",
         "unsloth/gemma-4-26B-A4B",
+        "unsloth/gemma-4-12B-it",
+        "unsloth/gemma-4-12B-it-unsloth-bnb-4bit",
+        "google/gemma-4-12B-it",
+        "unsloth/gemma-4-12B",
+        "unsloth/gemma-4-12B-unsloth-bnb-4bit",
+        "google/gemma-4-12B",
     ),
     "gemma3n": (
         "unsloth/gemma-3n-E4B-it-unsloth-bnb-4bit",
