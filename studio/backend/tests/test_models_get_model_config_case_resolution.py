@@ -68,7 +68,8 @@ def test_get_model_config_resolves_cached_case_before_model_checks(monkeypatch):
     result = asyncio.run(
         models_route.get_model_config(
             model_name = "org/model",
-            hf_token = None,
+            hf_token_query = None,
+            hf_token_header = None,
             current_subject = "test-subject",
         )
     )
