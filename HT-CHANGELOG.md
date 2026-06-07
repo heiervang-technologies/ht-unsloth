@@ -68,6 +68,23 @@ a backward-pass one — training loss still flows; the trained model
 will inherit whatever the projection produces. Once #6028 lands
 upstream, both training and inference benefit without HT-side work.
 
+**Smoke verified end-to-end on RTX 3090 24GB (2026-06-07):**
+- Text mode: `unsloth/gemma-4-12B-it` loaded in 4bit via on-the-fly
+  bitsandbytes quant, LoRA r=8/α=8 attached (32.7M / 11.99B trainable
+  = 0.27%), 2 SFT train steps in 4.5s. Loss: 8.71 → 9.46.
+- Vision mode: `FastVisionModel.from_pretrained` returns
+  `model_type=gemma4_unified`; LoRA attaches cleanly through the
+  `Gemma4ClippableLinear` PEFT shim; gradient checkpointing enables
+  with the forced `use_reentrant=True`.
+- Mapper correction: the `-unsloth-bnb-4bit` quant repo isn't published
+  yet; mapper key is the bf16 reup (`unsloth/gemma-4-12B-it`), mirror of
+  the 26B-A4B-it shape. `load_in_4bit=True` triggers the runtime bnb-NF4
+  quant.
+- One known knob: `UNSLOTH_COMPILE_DISABLE=1` is required for small SFT
+  loops on 12B (the auto-compile recompile-limit fires before step 1
+  finishes on a tiny dataset). Smoke test sets it as a default; Studio's
+  worker should set the same when training Gemma 4 ≥ 12B.
+
 ## 2026-06-01
 
 ### Caught up with upstream/main (`e3b52eb98`)

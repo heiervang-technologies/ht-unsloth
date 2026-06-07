@@ -40,8 +40,11 @@ __INT_TO_FLOAT_MAPPER = \
     ),
     # Gemma 4 12B "Unified" — encoder-free Any-to-Any (text + image + audio + video),
     # 11.95B params, 48 layers, 256K ctx. Added by HT fork (upstream mapper missing as
-    # of 2026-06-07; Google released ~2026-06-04).
-    "unsloth/gemma-4-12B-it-unsloth-bnb-4bit" : (
+    # of 2026-06-07; Google released ~2026-06-04). Mirrors the 26B-A4B-it shape:
+    # key = unsloth bf16 reup (no -unsloth-bnb-4bit suffix because that quant hasn't
+    # been published yet); on-the-fly bitsandbytes quant via `load_in_4bit=True`
+    # produces the 4-bit weights at load time.
+    "unsloth/gemma-4-12B-it" : (
         "unsloth/gemma-4-12B-it",
         "google/gemma-4-12B-it",
     ),
@@ -57,7 +60,7 @@ __INT_TO_FLOAT_MAPPER = \
         "unsloth/gemma-4-31B",
         "google/gemma-4-31B",
     ),
-    "unsloth/gemma-4-12B-unsloth-bnb-4bit" : (
+    "unsloth/gemma-4-12B" : (
         "unsloth/gemma-4-12B",
         "google/gemma-4-12B",
     ),
