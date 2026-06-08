@@ -1407,7 +1407,8 @@ class FastBaseModel:
             attn_modules = {"q_proj", "k_proj", "v_proj", "o_proj"}
             finetune_attention_modules = any(m in target_modules for m in attn_modules)
 
-        if detach_attention == "auto":
+        detach_attention_auto = detach_attention == "auto"
+        if detach_attention_auto:
             detach_attention = not finetune_attention_modules
         elif detach_attention and finetune_attention_modules:
             import warnings
@@ -1570,13 +1571,19 @@ class FastBaseModel:
             m = m.model
             
         if detach_attention:
+            if detach_attention_auto:
+                logger.warning_once(
+                    "Unsloth: MLP-only LoRA detected — detaching attention from the "
+                    "autograd graph to save VRAM/compute. This changes (approximates) "
+                    "gradients to upstream layers. Pass detach_attention=False to disable."
+                )
             _model = model
             while hasattr(_model, "model") and not hasattr(_model, "layers"):
                 _model = _model.model
             if hasattr(_model, "layers"):
                 for layer in _model.layers:
                     layer.self_attn._unsloth_detach_attn = True
-                    
+
         return model
 
     @staticmethod
