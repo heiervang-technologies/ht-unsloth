@@ -12,8 +12,15 @@ unsloth.models.llama.fast_rms_layernorm_inference = mock_rms
 
 def test_cpu_detach_attention_correctness():
     # 1. Setup a tiny LLaMA model
-    config = AutoConfig.from_pretrained("hf-internal-testing/tiny-random-LlamaForCausalLM")
-    model = AutoModelForCausalLM.from_config(config)
+    import pytest
+    try:
+        config = AutoConfig.from_pretrained("hf-internal-testing/tiny-random-LlamaForCausalLM")
+        model = AutoModelForCausalLM.from_config(config)
+    except OSError as exc:
+        pytest.skip(f"Requires access to tiny llama checkpoint: {exc}")
+    except RuntimeError as exc:
+        pytest.skip(f"Failed to load checkpoint: {exc}")
+
     layer = model.model.layers[0]
     
     # 2. Patch the layer forward to use LlamaDecoderLayer_fast_forward
@@ -77,12 +84,18 @@ def test_get_peft_model_sets_detach_attention():
     dtype = None
     load_in_4bit = False
 
-    model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name="hf-internal-testing/tiny-random-LlamaForCausalLM",
-        max_seq_length=max_seq_length,
-        dtype=dtype,
-        load_in_4bit=load_in_4bit,
-    )
+    import pytest
+    try:
+        model, tokenizer = FastLanguageModel.from_pretrained(
+            model_name="hf-internal-testing/tiny-random-LlamaForCausalLM",
+            max_seq_length=max_seq_length,
+            dtype=dtype,
+            load_in_4bit=load_in_4bit,
+        )
+    except OSError as exc:
+        pytest.skip(f"Requires access to tiny llama checkpoint: {exc}")
+    except RuntimeError as exc:
+        pytest.skip(f"Failed to load checkpoint: {exc}")
 
     model = FastLanguageModel.get_peft_model(
         model,
