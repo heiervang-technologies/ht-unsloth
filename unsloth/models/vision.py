@@ -1364,6 +1364,7 @@ class FastBaseModel:
         qat_scheme = None,
         target_parameters = None,  # For MoE expert layers (nn.Parameter)
         ensure_weight_tying = False,  # [TODO] Add `ensure_weight_tying` for `modules_to_save` for vision models
+        detach_attention = "auto",
         **kwargs,
     ):
         if os.environ.get("UNSLOTH_ENABLE_FULL_FINETUNING", "0") == "1":
@@ -1400,8 +1401,18 @@ class FastBaseModel:
             assert type(target_modules) in (
                 list,
                 tuple,
-                str,
-            )
+            ), "Unsloth: target_modules must be a list or tuple of strings."
+            
+            # If target_modules is manually specified, check if attention modules are present
+            attn_modules = {"q_proj", "k_proj", "v_proj", "o_proj"}
+            finetune_attention_modules = any(m in target_modules for m in attn_modules)
+
+        if detach_attention == "auto":
+            detach_attention = not finetune_attention_modules
+        elif detach_attention and finetune_attention_modules:
+            import warnings
+            warnings.warn("Unsloth: detach_attention=True but attention LoRA adapters are present. This will break training. Setting detach_attention=False.")
+            detach_attention = False
 
         if hasattr(model, "vllm_engine"):
             if (
@@ -1557,6 +1568,15 @@ class FastBaseModel:
             m.for_training = functools.partial(FastBaseModel.for_training, m)
             m.for_inference = functools.partial(FastBaseModel.for_inference, m)
             m = m.model
+            
+        if detach_attention:
+            _model = model
+            while hasattr(_model, "model") and not hasattr(_model, "layers"):
+                _model = _model.model
+            if hasattr(_model, "layers"):
+                for layer in _model.layers:
+                    layer.self_attn._unsloth_detach_attn = True
+                    
         return model
 
     @staticmethod
