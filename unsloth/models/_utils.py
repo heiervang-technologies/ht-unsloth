@@ -3278,7 +3278,7 @@ def is_mlp_only_lora(target_modules) -> bool:
     if isinstance(target_modules, str):
         target_modules = [target_modules]
         
-    allowed_mlp_modules = {"gate_proj", "up_proj", "down_proj"}
+    allowed_mlp_modules = {"gate_proj", "up_proj", "down_proj", "w1", "w2", "w3"}
     
     for module in target_modules:
         if not any(module == allowed or module.endswith("." + allowed) for allowed in allowed_mlp_modules):
