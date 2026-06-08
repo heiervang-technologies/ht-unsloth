@@ -3223,14 +3223,21 @@ class FastLlamaModel:
                 _n = max(1, min(int(finetune_last_n_layers), _total_layers))
                 layers_to_transform = list(range(_total_layers - _n, _total_layers))
 
-        # Determine detach_attention
-        attn_modules = {"q_proj", "k_proj", "v_proj", "o_proj"}
-        has_attn = any(m in target_modules for m in attn_modules) if isinstance(target_modules, (list, tuple, set)) else True
-        if detach_attention == "auto":
-            detach_attention = not has_attn
-        elif detach_attention and has_attn:
+        # Determine detach_attention. Detaching is only safe when LoRA targets MLP
+        # projections exclusively (no attention adapters); is_mlp_only_lora() is the
+        # single source of truth for that. "auto" enables it for MLP-only LoRA.
+        from ._utils import is_mlp_only_lora
+        mlp_only = is_mlp_only_lora(target_modules)
+        detach_attention_auto = detach_attention == "auto"
+        if detach_attention_auto:
+            detach_attention = mlp_only
+        elif detach_attention and not mlp_only:
             import warnings
-            warnings.warn("Unsloth: detach_attention=True but attention LoRA adapters are present. This will break training. Setting detach_attention=False.")
+            warnings.warn(
+                "Unsloth: detach_attention=True but non-MLP (e.g. attention) LoRA "
+                "adapters are present. Detaching attention would break their gradients. "
+                "Setting detach_attention=False."
+            )
             detach_attention = False
 
         arguments = dict(
@@ -3286,15 +3293,6 @@ class FastLlamaModel:
         model = _get_peft_model(model, lora_config)
         # Fix LoraConfig.auto_mapping is None
         fix_lora_auto_mapping(model)
-
-        from ._utils import is_mlp_only_lora
-        if is_mlp_only_lora(lora_config.target_modules):
-            try:
-                for layer in model.base_model.model.model.layers:
-                    if hasattr(layer, "self_attn"):
-                        layer.self_attn._unsloth_detach_attn = True
-            except AttributeError:
-                pass
 
         # Apply QAT + LoRA if specified
         if qat_scheme is not None:
@@ -3400,13 +3398,19 @@ class FastLlamaModel:
             m = m.model
             
         if detach_attention:
+            if detach_attention_auto:
+                logger.warning_once(
+                    "Unsloth: MLP-only LoRA detected — detaching attention from the "
+                    "autograd graph to save VRAM/compute. This changes (approximates) "
+                    "gradients to upstream layers. Pass detach_attention=False to disable."
+                )
             _model = model
             while hasattr(_model, "model") and not hasattr(_model, "layers"):
                 _model = _model.model
             if hasattr(_model, "layers"):
                 for layer in _model.layers:
                     layer.self_attn._unsloth_detach_attn = True
-                    
+
         return model
 
     @staticmethod
