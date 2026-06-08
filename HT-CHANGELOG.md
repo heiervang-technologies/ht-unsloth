@@ -4,6 +4,17 @@ All notable changes in the HT fork (relative to upstream unsloth) are documented
 
 ## Unreleased
 
+### Restore `recent-thread` test selectors on chat sidebar (2026-06-08)
+
+Re-added `data-testid="recent-thread"` + `data-thread-type` + `data-thread-id` on
+`SidebarMenuButton` in `studio/frontend/src/components/app-sidebar.tsx`.
+These three attributes are present on upstream's recent-chat entries and are what
+`tests/studio/playwright_chat_ui.py:1229` locates; they were dropped during the
+2026-06-01 catch-up rebase when the HT-side delete-button block was merged in,
+which silently red-lit the Chat UI Tests job (Studio / Mac Studio / Windows
+Studio UI CI workflows) for ~14 hours across 10 runs. Purely additive — no
+behavior change, just the test-locator parity.
+
 ### Detached Attention Optimization (2026-06-08)
 
 Added a new `detach_attention` flag to `get_peft_model` for MLP-only LoRA fine-tuning.
