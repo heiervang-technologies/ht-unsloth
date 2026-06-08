@@ -232,7 +232,23 @@ def Gemma2DecoderLayer_fast_forward(
         hidden_states = fast_rms_layernorm_inference_gemma(
             self.input_layernorm, hidden_states, out_weight
         )
-        hidden_states, self_attn_weights, present_key_value = self.self_attn(
+        detach_attn = getattr(self.self_attn, '_unsloth_detach_attn', False)
+        if detach_attn:
+            with torch.no_grad():
+                hidden_states, self_attn_weights, present_key_value = self.self_attn(
+            hidden_states = hidden_states,
+            causal_mask = causal_mask,
+            attention_mask = attention_mask,
+            position_ids = position_ids,
+            past_key_value = past_key_value,
+            output_attentions = output_attentions,
+            use_cache = use_cache,
+            padding_mask = padding_mask,
+            _flag_for_generation = self._flag_for_generation,
+            **kwargs,
+        )
+        else:
+            hidden_states, self_attn_weights, present_key_value = self.self_attn(
             hidden_states = hidden_states,
             causal_mask = causal_mask,
             attention_mask = attention_mask,
@@ -264,7 +280,22 @@ def Gemma2DecoderLayer_fast_forward(
         hidden_states = fast_rms_layernorm(
             self.input_layernorm, hidden_states, gemma = True
         )
-        hidden_states, self_attn_weights, present_key_value = self.self_attn(
+        detach_attn = getattr(self.self_attn, '_unsloth_detach_attn', False)
+        if detach_attn:
+            with torch.no_grad():
+                hidden_states, self_attn_weights, present_key_value = self.self_attn(
+            hidden_states = hidden_states,
+            causal_mask = causal_mask,
+            attention_mask = attention_mask,
+            position_ids = position_ids,
+            past_key_value = past_key_value,
+            output_attentions = output_attentions,
+            use_cache = use_cache,
+            padding_mask = padding_mask,
+            **kwargs,
+        )
+        else:
+            hidden_states, self_attn_weights, present_key_value = self.self_attn(
             hidden_states = hidden_states,
             causal_mask = causal_mask,
             attention_mask = attention_mask,
