@@ -10,6 +10,7 @@ Added a new `detach_attention` flag to `get_peft_model` for MLP-only LoRA fine-t
 When enabled (defaults to `"auto"`, activating when only MLP layers are targeted), it skips building the autograd computation graph through attention layers by wrapping them in `torch.no_grad()`.
 This saves ~25-30% of activation memory during training (with FlashAttention) and increases tokens/sec throughput, at zero quality cost (as earlier gradients flow purely via the residual stream).
 Tested across architectures including Llama, Mistral, Qwen2/3, Gemma2, and Granite.
+Both the text (`FastLanguageModel`) and vision (`FastVisionModel`) paths emit a one-time `warning_once` when `"auto"` turns detaching on, so the gradient-approximation trade-off is visible — the vision path is reachable from Studio's MLP-only module selection.
 
 ### Gemma 4 12B "Unified" — Any-to-Any (2026-06-07)
 
