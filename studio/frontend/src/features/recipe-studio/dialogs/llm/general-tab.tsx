@@ -165,6 +165,44 @@ export function LlmGeneralTab({
     }
     return deduped;
   }, [imageColumnOptions, imageContext.column_name, seedColumns]);
+
+  const audioColumnOptions = useMemo(() => {
+    if (seedColumns.length === 0) {
+      return [];
+    }
+    const detected = seedColumns.filter((columnName) => {
+      const lower = columnName.toLowerCase();
+      if (
+        lower.includes("audio") ||
+        lower.includes("sound") ||
+        lower.includes("voice") ||
+        lower.includes("speech")
+      ) {
+        return true;
+      }
+      return false;
+    });
+    return detected.length > 0 ? detected : seedColumns;
+  }, [seedColumns]);
+  const audioContext = config.audio_context ?? {
+    enabled: false,
+    // biome-ignore lint/style/useNamingConvention: api schema
+    column_name: "",
+  };
+  const audioContextToggleId = `${config.id}-audio-context-enabled`;
+  const audioContextColumnId = `${config.id}-audio-context-column`;
+  const audioContextColumnOptions = useMemo(() => {
+    const preferred =
+      audioColumnOptions.length > 0 ? audioColumnOptions : seedColumns;
+    const deduped = Array.from(
+      new Set(preferred.map((value) => value.trim()).filter(Boolean)),
+    );
+    const selected = audioContext.column_name.trim();
+    if (selected && !deduped.includes(selected)) {
+      deduped.unshift(selected);
+    }
+    return deduped;
+  }, [audioColumnOptions, audioContext.column_name, seedColumns]);
   const traceModeId = `${config.id}-trace-mode`;
   const reasoningToggleId = `${config.id}-reasoning-content`;
   const advancedOpen = config.advancedOpen === true;
@@ -351,66 +389,129 @@ export function LlmGeneralTab({
       </div>
       <AvailableVariables configId={config.id} />
       {hasHfSeed && (
-        <div className="space-y-2">
-          <div className="flex items-center justify-between gap-3">
-            <FieldLabel
-              label="Use image context"
-              htmlFor={imageContextToggleId}
-              hint="Attach one image field from your source data to this AI step."
-            />
-            <Switch
-              id={imageContextToggleId}
-              checked={imageContext.enabled}
-              onCheckedChange={(checked) => {
-                onUpdate({
-                  image_context: {
-                    ...imageContext,
-                    enabled: checked,
-                    // biome-ignore lint/style/useNamingConvention: api schema
-                    column_name:
-                      checked && !imageContext.column_name
-                        ? (imageContextColumnOptions[0] ?? "")
-                        : imageContext.column_name,
-                  },
-                });
-              }}
-            />
-          </div>
-          {imageContext.enabled && (
-            <div className="grid gap-1.5">
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-3">
               <FieldLabel
-                label="Image field"
-                htmlFor={imageContextColumnId}
-                hint="Choose the source-data field that contains the image."
+                label="Use image context"
+                htmlFor={imageContextToggleId}
+                hint="Attach one image field from your source data to this AI step."
               />
-              <Select
-                value={imageContext.column_name || undefined}
-                onValueChange={(value) =>
+              <Switch
+                id={imageContextToggleId}
+                checked={imageContext.enabled}
+                onCheckedChange={(checked) => {
                   onUpdate({
                     image_context: {
                       ...imageContext,
+                      enabled: checked,
                       // biome-ignore lint/style/useNamingConvention: api schema
-                      column_name: value,
+                      column_name:
+                        checked && !imageContext.column_name
+                          ? (imageContextColumnOptions[0] ?? "")
+                          : imageContext.column_name,
                     },
-                  })
-                }
-              >
-                <SelectTrigger
-                  className="nodrag w-full"
-                  id={imageContextColumnId}
-                >
-                  <SelectValue placeholder="Select image column" />
-                </SelectTrigger>
-                <SelectContent>
-                  {imageContextColumnOptions.map((columnName) => (
-                    <SelectItem key={columnName} value={columnName}>
-                      {columnName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                  });
+                }}
+              />
             </div>
-          )}
+            {imageContext.enabled && (
+              <div className="grid gap-1.5">
+                <FieldLabel
+                  label="Image field"
+                  htmlFor={imageContextColumnId}
+                  hint="Choose the source-data field that contains the image."
+                />
+                <Select
+                  value={imageContext.column_name || undefined}
+                  onValueChange={(value) =>
+                    onUpdate({
+                      image_context: {
+                        ...imageContext,
+                        // biome-ignore lint/style/useNamingConvention: api schema
+                        column_name: value,
+                      },
+                    })
+                  }
+                >
+                  <SelectTrigger
+                    className="nodrag w-full"
+                    id={imageContextColumnId}
+                  >
+                    <SelectValue placeholder="Select image column" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {imageContextColumnOptions.map((columnName) => (
+                      <SelectItem key={columnName} value={columnName}>
+                        {columnName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <FieldLabel
+                label="Use audio context"
+                htmlFor={audioContextToggleId}
+                hint="Attach one audio field from your source data to this AI step."
+              />
+              <Switch
+                id={audioContextToggleId}
+                checked={audioContext.enabled}
+                onCheckedChange={(checked) => {
+                  onUpdate({
+                    audio_context: {
+                      ...audioContext,
+                      enabled: checked,
+                      // biome-ignore lint/style/useNamingConvention: api schema
+                      column_name:
+                        checked && !audioContext.column_name
+                          ? (audioContextColumnOptions[0] ?? "")
+                          : audioContext.column_name,
+                    },
+                  });
+                }}
+              />
+            </div>
+            {audioContext.enabled && (
+              <div className="grid gap-1.5">
+                <FieldLabel
+                  label="Audio field"
+                  htmlFor={audioContextColumnId}
+                  hint="Choose the source-data field that contains the audio."
+                />
+                <Select
+                  value={audioContext.column_name || undefined}
+                  onValueChange={(value) =>
+                    onUpdate({
+                      audio_context: {
+                        ...audioContext,
+                        // biome-ignore lint/style/useNamingConvention: api schema
+                        column_name: value,
+                      },
+                    })
+                  }
+                >
+                  <SelectTrigger
+                    className="nodrag w-full"
+                    id={audioContextColumnId}
+                  >
+                    <SelectValue placeholder="Select audio column" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {audioContextColumnOptions.map((columnName) => (
+                      <SelectItem key={columnName} value={columnName}>
+                        {columnName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
         </div>
       )}
       {config.llm_type === "structured" && (

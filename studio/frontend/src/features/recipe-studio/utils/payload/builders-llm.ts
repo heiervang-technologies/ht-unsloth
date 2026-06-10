@@ -8,26 +8,41 @@ import type {
   ToolProfileConfig,
 } from "../../types";
 
-function buildImageContext(
+function buildMultiModalContext(
   config: LlmConfig,
   errors: string[],
 ): Array<Record<string, unknown>> | undefined {
+  const result: Array<Record<string, unknown>> = [];
+
   const imageContext = config.image_context;
-  if (!imageContext?.enabled) {
-    return undefined;
+  if (imageContext?.enabled) {
+    const columnName = imageContext.column_name.trim();
+    if (!columnName) {
+      errors.push(`LLM ${config.name}: image context column is required.`);
+    } else {
+      result.push({
+        modality: "image",
+        // biome-ignore lint/style/useNamingConvention: api schema
+        column_name: columnName,
+      });
+    }
   }
-  const columnName = imageContext.column_name.trim();
-  if (!columnName) {
-    errors.push(`LLM ${config.name}: image context column is required.`);
-    return undefined;
+
+  const audioContext = config.audio_context;
+  if (audioContext?.enabled) {
+    const columnName = audioContext.column_name.trim();
+    if (!columnName) {
+      errors.push(`LLM ${config.name}: audio context column is required.`);
+    } else {
+      result.push({
+        modality: "audio",
+        // biome-ignore lint/style/useNamingConvention: api schema
+        column_name: columnName,
+      });
+    }
   }
-  return [
-    {
-      modality: "image",
-      // biome-ignore lint/style/useNamingConvention: api schema
-      column_name: columnName,
-    },
-  ];
+
+  return result.length > 0 ? result : undefined;
 }
 
 export function buildLlmColumn(
@@ -44,7 +59,7 @@ export function buildLlmColumn(
     // biome-ignore lint/style/useNamingConvention: api schema
     system_prompt: config.system_prompt || undefined,
     // biome-ignore lint/style/useNamingConvention: api schema
-    multi_modal_context: buildImageContext(config, errors),
+    multi_modal_context: buildMultiModalContext(config, errors),
     // biome-ignore lint/style/useNamingConvention: api schema
     tool_alias: toolAlias || undefined,
     // biome-ignore lint/style/useNamingConvention: api schema

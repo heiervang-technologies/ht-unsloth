@@ -560,6 +560,18 @@ class UnslothTrainer:
             clear_unsloth_compiled_cache(preserve_patterns = _preserve)
             # Detect audio model type dynamically (config.json + tokenizer)
             self._audio_type = detect_audio_type(model_name, hf_token)
+
+            from utils.models.model_config import load_model_config
+            try:
+                config = load_model_config(model_name, use_auth=bool(hf_token), token=hf_token)
+                model_type_is_gemma4_unified = (getattr(config, "model_type", "") == "gemma4_unified")
+            except Exception:
+                model_type_is_gemma4_unified = False
+
+            # VLM: vision model with image dataset (detect early for trimodal arch check)
+            vision = is_vision_model(model_name, hf_token = hf_token)
+            is_trimodal_arch = (self._audio_type == "audio_vlm" and vision and model_type_is_gemma4_unified)
+
             # audio_vlm is detected as an audio_type now, handle it separately
             if self._audio_type == "audio_vlm":
                 self.is_audio = False
@@ -574,13 +586,14 @@ class UnslothTrainer:
             if not self.is_audio and not self.is_audio_vlm:
                 self._cuda_audio_used = False
 
-            # VLM: vision model with image dataset (mutually exclusive with audio paths)
-            vision = (
-                is_vision_model(model_name, hf_token = hf_token)
-                if not self.is_audio
-                else False
-            )
-            self.is_vlm = not self.is_audio_vlm and vision and is_dataset_image
+            if is_trimodal_arch:
+                # Trimodal models can do both audio and vision simultaneously
+                self.is_vlm = vision and is_dataset_image
+            else:
+                # Legacy mutually exclusive logic
+                if self.is_audio:
+                    vision = False
+                self.is_vlm = not self.is_audio_vlm and vision and is_dataset_image
             self.model_name = model_name
             self.max_seq_length = max_seq_length
 

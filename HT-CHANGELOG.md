@@ -12,6 +12,39 @@ This saves ~25-30% of activation memory during training (with FlashAttention) an
 Tested across architectures including Llama, Mistral, Qwen2/3, Gemma2, and Granite.
 Both the text (`FastLanguageModel`) and vision (`FastVisionModel`) paths emit a one-time `warning_once` when `"auto"` turns detaching on, so the gradient-approximation trade-off is visible — the vision path is reachable from Studio's MLP-only module selection.
 
+### Gemma 4 12B tri-modal — scaffolding (2026-06-07, branch `feat/gemma4-trimodal`)
+
+Opening draft PR for tri-modal (text + image + audio) training on Gemma 4
+12B Unified. The model + processor already support it; Studio's training
+plumbing was Gemma 3N-shaped and doesn't route Gemma 4 Unified through
+the audio path. See [`docs/gemma4-trimodal-training.md`](docs/gemma4-trimodal-training.md)
+for the full gap analysis.
+
+This commit ships *scaffolding only*:
+- `studio/backend/utils/models/model_config.py` — added a new
+  `_AUDIO_CONFIG_PATTERNS` dict that runs structural checks against the
+  *full* `tokenizer_config.json` (not just `added_tokens_decoder`). First
+  entry maps `processor_class == "Gemma4UnifiedProcessor"` →
+  `audio_vlm`. `_check_token_patterns` runs added-vocab patterns first
+  (existing behavior) then config patterns as a fallback. Verified:
+  `detect_audio_type("unsloth/gemma-4-12B-it") → "audio_vlm"`;
+  `processor_class="Qwen2TokenizerFast"` negative control → False.
+- `tests/test_gemma4_12b_smoke.py` — new `--mode trimodal` that loads
+  `Gemma4UnifiedProcessor` and runs `apply_chat_template` against a
+  1-sample message with image + audio + text content. Asserts the
+  resulting batch carries audio_token + image_token in `input_ids`
+  AND has both `pixel_values` and `input_features` payloads. CPU-only,
+  ~1s. **Verified PASS** on the cached processor: 256 image tokens
+  + 25 audio tokens + payloads + `mm_token_type_ids` all present.
+
+Still to do (separate PRs):
+- Audio collator branch for `gemma4_unified` in `trainer.py:3098` —
+  current path is Gemma 3N-shaped.
+- Tri-modal dataset format detector + converter in
+  `studio/backend/utils/datasets/`.
+- Studio frontend recipe-studio support for mixed-modality rows.
+- End-to-end LoRA SFT smoke on a 4-row tri-modal dataset.
+
 ### Gemma 4 12B "Unified" — Any-to-Any (2026-06-07)
 
 Google released `google/gemma-4-12B-it` and `google/gemma-4-12B` on
